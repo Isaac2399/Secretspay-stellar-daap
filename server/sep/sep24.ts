@@ -1,7 +1,8 @@
 /**
  * SEP-24 interactive deposit: POST /transactions/deposit/interactive with
  * Bearer JWT from SEP-10, then poll GET /transaction?id= until the anchor
- * credits USDC on Testnet.
+ * credits USDC. The spec (and Stellar Anchor Platform / MoneyGram) requires
+ * multipart/form-data, not application/x-www-form-urlencoded.
  */
 import { AuthError } from '../errors.js'
 import { authenticateSep10, readAnchorJson, anchorMessage, clearSep10Cache } from './sep10.js'
@@ -230,10 +231,22 @@ async function postInteractiveDeposit(
   const headers = {
     Authorization: `Bearer ${token}`,
     Accept: 'application/json',
-    'Content-Type': 'application/x-www-form-urlencoded',
   }
-  const body = new URLSearchParams(fields)
-  const response = await fetch(url, { method: 'POST', headers, body })
+  let response = await fetch(url, {
+    method: 'POST',
+    headers,
+    body: toMultipart(fields),
+  })
+  if (await isUnsupportedContentType(response)) {
+    response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        ...headers,
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams(fields),
+    })
+  }
   if (response.ok || response.status === 401) {
     return response
   }
@@ -257,8 +270,32 @@ async function postInteractiveDeposit(
   return fetch(url, {
     method: 'POST',
     headers,
-    body: new URLSearchParams(minimal),
+    body: toMultipart(minimal),
   })
+}
+
+function toMultipart(fields: Record<string, string>): FormData {
+  const body = new FormData()
+  for (const [key, value] of Object.entries(fields)) {
+    body.append(key, value)
+  }
+  return body
+}
+
+async function isUnsupportedContentType(response: Response): Promise<boolean> {
+  if (response.ok || response.status === 401) {
+    return false
+  }
+  if (response.status === 415) {
+    return true
+  }
+  try {
+    const payload = (await response.clone().json()) as Record<string, unknown>
+    const text = JSON.stringify(payload)
+    return /content-type|urlencoded|multipart/i.test(text) && /not supported/i.test(text)
+  } catch {
+    return false
+  }
 }
 
 function parseAdvertisedTypes(usdc: Record<string, unknown> | undefined): string[] {
