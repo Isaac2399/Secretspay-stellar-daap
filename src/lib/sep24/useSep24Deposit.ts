@@ -8,10 +8,11 @@ import {
 import {
   isTerminalSep24Status,
   type Sep24InteractiveResponse,
+  type Sep24Rail,
   type Sep24Transaction,
 } from './types'
 
-const POLL_MS = 5_000
+const POLL_MS = 4_000
 
 export type Sep24Phase =
   | 'idle'
@@ -21,7 +22,7 @@ export type Sep24Phase =
   | 'completed'
   | 'error'
 
-export function useSep24Deposit(onCompleted?: () => void) {
+export function useSep24Deposit(onCompleted?: (tx: Sep24Transaction) => void) {
   const [phase, setPhase] = useState<Sep24Phase>('idle')
   const [error, setError] = useState<string | null>(null)
   const [errorCode, setErrorCode] = useState<string | undefined>()
@@ -29,8 +30,18 @@ export function useSep24Deposit(onCompleted?: () => void) {
   const [transaction, setTransaction] = useState<Sep24Transaction | null>(null)
   const onCompletedRef = useRef(onCompleted)
   onCompletedRef.current = onCompleted
+  const notifiedRef = useRef(false)
+
+  const notifyCompleted = useCallback((tx: Sep24Transaction) => {
+    if (notifiedRef.current) {
+      return
+    }
+    notifiedRef.current = true
+    onCompletedRef.current?.(tx)
+  }, [])
 
   const reset = useCallback(() => {
+    notifiedRef.current = false
     setPhase('idle')
     setError(null)
     setErrorCode(undefined)
@@ -52,13 +63,16 @@ export function useSep24Deposit(onCompleted?: () => void) {
     }
   }, [])
 
-  const start = useCallback(async (amount?: string) => {
-    setPhase('starting')
+  const start = useCallback(async (amount: string | undefined, rail: Sep24Rail) => {
+    notifiedRef.current = false
+    setPhase('trustline')
     setError(null)
     setErrorCode(undefined)
     setTransaction(null)
     try {
-      const next = await startSep24Deposit(amount)
+      await ensureUsdcTrustline()
+      setPhase('starting')
+      const next = await startSep24Deposit({ amount, rail })
       setSession(next)
       setPhase('interactive')
       return next
@@ -86,7 +100,7 @@ export function useSep24Deposit(onCompleted?: () => void) {
         setTransaction(next)
         if (next.status === 'completed') {
           setPhase('completed')
-          onCompletedRef.current?.()
+          notifyCompleted(next)
           return
         }
         if (isTerminalSep24Status(next.status)) {
@@ -113,7 +127,50 @@ export function useSep24Deposit(onCompleted?: () => void) {
       cancelled = true
       window.clearInterval(id)
     }
-  }, [phase, session])
+  }, [phase, session, notifyCompleted])
+
+  useEffect(() => {
+    if (!session) {
+      return
+    }
+
+    function onMessage(event: MessageEvent) {
+      if (!isAnchorOrigin(event.origin, session?.homeDomain, session?.url)) {
+        return
+      }
+      const payload = event.data
+      const tx = extractPostedTransaction(payload)
+      if (!tx) {
+        return
+      }
+      setTransaction((current) => ({
+        id: String(tx.id ?? session?.id ?? current?.id ?? ''),
+        kind: String(tx.kind ?? 'deposit'),
+        status: String(tx.status ?? current?.status ?? 'unknown'),
+        message: tx.message ? String(tx.message) : current?.message,
+        amount_out: tx.amount_out ? String(tx.amount_out) : current?.amount_out,
+        stellar_transaction_id: tx.stellar_transaction_id
+          ? String(tx.stellar_transaction_id)
+          : current?.stellar_transaction_id,
+      }))
+      if (tx.status === 'completed') {
+        setPhase('completed')
+        notifyCompleted({
+          id: String(tx.id ?? session?.id ?? ''),
+          kind: String(tx.kind ?? 'deposit'),
+          status: String(tx.status),
+          message: tx.message ? String(tx.message) : null,
+          amount_out: tx.amount_out ? String(tx.amount_out) : undefined,
+          stellar_transaction_id: tx.stellar_transaction_id
+            ? String(tx.stellar_transaction_id)
+            : null,
+        })
+      }
+    }
+
+    window.addEventListener('message', onMessage)
+    return () => window.removeEventListener('message', onMessage)
+  }, [session, notifyCompleted])
 
   return {
     phase,
@@ -125,6 +182,41 @@ export function useSep24Deposit(onCompleted?: () => void) {
     openTrustline,
     reset,
   }
+}
+
+function isAnchorOrigin(
+  origin: string,
+  homeDomain?: string,
+  interactiveUrl?: string,
+): boolean {
+  try {
+    const host = new URL(origin).hostname
+    if (homeDomain && (host === homeDomain || host.endsWith(`.${homeDomain}`))) {
+      return true
+    }
+    if (interactiveUrl) {
+      return host === new URL(interactiveUrl).hostname
+    }
+  } catch {
+    return false
+  }
+  return false
+}
+
+function extractPostedTransaction(
+  payload: unknown,
+): Record<string, unknown> | null {
+  if (!payload || typeof payload !== 'object') {
+    return null
+  }
+  const record = payload as Record<string, unknown>
+  if (record.transaction && typeof record.transaction === 'object') {
+    return record.transaction as Record<string, unknown>
+  }
+  if (typeof record.status === 'string') {
+    return record
+  }
+  return null
 }
 
 function applyError(

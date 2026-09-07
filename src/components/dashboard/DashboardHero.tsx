@@ -18,6 +18,7 @@ import {
   shortenPublicKey,
 } from '@/lib/userDisplay'
 import type { AppUser } from '@/types/user'
+import type { Sep24Transaction } from '@/lib/sep24/types'
 
 type DashboardHeroProps = {
   user: AppUser
@@ -25,7 +26,7 @@ type DashboardHeroProps = {
   error: string | null
   onScan: () => void
   onSend: () => void
-  onDepositCompleted?: () => void
+  onDepositCompleted?: (tx: Sep24Transaction) => void
 }
 
 type AssetKey = 'loyalty' | 'xlm' | 'usdc'

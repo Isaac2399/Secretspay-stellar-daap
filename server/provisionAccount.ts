@@ -37,6 +37,18 @@ export async function ensureUsdcTrustline(secretKey: string): Promise<void> {
   await ensureAssetTrustline(secretKey, usdcAssetFromEnv())
 }
 
+/** Opens (or no-ops) a trustline for a specific USDC issuer, e.g. the one in stellar.toml. */
+export async function ensureUsdcTrustlineForIssuer(
+  secretKey: string,
+  issuer: string,
+  code = 'USDC',
+): Promise<void> {
+  if (!StrKey.isValidEd25519PublicKey(issuer)) {
+    throw new Error('El emisor USDC del ancla no es una public key válida.')
+  }
+  await ensureAssetTrustline(secretKey, new Asset(code, issuer))
+}
+
 export async function accountHasUsdcTrustline(publicKey: string): Promise<boolean> {
   const server = new Horizon.Server(horizonUrl())
   const account = await server.loadAccount(publicKey)

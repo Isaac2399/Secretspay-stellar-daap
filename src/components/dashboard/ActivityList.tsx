@@ -1,7 +1,11 @@
+import { useEffect, useState } from 'react'
 import { ArrowDownLeft, ArrowUpRight, Inbox } from 'lucide-react'
 import { formatAmount } from '@/lib/stellar/useAccountBalances'
 import type { AccountActivity } from '@/lib/stellar/getPayments'
 import { shortenPublicKey } from '@/lib/userDisplay'
+
+const INITIAL_VISIBLE = 3
+const MORE_STEP = 6
 
 type ActivityListProps = {
   publicKey: string
@@ -16,6 +20,15 @@ export function ActivityList({
   loading,
   error,
 }: ActivityListProps) {
+  const [visible, setVisible] = useState(INITIAL_VISIBLE)
+
+  useEffect(() => {
+    setVisible(INITIAL_VISIBLE)
+  }, [publicKey])
+
+  const shown = items.slice(0, visible)
+  const hasMore = items.length > visible
+
   return (
     <section className="space-y-3">
       <h2 className="text-[17px] font-semibold">Transacciones</h2>
@@ -42,11 +55,22 @@ export function ActivityList({
         ) : null}
 
         {items.length > 0 ? (
-          <ul className="divide-y divide-white/10">
-            {items.map((item) => (
-              <ActivityRow key={item.id} item={item} />
-            ))}
-          </ul>
+          <>
+            <ul className="divide-y divide-white/10">
+              {shown.map((item) => (
+                <ActivityRow key={item.id} item={item} />
+              ))}
+            </ul>
+            {hasMore ? (
+              <button
+                type="button"
+                onClick={() => setVisible((count) => count + MORE_STEP)}
+                className="w-full border-t border-white/10 py-3 text-sm font-medium text-app-accent"
+              >
+                Ver más
+              </button>
+            ) : null}
+          </>
         ) : null}
       </div>
     </section>
@@ -60,12 +84,16 @@ function ActivityRow({ item }: { item: AccountActivity }) {
       ? 'Cuenta activada'
       : outgoing
         ? 'Enviado'
-        : 'Recibido'
+        : item.asset === 'USDC'
+          ? 'Depósito USDC'
+          : 'Recibido'
   const detail = item.memo.trim()
     ? item.memo
     : item.counterparty
       ? shortenPublicKey(item.counterparty)
-      : 'Horizon'
+      : item.asset === 'USDC'
+        ? 'Ancla SEP-24'
+        : 'Horizon'
   const statusLabel = item.status === 'failed' ? 'Fallido' : 'Confirmado'
 
   return (

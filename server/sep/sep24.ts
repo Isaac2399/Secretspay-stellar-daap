@@ -1,3 +1,8 @@
+/**
+ * SEP-24 interactive deposit: POST /transactions/deposit/interactive with
+ * Bearer JWT from SEP-10, then poll GET /transaction?id= until the anchor
+ * credits USDC on Testnet.
+ */
 import { AuthError } from '../errors.js'
 import { authenticateSep10, readAnchorJson, anchorMessage, clearSep10Cache } from './sep10.js'
 import { loadAnchorToml, type AnchorToml } from './toml.js'
@@ -26,9 +31,16 @@ export type Sep24Transaction = {
   memo?: string | null
 }
 
+export type Sep24Rail = 'cash' | 'card'
+
 export type Sep24AmountLimits = {
   min: number
   max: number
+  types: string[]
+}
+
+export function parseSep24Rail(raw: unknown): Sep24Rail {
+  return String(raw ?? '').trim().toLowerCase() === 'card' ? 'card' : 'cash'
 }
 
 export async function getUsdcDepositLimits(): Promise<Sep24AmountLimits | null> {
@@ -45,7 +57,7 @@ export async function getUsdcDepositLimits(): Promise<Sep24AmountLimits | null> 
   if (!Number.isFinite(min) || !Number.isFinite(max) || max <= 0) {
     return null
   }
-  return { min, max }
+  return { min, max, types: parseAdvertisedTypes(usdc) }
 }
 
 export function parseSep24Amount(raw: string): string | undefined {
@@ -103,6 +115,7 @@ export async function startInteractiveDeposit(input: {
   secretKey: string
   amount?: string
   lang?: string
+  rail?: Sep24Rail
 }): Promise<{ interactive: Sep24Interactive; toml: AnchorToml }> {
   const limits = await getUsdcDepositLimits()
   if (input.amount) {
@@ -114,16 +127,22 @@ export async function startInteractiveDeposit(input: {
     secretKey: input.secretKey,
   })
 
+  const rail = input.rail ?? 'cash'
   const fields: Record<string, string> = {
     asset_code: 'USDC',
     account: input.publicKey,
-    lang: input.lang ?? 'es',
+    lang: input.lang ?? 'en',
+    callback: 'postMessage',
   }
   if (toml.usdcIssuer) {
     fields.asset_issuer = toml.usdcIssuer
   }
   if (input.amount) {
     fields.amount = input.amount
+  }
+  const advertisedType = typeForRail(rail, limits?.types ?? [])
+  if (advertisedType) {
+    fields.type = advertisedType
   }
 
   const response = await postInteractiveDeposit(
@@ -173,7 +192,7 @@ export async function startInteractiveDeposit(input: {
   }
 
   const id = String(payload.id ?? '')
-  const url = String(payload.url ?? '')
+  const url = withPostMessageCallback(String(payload.url ?? ''))
   if (!id || !url) {
     throw new AuthError('El ancla no devolvió URL interactiva de depósito', 502)
   }
@@ -188,19 +207,82 @@ export async function startInteractiveDeposit(input: {
   }
 }
 
+function withPostMessageCallback(url: string): string {
+  if (!url) {
+    return url
+  }
+  try {
+    const parsed = new URL(url)
+    if (!parsed.searchParams.has('callback')) {
+      parsed.searchParams.set('callback', 'postMessage')
+    }
+    return parsed.toString()
+  } catch {
+    return url
+  }
+}
+
 async function postInteractiveDeposit(
   url: string,
   token: string,
   fields: Record<string, string>,
 ): Promise<Response> {
+  const headers = {
+    Authorization: `Bearer ${token}`,
+    Accept: 'application/json',
+    'Content-Type': 'application/x-www-form-urlencoded',
+  }
+  const body = new URLSearchParams(fields)
+  const response = await fetch(url, { method: 'POST', headers, body })
+  if (response.ok || response.status === 401) {
+    return response
+  }
+  const extraKeys = Object.keys(fields).filter(
+    (key) => !['asset_code', 'asset_issuer', 'account', 'amount', 'callback'].includes(key),
+  )
+  if (!extraKeys.length) {
+    return response
+  }
+  const minimal: Record<string, string> = {
+    asset_code: fields.asset_code,
+    account: fields.account,
+    callback: fields.callback,
+  }
+  if (fields.asset_issuer) {
+    minimal.asset_issuer = fields.asset_issuer
+  }
+  if (fields.amount) {
+    minimal.amount = fields.amount
+  }
   return fetch(url, {
     method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(fields),
+    headers,
+    body: new URLSearchParams(minimal),
   })
+}
+
+function parseAdvertisedTypes(usdc: Record<string, unknown> | undefined): string[] {
+  const types = usdc?.types
+  if (Array.isArray(types)) {
+    return types.map((value) => String(value).trim()).filter(Boolean)
+  }
+  if (types && typeof types === 'object') {
+    return Object.keys(types as Record<string, unknown>)
+  }
+  return []
+}
+
+function typeForRail(rail: Sep24Rail, advertised: string[]): string | undefined {
+  if (!advertised.length) {
+    return undefined
+  }
+  const aliases =
+    rail === 'card'
+      ? ['card', 'credit_card', 'debit_card', 'credit', 'visa']
+      : ['cash', 'cash_pickup', 'moneygram', 'bank_account', 'bank', 'wire']
+  const lowered = advertised.map((value) => value.toLowerCase())
+  const index = lowered.findIndex((value) => aliases.includes(value))
+  return index >= 0 ? advertised[index] : undefined
 }
 
 export async function getSep24Transaction(input: {

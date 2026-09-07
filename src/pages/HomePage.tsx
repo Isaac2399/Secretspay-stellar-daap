@@ -47,7 +47,10 @@ export default function HomePage() {
           scanRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
         }
         onSend={() => setSendOpen(true)}
-        onDepositCompleted={() => void reload()}
+        onDepositCompleted={(tx) => {
+          void reload()
+          void activity.reloadAfterDeposit(tx)
+        }}
       />
 
       <CardTeaser />

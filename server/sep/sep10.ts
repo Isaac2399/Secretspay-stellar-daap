@@ -1,3 +1,9 @@
+/**
+ * SEP-10 web auth against the anchor's WEB_AUTH_ENDPOINT (from stellar.toml).
+ * Custodial Web2.5: the server signs the challenge with the user's wallet secret
+ * so the browser never sees the key. Optional client_domain extra signature is
+ * only used when SEP24_CLIENT_SIGNING_SECRET is set.
+ */
 import { FeeBumpTransaction, Keypair, TransactionBuilder } from '@stellar/stellar-sdk'
 import { AuthError } from '../errors.js'
 import {

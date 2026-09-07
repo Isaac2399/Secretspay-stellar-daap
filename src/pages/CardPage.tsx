@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
 import { CreditCard, LoaderCircle } from 'lucide-react'
 import { CardControls } from '@/components/card/CardControls'
+import { CardDepositModal } from '@/components/card/CardDepositModal'
 import { CardTransactions } from '@/components/card/CardTransactions'
 import { PosSimulator } from '@/components/card/PosSimulator'
 import { VirtualCard } from '@/components/card/VirtualCard'
 import { WalletSheet } from '@/components/card/WalletSheet'
+import { hasUsdcTrustline } from '@/lib/stellar/getBalances'
 import {
   fetchCard,
   fetchCardTransactions,
@@ -19,15 +21,18 @@ import type {
   PublicCard,
   SecureCardDetails,
 } from '@/lib/cards/types'
+import { ActivityList } from '@/components/dashboard/ActivityList'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { readableError } from '@/lib/auth/readableError'
 import { formatAmount, useAccountBalances } from '@/lib/stellar/useAccountBalances'
+import { useRecentActivity } from '@/lib/stellar/useRecentActivity'
 
 const REVEAL_MS = 20_000
 
 export default function CardPage() {
   const { user } = useAuth()
   const { balances, reload } = useAccountBalances(user?.publicKey ?? '')
+  const activity = useRecentActivity(user?.publicKey ?? '')
   const [card, setCard] = useState<PublicCard | null>(null)
   const [transactions, setTransactions] = useState<CardAuthorization[]>([])
   const [loading, setLoading] = useState(true)
@@ -37,6 +42,7 @@ export default function CardPage() {
   const [revealed, setRevealed] = useState<SecureCardDetails | null>(null)
   const [revealing, setRevealing] = useState(false)
   const [walletOpen, setWalletOpen] = useState(false)
+  const [depositOpen, setDepositOpen] = useState(false)
 
   const loadCard = useCallback(async () => {
     const next = await fetchMyCard()
@@ -214,15 +220,33 @@ export default function CardPage() {
             busy={busy}
             onToggleFreeze={() => void onToggleFreeze()}
             onAddToWallet={() => setWalletOpen(true)}
+            onDepositUsdc={() => setDepositOpen(true)}
           />
 
           <PosSimulator cardId={card.id} onSettled={(tx) => void onSettled(tx)} />
+
+          <ActivityList
+            publicKey={user.publicKey}
+            items={activity.items}
+            loading={activity.loading}
+            error={activity.error}
+          />
 
           <CardTransactions items={transactions} loading={false} />
         </>
       ) : null}
 
       {walletOpen ? <WalletSheet onClose={() => setWalletOpen(false)} /> : null}
+      {depositOpen ? (
+        <CardDepositModal
+          hasUsdcTrustline={hasUsdcTrustline(balances)}
+          onClose={() => setDepositOpen(false)}
+          onDepositCompleted={(tx) => {
+            void reload()
+            void activity.reloadAfterDeposit(tx)
+          }}
+        />
+      ) : null}
     </div>
   )
 }

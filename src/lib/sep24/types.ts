@@ -8,9 +8,12 @@ export const SEP24_TERMINAL = new Set([
 export type Sep24AmountLimits = {
   minAmount: number | null
   maxAmount: number | null
+  homeDomain?: string | null
 }
 
 export type Sep24ErrorCode = 'missing_trustline' | 'expired_session' | 'amount_out_of_range' | string
+
+export type Sep24Rail = 'cash' | 'card'
 
 export type Sep24InteractiveResponse = {
   id: string
@@ -18,6 +21,7 @@ export type Sep24InteractiveResponse = {
   type: string
   homeDomain: string
   assetCode: string
+  rail: Sep24Rail
 }
 
 export type Sep24Transaction = {

@@ -1,10 +1,9 @@
-import { useEffect, useState, type FormEvent } from 'react'
-import { Banknote, Check, Copy, ExternalLink } from 'lucide-react'
+import { useState, type ReactNode } from 'react'
+import { ArrowLeft, Banknote, Check, Copy, CreditCard, QrCode } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
+import { Sep24DepositPanel } from '@/components/sep24/Sep24DepositPanel'
 import { stellarConfig } from '@/lib/stellar/config'
-import { fetchSep24DepositLimits } from '@/lib/sep24/api'
-import { useSep24Deposit } from '@/lib/sep24/useSep24Deposit'
-import type { Sep24AmountLimits, Sep24Transaction } from '@/lib/sep24/types'
+import type { Sep24Transaction } from '@/lib/sep24/types'
 
 type AddFundsSheetProps = {
   publicKey: string
@@ -12,8 +11,10 @@ type AddFundsSheetProps = {
   hasUsdcTrustline: boolean
   onCopy: () => void
   onClose: () => void
-  onDepositCompleted?: () => void
+  onDepositCompleted?: (tx: Sep24Transaction) => void
 }
+
+type FundsView = 'pick' | 'cash' | 'card' | 'receive'
 
 export function AddFundsSheet({
   publicKey,
@@ -23,7 +24,16 @@ export function AddFundsSheet({
   onClose,
   onDepositCompleted,
 }: AddFundsSheetProps) {
-  const [tab, setTab] = useState<'cash' | 'receive'>('cash')
+  const [view, setView] = useState<FundsView>('pick')
+
+  const title =
+    view === 'cash'
+      ? 'MoneyGram'
+      : view === 'card'
+        ? 'Tarjeta'
+        : view === 'receive'
+          ? 'Recibir on-chain'
+          : 'Agregar'
 
   return (
     <div
@@ -33,296 +43,100 @@ export function AddFundsSheet({
       aria-labelledby="add-funds-title"
     >
       <div className="max-h-[92dvh] w-full max-w-lg overflow-y-auto rounded-[28px] bg-app-card p-5">
-        <div className="mb-4 flex items-center justify-between">
-          <h2 id="add-funds-title" className="text-lg font-semibold">
-            Agregar
-          </h2>
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-2">
+            {view !== 'pick' ? (
+              <button
+                type="button"
+                className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-app-chip"
+                onClick={() => setView('pick')}
+                aria-label="Volver"
+              >
+                <ArrowLeft className="h-4 w-4" />
+              </button>
+            ) : null}
+            <h2 id="add-funds-title" className="truncate text-lg font-semibold">
+              {title}
+            </h2>
+          </div>
           <button type="button" className="text-sm text-app-muted" onClick={onClose}>
             Cerrar
           </button>
         </div>
 
-        <div className="mb-4 grid grid-cols-2 gap-2">
-          <TabButton
-            active={tab === 'cash'}
-            label="Depositar USDC"
-            onClick={() => setTab('cash')}
-          />
-          <TabButton
-            active={tab === 'receive'}
-            label="Recibir on-chain"
-            onClick={() => setTab('receive')}
-          />
-        </div>
+        {view === 'pick' ? (
+          <div className="grid gap-2">
+            <MethodCard
+              icon={<Banknote className="h-5 w-5" />}
+              title="MoneyGram"
+              subtitle="Efectivo en agente · SEP-24"
+              onClick={() => setView('cash')}
+            />
+            <MethodCard
+              icon={<CreditCard className="h-5 w-5" />}
+              title="Tarjeta"
+              subtitle="Visa / Mastercard · SEP-24"
+              onClick={() => setView('card')}
+            />
+            <MethodCard
+              icon={<QrCode className="h-5 w-5" />}
+              title="Recibir on-chain"
+              subtitle="Public key Stellar"
+              onClick={() => setView('receive')}
+            />
+          </div>
+        ) : null}
 
-        {tab === 'cash' ? (
-          <CashDepositPanel
+        {view === 'cash' ? (
+          <Sep24DepositPanel
+            rail="cash"
             hasUsdcTrustline={hasUsdcTrustline}
             onCompleted={onDepositCompleted}
           />
-        ) : (
-          <ReceiveOnchain
-            publicKey={publicKey}
-            copied={copied}
-            onCopy={onCopy}
+        ) : null}
+
+        {view === 'card' ? (
+          <Sep24DepositPanel
+            rail="card"
+            hasUsdcTrustline={hasUsdcTrustline}
+            onCompleted={onDepositCompleted}
           />
-        )}
+        ) : null}
+
+        {view === 'receive' ? (
+          <ReceiveOnchain publicKey={publicKey} copied={copied} onCopy={onCopy} />
+        ) : null}
       </div>
     </div>
   )
 }
 
-function TabButton({
-  active,
-  label,
+function MethodCard({
+  icon,
+  title,
+  subtitle,
   onClick,
 }: {
-  active: boolean
-  label: string
+  icon: ReactNode
+  title: string
+  subtitle: string
   onClick: () => void
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`rounded-2xl px-3 py-2 text-sm font-medium ${
-        active ? 'bg-app-accent text-white' : 'bg-app-chip text-white/80'
-      }`}
+      className="flex items-center gap-3 rounded-[22px] bg-app-chip px-4 py-4 text-left"
     >
-      {label}
+      <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-white/5 text-app-accent">
+        {icon}
+      </span>
+      <span className="min-w-0">
+        <span className="block text-sm font-semibold">{title}</span>
+        <span className="mt-0.5 block text-xs text-app-muted">{subtitle}</span>
+      </span>
     </button>
   )
-}
-
-function CashDepositPanel({
-  hasUsdcTrustline,
-  onCompleted,
-}: {
-  hasUsdcTrustline: boolean
-  onCompleted?: () => void
-}) {
-  const deposit = useSep24Deposit(onCompleted)
-  const [amount, setAmount] = useState('')
-  const [trustOk, setTrustOk] = useState(hasUsdcTrustline)
-  const [iframeBlocked, setIframeBlocked] = useState(false)
-  const [limits, setLimits] = useState<Sep24AmountLimits>({
-    minAmount: 1,
-    maxAmount: 10,
-  })
-
-  useEffect(() => {
-    let cancelled = false
-    void fetchSep24DepositLimits()
-      .then((next) => {
-        if (!cancelled && (next.minAmount != null || next.maxAmount != null)) {
-          setLimits({
-            minAmount: next.minAmount ?? 1,
-            maxAmount: next.maxAmount ?? 10,
-          })
-        }
-      })
-      .catch(() => {
-        // Keep the test-anchor fallback range.
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
-  useEffect(() => {
-    if (hasUsdcTrustline) {
-      setTrustOk(true)
-    }
-    if (deposit.errorCode === 'missing_trustline') {
-      setTrustOk(false)
-    }
-  }, [hasUsdcTrustline, deposit.errorCode])
-
-  const needsTrustline = !trustOk || deposit.errorCode === 'missing_trustline'
-  const showStartForm =
-    trustOk &&
-    !deposit.session &&
-    (deposit.phase === 'idle' || deposit.phase === 'error')
-
-  async function onStart(event: FormEvent) {
-    event.preventDefault()
-    const raw = amount.trim().replace(',', '.')
-    if (raw) {
-      const value = Number(raw)
-      const min = limits.minAmount ?? 1
-      const max = limits.maxAmount ?? 10
-      if (!Number.isFinite(value) || value < min || value > max) {
-        return
-      }
-    }
-    const session = await deposit.start(raw || undefined)
-    if (session?.url) {
-      window.open(session.url, 'sep24-deposit', 'noopener,noreferrer')
-    }
-  }
-
-  const min = limits.minAmount ?? 1
-  const max = limits.maxAmount ?? 10
-  const amountValue = Number(amount.trim().replace(',', '.'))
-  const amountOutOfRange =
-    Boolean(amount.trim()) &&
-    (!Number.isFinite(amountValue) || amountValue < min || amountValue > max)
-
-  return (
-    <div className="space-y-4">
-      <p className="text-sm text-app-muted">
-        Depósito en efectivo vía SEP-24 (ancla tipo MoneyGram Access). Recibes
-        USDC de Testnet. En el ancla de prueba el monto va de {min} a {max} USDC.
-      </p>
-
-      {needsTrustline && deposit.phase !== 'interactive' && deposit.phase !== 'completed' ? (
-        <div className="space-y-3 rounded-2xl bg-app-chip p-4">
-          <p className="text-sm">
-            Esta cuenta aún no confía USDC. El ancla no puede enviarte fondos
-            sin esa trustline.
-          </p>
-          <button
-            type="button"
-            onClick={() => {
-              void deposit.openTrustline().then((ok) => {
-                if (ok) {
-                  setTrustOk(true)
-                }
-              })
-            }}
-            disabled={deposit.phase === 'trustline'}
-            className="w-full rounded-2xl bg-app-accent py-3 text-sm font-medium text-white disabled:opacity-60"
-          >
-            {deposit.phase === 'trustline' ? 'Abriendo trustline…' : 'Abrir trustline USDC'}
-          </button>
-        </div>
-      ) : null}
-
-      {showStartForm ? (
-        <form className="space-y-3" onSubmit={(event) => void onStart(event)}>
-          <label className="grid gap-1 text-sm">
-            Monto USDC (opcional, {min}–{max} en este ancla)
-            <input
-              className="rounded-2xl border border-app-line bg-app-chip px-3 py-2 text-sm"
-              inputMode="decimal"
-              value={amount}
-              onChange={(event) => setAmount(event.target.value)}
-              placeholder={`Ej. ${Math.min(max, Math.max(min, 5))}`}
-            />
-          </label>
-          {amountOutOfRange ? (
-            <p className="text-sm text-red-400">
-              El ancla de prueba acepta entre {min} y {max} USDC. Un valor como 20
-              lo rechaza.
-            </p>
-          ) : null}
-          <button
-            type="submit"
-            disabled={deposit.phase === 'starting' || amountOutOfRange}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-app-accent py-3 text-sm font-medium text-white disabled:opacity-60"
-          >
-            <Banknote className="h-4 w-4" />
-            Continuar con el ancla
-          </button>
-        </form>
-      ) : null}
-
-      {deposit.phase === 'starting' ? (
-        <p className="text-sm text-app-muted">Autenticando SEP-10 y abriendo SEP-24…</p>
-      ) : null}
-
-      {deposit.session ? (
-        <div className="space-y-3">
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-sm font-medium">Flujo interactivo del ancla</p>
-            <a
-              href={deposit.session.url}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-1 text-xs text-app-accent"
-            >
-              Abrir en ventana
-              <ExternalLink className="h-3.5 w-3.5" />
-            </a>
-          </div>
-          {iframeBlocked ? (
-            <p className="rounded-2xl bg-app-chip p-3 text-sm text-app-muted">
-              El ancla no permite incrustar su página. Usa Abrir en ventana.
-            </p>
-          ) : (
-            <iframe
-              title="Depósito SEP-24"
-              src={deposit.session.url}
-              className="h-[52vh] w-full rounded-2xl bg-black"
-              sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox"
-              onError={() => setIframeBlocked(true)}
-            />
-          )}
-          <TransactionStatus tx={deposit.transaction} />
-        </div>
-      ) : null}
-
-      {deposit.phase === 'completed' ? (
-        <p className="text-sm text-green-400">Depósito completado. El USDC ya está en tu cuenta.</p>
-      ) : null}
-
-      {deposit.error ? <p className="text-sm text-red-400">{deposit.error}</p> : null}
-
-      {deposit.phase === 'error' && deposit.errorCode === 'expired_session' ? (
-        <button
-          type="button"
-          onClick={() => deposit.reset()}
-          className="w-full rounded-2xl bg-app-chip py-3 text-sm"
-        >
-          Reintentar sesión
-        </button>
-      ) : null}
-    </div>
-  )
-}
-
-function TransactionStatus({ tx }: { tx: Sep24Transaction | null }) {
-  if (!tx) {
-    return (
-      <p className="text-xs text-app-muted">
-        Esperando estado del ancla…
-      </p>
-    )
-  }
-
-  return (
-    <div className="rounded-2xl bg-app-chip p-3 text-sm">
-      <p className="font-medium">{statusLabel(tx.status)}</p>
-      {tx.message ? <p className="mt-1 text-app-muted">{tx.message}</p> : null}
-      {tx.amount_out ? (
-        <p className="mt-1 tabular-nums">
-          {tx.amount_out} {tx.amount_out_asset ? 'USDC' : ''}
-        </p>
-      ) : null}
-      {tx.external_transaction_id ? (
-        <p className="mt-1 font-mono text-xs text-app-muted">
-          Ref {tx.external_transaction_id}
-        </p>
-      ) : null}
-    </div>
-  )
-}
-
-function statusLabel(status: string): string {
-  const labels: Record<string, string> = {
-    incomplete: 'Pendiente de datos',
-    pending_user_transfer_start: 'Paga en el agente (efectivo)',
-    pending_user_transfer_complete: 'Esperando confirmación del agente',
-    pending_anchor: 'El ancla está procesando',
-    pending_stellar: 'Enviando USDC en Stellar',
-    pending_external: 'Procesando fuera de Stellar',
-    pending_trust: 'Falta trustline de USDC',
-    pending_user: 'Acción pendiente en el ancla',
-    completed: 'Completado',
-    error: 'Error',
-    expired: 'Expirado',
-  }
-  return labels[status] ?? status
 }
 
 function ReceiveOnchain({

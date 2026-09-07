@@ -81,7 +81,7 @@ HTTP routing lives in `server/dispatchApi.ts`. Locally it is mounted by `server/
 
 ## SEP-24 (USDC deposit)
 
-The **Add** button runs SEP-10 (server-side signing) and SEP-24 interactive deposit. To try without MoneyGram, use `testanchor.stellar.org`. MoneyGram Ramps requires allowlisting public keys / your domain.
+The **Add** button runs SEP-10 (server-side signing) and SEP-24 interactive deposit. In local and Vercel **dev**, keep `SEP24_HOME_DOMAIN=testanchor.stellar.org`: that SDF Testnet anchor simulates cash (MoneyGram-style) and card rails (limits are typically 1–10 USDC). MoneyGram Access (`extmgxanchor.moneygram.com`) needs public-key / domain allowlisting and will fail without it.
 
 ## Virtual Visa (sandbox)
 

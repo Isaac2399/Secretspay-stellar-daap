@@ -20,6 +20,7 @@ export default defineConfig(({ mode }) => {
     'VITE_LOYALTY_ISSUER',
     'LOYALTY_CODE',
     'LOYALTY_ISSUER',
+    'VITE_USDC_CODE',
     'VITE_USDC_ISSUER',
     'SEP24_HOME_DOMAIN',
     'VITE_SEP24_HOME_DOMAIN',

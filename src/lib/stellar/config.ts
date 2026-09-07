@@ -2,6 +2,7 @@ import { Horizon, Networks } from '@stellar/stellar-sdk'
 
 const MAINNET_USDC_ISSUER =
   'GA5ZSEJYB37JRC5RCJAELWUHTMYHMEKPVGFBMDLM5AH4VEKBE4SKZU7Z'
+/** Circle USDC on Stellar Testnet — same issuer as testanchor.stellar.org stellar.toml. */
 const TESTNET_USDC_ISSUER =
   'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5'
 const DEFAULT_HORIZON = 'https://horizon-testnet.stellar.org'

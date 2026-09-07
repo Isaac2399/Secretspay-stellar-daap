@@ -1,6 +1,10 @@
+import { useEffect, useState } from 'react'
 import { Ban, ExternalLink, Inbox, Store } from 'lucide-react'
 import type { CardAuthorization } from '@/lib/cards/types'
 import { formatAmount } from '@/lib/stellar/useAccountBalances'
+
+const INITIAL_VISIBLE = 3
+const MORE_STEP = 6
 
 export function CardTransactions({
   items,
@@ -9,6 +13,14 @@ export function CardTransactions({
   items: CardAuthorization[]
   loading: boolean
 }) {
+  const [visible, setVisible] = useState(INITIAL_VISIBLE)
+
+  useEffect(() => {
+    setVisible(INITIAL_VISIBLE)
+  }, [items[0]?.id])
+
+  const shown = items.slice(0, visible)
+  const hasMore = items.length > visible
   return (
     <section className="space-y-3">
       <h2 className="text-[17px] font-semibold">Movimientos de la tarjeta</h2>
@@ -30,11 +42,22 @@ export function CardTransactions({
         ) : null}
 
         {items.length > 0 ? (
-          <ul className="divide-y divide-white/10">
-            {items.map((item) => (
-              <TransactionRow key={item.id} item={item} />
-            ))}
-          </ul>
+          <>
+            <ul className="divide-y divide-white/10">
+              {shown.map((item) => (
+                <TransactionRow key={item.id} item={item} />
+              ))}
+            </ul>
+            {hasMore ? (
+              <button
+                type="button"
+                onClick={() => setVisible((count) => count + MORE_STEP)}
+                className="w-full border-t border-white/10 py-3 text-sm font-medium text-app-accent"
+              >
+                Ver más
+              </button>
+            ) : null}
+          </>
         ) : null}
       </div>
     </section>

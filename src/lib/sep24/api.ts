@@ -2,6 +2,7 @@ import type {
   Sep24AmountLimits,
   Sep24ErrorCode,
   Sep24InteractiveResponse,
+  Sep24Rail,
   Sep24Transaction,
 } from './types'
 
@@ -36,12 +37,17 @@ export async function fetchSep24DepositLimits(): Promise<Sep24AmountLimits> {
   return {
     minAmount: typeof parsed.minAmount === 'number' ? parsed.minAmount : null,
     maxAmount: typeof parsed.maxAmount === 'number' ? parsed.maxAmount : null,
+    homeDomain: typeof parsed.homeDomain === 'string' ? parsed.homeDomain : null,
   }
 }
 
-export async function startSep24Deposit(amount?: string): Promise<Sep24InteractiveResponse> {
+export async function startSep24Deposit(input: {
+  amount?: string
+  rail: Sep24Rail
+}): Promise<Sep24InteractiveResponse> {
   return request<Sep24InteractiveResponse>('/api/sep24/deposit', {
-    amount: amount || undefined,
+    amount: input.amount || undefined,
+    rail: input.rail,
   })
 }
 

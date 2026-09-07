@@ -1,4 +1,4 @@
-import { Gauge, Snowflake, Wallet } from 'lucide-react'
+import { CreditCard, Gauge, Snowflake, Wallet } from 'lucide-react'
 import type { PublicCard } from '@/lib/cards/types'
 import { formatAmount } from '@/lib/stellar/useAccountBalances'
 
@@ -7,6 +7,7 @@ type CardControlsProps = {
   busy: boolean
   onToggleFreeze: () => void
   onAddToWallet: () => void
+  onDepositUsdc: () => void
 }
 
 export function CardControls({
@@ -14,6 +15,7 @@ export function CardControls({
   busy,
   onToggleFreeze,
   onAddToWallet,
+  onDepositUsdc,
 }: CardControlsProps) {
   const frozen = card.status === 'frozen'
   const daily = card.limits.daily
@@ -46,6 +48,14 @@ export function CardControls({
           Apple / Google Pay
         </button>
       </div>
+      <button
+        type="button"
+        onClick={onDepositUsdc}
+        className="flex w-full items-center justify-center gap-2 rounded-[22px] bg-app-accent px-3 py-4 text-[13px] font-medium text-black"
+      >
+        <CreditCard className="h-5 w-5" />
+        Depositar con tarjeta
+      </button>
 
       <div className="rounded-[24px] bg-app-card p-4">
         <div className="flex items-center justify-between gap-2">
