@@ -55,6 +55,20 @@ export async function accountHasUsdcTrustline(publicKey: string): Promise<boolea
   return hasTrustline(account, usdcAssetFromEnv())
 }
 
+export async function ensureClassicAssetTrustline(
+  secretKey: string,
+  code: string,
+  issuer: string,
+): Promise<void> {
+  if (!/^[A-Z0-9]{1,12}$/.test(code)) {
+    throw new Error('El código de asset Stellar debe ser alfanumérico (máx. 12).')
+  }
+  if (!StrKey.isValidEd25519PublicKey(issuer)) {
+    throw new Error('El emisor del asset no es una public key válida.')
+  }
+  await ensureAssetTrustline(secretKey, new Asset(code, issuer))
+}
+
 async function ensureAssetTrustline(secretKey: string, asset: Asset): Promise<void> {
   const pair = Keypair.fromSecret(secretKey)
   const server = new Horizon.Server(horizonUrl())

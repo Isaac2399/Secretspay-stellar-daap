@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Building2, Shield, Users } from 'lucide-react'
 import { ActivityList } from '@/components/dashboard/ActivityList'
+import { StructuringDashboard } from '@/components/rwa/StructuringDashboard'
 import { fetchAdminOverview } from '@/lib/admin/api'
 import { readableError } from '@/lib/auth/readableError'
 import { formatAmount } from '@/lib/stellar/useAccountBalances'
@@ -9,7 +10,7 @@ import { stellarConfig } from '@/lib/stellar/config'
 import type { AdminMerchantRow, TokenTotals } from '@/types/admin'
 
 export function AdminDashboard() {
-  const [tab, setTab] = useState<'merchants' | 'customers'>('merchants')
+  const [tab, setTab] = useState<'merchants' | 'customers' | 'rwa'>('merchants')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -81,7 +82,7 @@ export function AdminDashboard() {
         </section>
       ) : null}
 
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-3 gap-2">
         <TabButton
           active={tab === 'merchants'}
           label="Empresas"
@@ -98,12 +99,22 @@ export function AdminDashboard() {
             setSelectedId(null)
           }}
         />
+        <TabButton
+          active={tab === 'rwa'}
+          label="RWA"
+          onClick={() => {
+            setTab('rwa')
+            setSelectedId(null)
+          }}
+        />
       </div>
 
       {loading ? (
         <p className="text-sm text-app-muted">Cargando panel…</p>
       ) : null}
       {error ? <p className="text-sm text-red-400">{error}</p> : null}
+
+      {tab === 'rwa' ? <StructuringDashboard /> : null}
 
       {tab === 'merchants' && overview ? (
         <ul className="space-y-2">

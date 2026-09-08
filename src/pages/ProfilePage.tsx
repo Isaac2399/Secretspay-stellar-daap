@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { Check, Copy, LogOut, Shield, Store, User } from 'lucide-react'
-import { useNavigate } from 'react-router-dom'
+import { Check, Copy, Landmark, LogOut, Shield, Store, User } from 'lucide-react'
+import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { categoryLabel } from '@/lib/places/categories'
 
@@ -77,6 +77,14 @@ export default function ProfilePage() {
           </button>
         </div>
       </div>
+
+      <Link
+        to="/rwa"
+        className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-app-card py-3 text-sm font-medium"
+      >
+        <Landmark className="h-4 w-4 text-app-accent" />
+        Activos reales (RWA)
+      </Link>
 
       <button
         type="button"

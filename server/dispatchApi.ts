@@ -22,6 +22,7 @@ import {
 } from './sep24Api.js'
 import { parsePlaceBody, reverseNominatim, searchNominatim } from './places.js'
 import { handleCardRoutes } from './cardApi.js'
+import { handleRwaRoutes } from './rwaApi.js'
 
 function isAuthError(error: unknown): error is AuthError {
   if (error instanceof AuthError) {
@@ -70,6 +71,11 @@ async function route(input: {
   await ensureDevSuperAdmin()
   const path = (input.path.split('?')[0] ?? input.path).replace(/\/$/, '') || '/'
   const method = input.method.toUpperCase()
+
+  const rwaResult = await handleRwaRoutes({ ...input, path, method })
+  if (rwaResult) {
+    return rwaResult
+  }
 
   const cardResult = await handleCardRoutes({ ...input, path, method })
   if (cardResult) {

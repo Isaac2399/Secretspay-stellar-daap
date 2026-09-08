@@ -7,6 +7,11 @@ import MapPage from '@/pages/MapPage'
 import ProfilePage from '@/pages/ProfilePage'
 import RegisterPage from '@/pages/RegisterPage'
 import CardPage from '@/pages/CardPage'
+import RwaLearnPage from '@/pages/RwaLearnPage'
+import RwaTokenizePage from '@/pages/RwaTokenizePage'
+import RwaMarketplacePage from '@/pages/RwaMarketplacePage'
+import RwaPortfolioPage from '@/pages/RwaPortfolioPage'
+import RwaStructuringPage from '@/pages/RwaStructuringPage'
 import { useAuth } from '@/lib/auth/AuthContext'
 
 export function AppRoutes() {
@@ -25,6 +30,11 @@ export function AppRoutes() {
           <Route path="/card" element={<CardPage />} />
           <Route path="/map" element={<MapPage />} />
           <Route path="/profile" element={<ProfilePage />} />
+          <Route path="/rwa" element={<RwaLearnPage />} />
+          <Route path="/rwa/tokenizar" element={<RwaTokenizePage />} />
+          <Route path="/rwa/invertir" element={<RwaMarketplacePage />} />
+          <Route path="/rwa/dividendos" element={<RwaPortfolioPage />} />
+          <Route path="/rwa/panel" element={<RwaStructuringPage />} />
         </Route>
       </Route>
 

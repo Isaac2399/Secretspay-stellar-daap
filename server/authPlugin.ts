@@ -30,7 +30,8 @@ async function handleApi(
     !url.startsWith('/api/sep24') &&
     !url.startsWith('/api/places') &&
     !url.startsWith('/api/admin') &&
-    !url.startsWith('/api/cards')
+    !url.startsWith('/api/cards') &&
+    !url.startsWith('/api/rwa')
   ) {
     next()
     return

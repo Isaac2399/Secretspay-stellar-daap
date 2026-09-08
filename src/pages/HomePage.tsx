@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
 import { AdminDashboard } from '@/components/admin/AdminDashboard'
-import { CardTeaser } from '@/components/card/CardTeaser'
 import { AccountStrip } from '@/components/dashboard/AccountStrip'
 import { ActivityList } from '@/components/dashboard/ActivityList'
 import { DashboardHero } from '@/components/dashboard/DashboardHero'
@@ -52,8 +51,6 @@ export default function HomePage() {
           void activity.reloadAfterDeposit(tx)
         }}
       />
-
-      <CardTeaser />
 
       <AccountStrip balances={balances} />
 

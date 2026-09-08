@@ -1,10 +1,11 @@
 import { NavLink } from 'react-router-dom'
-import { CreditCard, Home, Map, UserRound } from 'lucide-react'
+import { CreditCard, Home, Landmark, Map, UserRound } from 'lucide-react'
 
 const items = [
   { to: '/', label: 'Inicio', icon: Home, end: true },
   { to: '/card', label: 'Tarjeta', icon: CreditCard, end: false },
   { to: '/map', label: 'Mapa', icon: Map, end: false },
+  { to: '/rwa', label: 'RWA', icon: Landmark, end: false },
   { to: '/profile', label: 'Perfil', icon: UserRound, end: false },
 ] as const
 
@@ -21,7 +22,7 @@ export function BottomNav() {
             to={item.to}
             end={item.end}
             className={({ isActive }) =>
-              `flex min-w-16 flex-1 flex-col items-center gap-0.5 rounded-2xl px-2 py-2 text-[11px] font-medium transition-colors ${
+              `flex min-w-0 flex-1 flex-col items-center gap-0.5 rounded-2xl px-1 py-2 text-[10px] font-medium transition-colors ${
                 isActive
                   ? 'bg-white/10 text-app-accent'
                   : 'text-white/70 hover:text-white'
