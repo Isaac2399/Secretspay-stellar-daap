@@ -53,5 +53,9 @@ export default defineConfig(({ mode }) => {
         '@': fileURLToPath(new URL('./src', import.meta.url)),
       },
     },
+    build: {
+      // Stellar SDK + map/QR keep the main chunk large; this is a warning only.
+      chunkSizeWarningLimit: 1600,
+    },
   }
 })
