@@ -4,8 +4,10 @@ import { useRwa } from '@/lib/rwa/RwaContext'
 import { readableError } from '@/lib/auth/readableError'
 import {
   ASSET_TYPE_LABELS,
+  DOCUMENT_KIND_LABELS,
   LEGAL_LABELS,
   STATUS_LABELS,
+  typeDetailsSummary,
   type TokenizationRequest,
   type TokenizationStatus,
 } from '@/types/rwa'
@@ -116,6 +118,28 @@ export function StructuringDashboard() {
           <p className="text-xs text-app-muted">
             {LEGAL_LABELS[selected.legalGuarantee]} · levantar {selected.raiseAmountUsd} USDC
           </p>
+          <dl className="space-y-1 rounded-2xl bg-app-chip p-3 text-xs">
+            <div className="flex justify-between gap-3">
+              <dt className="text-app-muted">Tipo</dt>
+              <dd className="max-w-[65%] text-right">{ASSET_TYPE_LABELS[selected.assetType]}</dd>
+            </div>
+            {typeDetailsSummary(selected.typeDetails).map((row) => (
+              <div key={row.label} className="flex justify-between gap-3">
+                <dt className="text-app-muted">{row.label}</dt>
+                <dd className="max-w-[65%] text-right">{row.value}</dd>
+              </div>
+            ))}
+            {selected.documents.length ? (
+              <div className="flex justify-between gap-3">
+                <dt className="text-app-muted">Documentos</dt>
+                <dd className="max-w-[65%] text-right">
+                  {selected.documents
+                    .map((row) => `${DOCUMENT_KIND_LABELS[row.kind]}: ${row.fileName}`)
+                    .join(' · ')}
+                </dd>
+              </div>
+            ) : null}
+          </dl>
           <label className="grid gap-1.5 text-sm font-medium text-white/80">
             Número de inscripción RUGM
             <input

@@ -1,16 +1,13 @@
 import { useState, type FormEvent } from 'react'
 import { X } from 'lucide-react'
-import { fieldClass } from '@/components/auth/AuthLayout'
+import { InvestmentInsights } from '@/components/rwa/InvestmentInsights'
 import { useRwa } from '@/lib/rwa/RwaContext'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { useAccountBalances } from '@/lib/stellar/useAccountBalances'
 import { formatUsd } from '@/lib/rwa/format'
+import { remainingCapacityUsd } from '@/lib/rwa/insights'
 import { readableError } from '@/lib/auth/readableError'
-import {
-  ASSET_TYPE_LABELS,
-  LEGAL_BADGE,
-  type MarketplaceListing,
-} from '@/types/rwa'
+import { type MarketplaceListing } from '@/types/rwa'
 import { shortenPublicKey } from '@/lib/userDisplay'
 
 export function AssetDetailModal({
@@ -27,11 +24,20 @@ export function AssetDetailModal({
   const [error, setError] = useState<string | null>(null)
   const [hash, setHash] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const remaining = remainingCapacityUsd(listing)
 
   async function onInvest(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setError(null)
     setHash(null)
+    if (Number(amount) < Number(listing.minInvestmentUsd)) {
+      setError(`La inversión mínima es ${formatUsd(listing.minInvestmentUsd)}.`)
+      return
+    }
+    if (Number(amount) > remaining) {
+      setError(`Solo queda cupo por ${formatUsd(remaining)}.`)
+      return
+    }
     if (Number(amount) > Number(balances.usdc)) {
       setError(
         `Saldo USDC insuficiente (${balances.usdc}). Recargue desde Inicio → Agregar.`,
@@ -67,43 +73,32 @@ export function AssetDetailModal({
             <X className="h-4 w-4" />
           </button>
         </div>
-        <p className="mt-3 text-sm leading-relaxed text-white/80">{listing.description}</p>
-        <p className="mt-3 text-xs text-app-accent">{LEGAL_BADGE[listing.legalBacking]}</p>
-        <dl className="mt-4 space-y-2 text-sm">
-          <Row label="Tipo" value={ASSET_TYPE_LABELS[listing.assetType]} />
-          <Row label="APY" value={`${listing.apy}%`} />
-          <Row label="Levantado" value={`${formatUsd(listing.raisedUsd)} / ${formatUsd(listing.targetUsd)}`} />
-          <Row label="Mínimo" value={formatUsd(listing.minInvestmentUsd)} />
-          <Row label="Suministro" value={listing.totalSupply} />
-          <Row label="Emisor" value={shortenPublicKey(listing.issuerPublicKey)} />
-        </dl>
+
+        <div className="mt-4">
+          <InvestmentInsights
+            listing={listing}
+            amount={amount}
+            usdcBalance={balances.usdc}
+            onAmountChange={setAmount}
+          />
+        </div>
+
+        <p className="mt-4 text-[11px] text-app-muted">
+          Emisor {shortenPublicKey(listing.issuerPublicKey)} · el token viaja por trustline Stellar;
+          el cobro ante incumplimiento es el contrato costarricense, no un smart contract.
+        </p>
+
         <div className="mt-4 grid gap-2">
-          <button
-            type="button"
-            className="rounded-2xl bg-app-chip py-2.5 text-sm text-white/80"
-          >
+          <button type="button" className="rounded-2xl bg-app-chip py-2.5 text-sm text-white/80">
             Descargar PDF legal (placeholder)
           </button>
-          <button
-            type="button"
-            className="rounded-2xl bg-app-chip py-2.5 text-sm text-white/80"
-          >
+          <button type="button" className="rounded-2xl bg-app-chip py-2.5 text-sm text-white/80">
             Contrato / RUGM (placeholder)
           </button>
         </div>
 
         <form className="mt-5 space-y-3" onSubmit={(event) => void onInvest(event)}>
-          <h3 className="text-sm font-semibold">Invertir con USDC</h3>
-          <p className="text-xs text-app-muted">
-            Abre la trustline del token {listing.assetCode} y transfiere USDC desde su wallet
-            custodial. Saldo USDC: {balances.usdc}
-          </p>
-          <input
-            className={fieldClass}
-            inputMode="decimal"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-          />
+          <h3 className="text-sm font-semibold">Confirmar compra con USDC</h3>
           {error ? <p className="text-sm text-red-400">{error}</p> : null}
           {hash ? (
             <p className="break-all text-xs text-app-accent">
@@ -115,19 +110,10 @@ export function AssetDetailModal({
             disabled={busy}
             className="w-full rounded-2xl bg-app-accent py-3 text-sm font-medium disabled:opacity-60"
           >
-            {busy ? 'Abriendo trustline y pagando…' : 'Invertir'}
+            {busy ? 'Abriendo trustline y pagando…' : `Invertir ${formatUsd(amount || 0)}`}
           </button>
         </form>
       </div>
-    </div>
-  )
-}
-
-function Row({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex justify-between gap-3">
-      <dt className="text-app-muted">{label}</dt>
-      <dd className="text-right">{value}</dd>
     </div>
   )
 }

@@ -2,32 +2,42 @@ import { useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { fieldClass } from '@/components/auth/AuthLayout'
 import { AuthSubmitButton } from '@/components/auth/formHelpers'
+import { DynamicAssetFields } from '@/components/rwa/DynamicAssetFields'
 import { useRwa } from '@/lib/rwa/RwaContext'
 import { readableError } from '@/lib/auth/readableError'
 import {
+  APY_BASIS_LABELS,
   ASSET_TYPE_LABELS,
+  ASSET_TYPE_OPTIONS,
+  DOCUMENT_KIND_LABELS,
   FREQUENCY_LABELS,
   LEGAL_LABELS,
+  emptyTypeDetails,
+  isTypeSpecificDocumentKind,
+  typeDetailsSummary,
+  validateTypeDetails,
   type DividendFrequency,
   type LegalGuarantee,
   type RwaAssetType,
+  type RwaDocumentKind,
   type RwaDocumentPlaceholder,
+  type TokenizationTypeDetails,
   type TokenizationWizardPayload,
 } from '@/types/rwa'
 
 const STEPS = [
   'Perfil del activo',
+  'Formulario dinámico',
   'Respaldo legal',
   'Parámetros financieros',
   'Resumen',
 ] as const
 
-const ASSET_TYPES = Object.entries(ASSET_TYPE_LABELS) as [RwaAssetType, string][]
-
 const emptyForm: TokenizationWizardPayload = {
   assetName: '',
-  assetType: 'inmueble',
+  assetType: 'equity_inmobiliario',
   estimatedValuationUsd: '',
+  typeDetails: emptyTypeDetails('equity_inmobiliario'),
   legalGuarantee: 'rugm',
   ownerLegalName: '',
   ownerIdNumber: '',
@@ -54,7 +64,20 @@ export function TokenizationWizard() {
     setForm((current) => ({ ...current, [key]: value }))
   }
 
-  function addDocument(kind: RwaDocumentPlaceholder['kind'], fileName: string) {
+  function setAssetType(assetType: RwaAssetType) {
+    setForm((current) => ({
+      ...current,
+      assetType,
+      typeDetails: emptyTypeDetails(assetType),
+      documents: current.documents.filter((row) => !isTypeSpecificDocumentKind(row.kind)),
+    }))
+  }
+
+  function setTypeDetails(typeDetails: TokenizationTypeDetails) {
+    update('typeDetails', typeDetails)
+  }
+
+  function addDocument(kind: RwaDocumentKind, fileName: string) {
     if (!fileName) {
       return
     }
@@ -77,6 +100,13 @@ export function TokenizationWizard() {
       }
     }
     if (step === 1) {
+      const details =
+        form.typeDetails.kind === form.assetType
+          ? form.typeDetails
+          : emptyTypeDetails(form.assetType)
+      return validateTypeDetails(details, form.documents)
+    }
+    if (step === 2) {
       if (form.ownerLegalName.trim().length < 3) {
         return 'Indique el nombre del titular o representante.'
       }
@@ -84,7 +114,7 @@ export function TokenizationWizard() {
         return 'Indique cédula jurídica o física.'
       }
     }
-    if (step === 2) {
+    if (step === 3) {
       if (!/^\d+(\.\d{1,2})?$/.test(form.raiseAmountUsd)) {
         return 'Indique cuánto desea levantar en USDC.'
       }
@@ -118,7 +148,14 @@ export function TokenizationWizard() {
     setSubmitting(true)
     setError(null)
     try {
-      const request = await submit(form)
+      const payload: TokenizationWizardPayload = {
+        ...form,
+        typeDetails:
+          form.typeDetails.kind === form.assetType
+            ? form.typeDetails
+            : emptyTypeDetails(form.assetType),
+      }
+      const request = await submit(payload)
       setPayloadPreview(JSON.stringify({ pending_tokenizations: request }, null, 2))
     } catch (err) {
       setError(readableError(err))
@@ -151,6 +188,11 @@ export function TokenizationWizard() {
       </section>
     )
   }
+
+  const apyBasisLabel =
+    form.typeDetails.kind === 'renta_flujo_caja'
+      ? APY_BASIS_LABELS[form.typeDetails.apyBasis]
+      : null
 
   return (
     <form className="space-y-5" onSubmit={(event) => void onSubmit(event)}>
@@ -186,13 +228,13 @@ export function TokenizationWizard() {
               placeholder="Ej. Local comercial en Curridabat"
             />
           </label>
-          <p className="text-sm font-medium text-white/80">Tipo de activo</p>
-          <div className="grid grid-cols-2 gap-2">
-            {ASSET_TYPES.map(([value, label]) => (
+          <p className="text-sm font-medium text-white/80">Tipo de tokenización</p>
+          <div className="grid gap-2">
+            {ASSET_TYPE_OPTIONS.map(([value, label]) => (
               <button
                 key={value}
                 type="button"
-                onClick={() => update('assetType', value)}
+                onClick={() => setAssetType(value)}
                 className={`rounded-2xl px-3 py-2.5 text-left text-xs font-medium ${
                   form.assetType === value
                     ? 'bg-app-accent text-white'
@@ -217,6 +259,22 @@ export function TokenizationWizard() {
       ) : null}
 
       {step === 1 ? (
+        <div className="space-y-3 rounded-[24px] bg-app-card p-4">
+          <div>
+            <p className="text-sm font-medium text-white/80">Datos específicos</p>
+            <p className="mt-1 text-xs text-app-muted">
+              {ASSET_TYPE_LABELS[form.assetType]}
+            </p>
+          </div>
+          <DynamicAssetFields
+            form={form}
+            onDetailsChange={setTypeDetails}
+            onPickDocument={addDocument}
+          />
+        </div>
+      ) : null}
+
+      {step === 2 ? (
         <div className="space-y-3 rounded-[24px] bg-app-card p-4">
           <p className="text-sm font-medium text-white/80">Garantía legal</p>
           {(Object.entries(LEGAL_LABELS) as [LegalGuarantee, string][]).map(
@@ -277,7 +335,7 @@ export function TokenizationWizard() {
         </div>
       ) : null}
 
-      {step === 2 ? (
+      {step === 3 ? (
         <div className="space-y-3 rounded-[24px] bg-app-card p-4">
           <label className="grid gap-1.5 text-sm font-medium text-white/80">
             Monto a levantar (USDC)
@@ -299,6 +357,12 @@ export function TokenizationWizard() {
               placeholder="8.5"
             />
           </label>
+          {apyBasisLabel ? (
+            <p className="text-xs text-app-muted">
+              Este APY se registrará como {apyBasisLabel.toLowerCase()}, según el formulario
+              de renta / flujo de caja.
+            </p>
+          ) : null}
           <p className="text-sm font-medium text-white/80">Frecuencia de dividendos</p>
           <div className="grid grid-cols-2 gap-2">
             {(Object.entries(FREQUENCY_LABELS) as [DividendFrequency, string][]).map(
@@ -321,15 +385,26 @@ export function TokenizationWizard() {
         </div>
       ) : null}
 
-      {step === 3 ? (
+      {step === 4 ? (
         <div className="space-y-3 rounded-[24px] bg-app-card p-4 text-sm">
           <SummaryRow label="Activo" value={form.assetName} />
           <SummaryRow label="Tipo" value={ASSET_TYPE_LABELS[form.assetType]} />
           <SummaryRow label="Valuación" value={`USD ${form.estimatedValuationUsd}`} />
+          {typeDetailsSummary(form.typeDetails).map((row) => (
+            <SummaryRow key={row.label} label={row.label} value={row.value} />
+          ))}
           <SummaryRow label="Garantía" value={LEGAL_LABELS[form.legalGuarantee]} />
           <SummaryRow label="Titular" value={form.ownerLegalName} />
+          <SummaryRow label="Cédula" value={form.ownerIdNumber} />
           <SummaryRow label="Levantar" value={`${form.raiseAmountUsd} USDC`} />
-          <SummaryRow label="APY" value={`${form.expectedApy}%`} />
+          <SummaryRow
+            label="APY"
+            value={
+              apyBasisLabel
+                ? `${form.expectedApy}% (${apyBasisLabel})`
+                : `${form.expectedApy}%`
+            }
+          />
           <SummaryRow
             label="Dividendos"
             value={FREQUENCY_LABELS[form.dividendFrequency]}
@@ -338,7 +413,9 @@ export function TokenizationWizard() {
             label="Documentos"
             value={
               form.documents.length
-                ? form.documents.map((row) => row.fileName).join(', ')
+                ? form.documents
+                    .map((row) => `${DOCUMENT_KIND_LABELS[row.kind]}: ${row.fileName}`)
+                    .join(' · ')
                 : 'Sin archivos (placeholders)'
             }
           />
@@ -351,7 +428,10 @@ export function TokenizationWizard() {
         {step > 0 ? (
           <button
             type="button"
-            onClick={() => setStep((current) => Math.max(0, current - 1))}
+            onClick={() => {
+              setError(null)
+              setStep((current) => Math.max(0, current - 1))
+            }}
             className="flex-1 rounded-2xl bg-app-chip py-3 text-sm font-medium"
           >
             Atrás

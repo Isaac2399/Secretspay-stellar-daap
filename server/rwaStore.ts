@@ -4,7 +4,12 @@ import { randomUUID } from 'node:crypto'
 import { AuthError } from './errors.js'
 import { loyaltyAssetFromEnv, usdcAssetFromEnv } from './provisionAccount.js'
 
-type RwaAssetType = 'inmueble' | 'vehiculo' | 'factura' | 'flujo_caja'
+type RwaAssetType =
+  | 'equity_inmobiliario'
+  | 'renta_flujo_caja'
+  | 'uso_fraccionado'
+  | 'agricola_exportacion'
+  | 'creditos_carbono'
 type LegalGuarantee = 'rugm' | 'fideicomiso'
 type DividendFrequency = 'monthly' | 'quarterly'
 type TokenizationStatus =
@@ -12,6 +17,53 @@ type TokenizationStatus =
   | 'legal_review'
   | 'approved'
   | 'rejected'
+type EquityProjectPhase = 'en_plano' | 'en_construccion' | 'finalizado'
+type ApyBasis = 'bruto' | 'neto'
+type RwaDocumentKind =
+  | 'titulo'
+  | 'estados_financieros'
+  | 'identificacion'
+  | 'otro'
+  | 'permisos_viabilidad'
+  | 'historico_ocupacion'
+  | 'offtake_agreement'
+  | 'plano_catastrado'
+  | 'mrv_auditoria'
+
+export type TokenizationTypeDetails =
+  | {
+      kind: 'equity_inmobiliario'
+      projectPhase: EquityProjectPhase
+      estimatedStartDate: string
+      estimatedDeliveryDate: string
+      exitStrategy: string
+    }
+  | {
+      kind: 'renta_flujo_caja'
+      operatingExpenses: string
+      apyBasis: ApyBasis
+    }
+  | {
+      kind: 'uso_fraccionado'
+      highSeasonDays: string
+      midSeasonDays: string
+      lowSeasonDays: string
+      annualMaintenanceUsd: string
+      subletRules: string
+    }
+  | {
+      kind: 'agricola_exportacion'
+      cropType: string
+      cropVariety: string
+      certifications: string
+      hectaresInProduction: string
+      agriculturalInsurance: string
+    }
+  | {
+      kind: 'creditos_carbono'
+      certificationStandard: string
+      vintageYear: string
+    }
 
 type StellarAssetSpec = {
   issuerPublicKey: string
@@ -37,11 +89,12 @@ export type TokenizationRequest = {
   assetName: string
   assetType: RwaAssetType
   estimatedValuationUsd: string
+  typeDetails: TokenizationTypeDetails
   legalGuarantee: LegalGuarantee
   ownerLegalName: string
   ownerIdNumber: string
   ownerCompany: string
-  documents: { kind: 'titulo' | 'estados_financieros' | 'identificacion' | 'otro'; fileName: string }[]
+  documents: { kind: RwaDocumentKind; fileName: string }[]
   raiseAmountUsd: string
   expectedApy: string
   dividendFrequency: DividendFrequency
@@ -70,6 +123,7 @@ export type MarketplaceListing = {
   nextPayoutDate: string
   totalSupply: string
   published: boolean
+  dividendFrequency: DividendFrequency
 }
 
 export type RwaHolding = {
@@ -85,6 +139,7 @@ export type TokenizationWizardPayload = {
   assetName: string
   assetType: RwaAssetType
   estimatedValuationUsd: string
+  typeDetails: TokenizationTypeDetails
   legalGuarantee: LegalGuarantee
   ownerLegalName: string
   ownerIdNumber: string
@@ -143,6 +198,7 @@ export async function createTokenizationRequest(input: {
     assetName: input.payload.assetName.trim(),
     assetType: input.payload.assetType,
     estimatedValuationUsd: input.payload.estimatedValuationUsd,
+    typeDetails: input.payload.typeDetails,
     legalGuarantee: input.payload.legalGuarantee,
     ownerLegalName: input.payload.ownerLegalName.trim(),
     ownerIdNumber: input.payload.ownerIdNumber.trim(),
@@ -357,6 +413,7 @@ function upsertListing(store: RwaStore, request: TokenizationRequest) {
     nextPayoutDate: existing?.nextPayoutDate ?? nextPayoutIso(request.dividendFrequency),
     totalSupply: spec.totalSupply,
     published: true,
+    dividendFrequency: request.dividendFrequency,
   }
   if (existing) {
     Object.assign(existing, listing)
@@ -392,7 +449,7 @@ function seedIfEmpty(store: RwaStore): RwaStore {
       requestId: null,
       assetCode: 'RWA01',
       name: 'Oficinas Plaza Escazú',
-      assetType: 'inmueble',
+      assetType: 'renta_flujo_caja',
       apy: '8.5',
       legalBacking: 'rugm',
       raisedUsd: '185000',
@@ -405,13 +462,14 @@ function seedIfEmpty(store: RwaStore): RwaStore {
       nextPayoutDate: '2026-10-01',
       totalSupply: '400000',
       published: true,
+      dividendFrequency: 'monthly',
     },
     {
       id: 'listing-rwa02',
       requestId: null,
       assetCode: 'RWA02',
       name: 'Flota de taxis Gran Área Metropolitana',
-      assetType: 'vehiculo',
+      assetType: 'renta_flujo_caja',
       apy: '11.0',
       legalBacking: 'fideicomiso',
       raisedUsd: '62000',
@@ -424,13 +482,14 @@ function seedIfEmpty(store: RwaStore): RwaStore {
       nextPayoutDate: '2026-10-01',
       totalSupply: '120000',
       published: true,
+      dividendFrequency: 'monthly',
     },
     {
       id: 'listing-rwa03',
       requestId: null,
       assetCode: 'RWA03',
       name: 'Factoring PYME — cadenas de supermercado',
-      assetType: 'factura',
+      assetType: 'renta_flujo_caja',
       apy: '14.0',
       legalBacking: 'rugm',
       raisedUsd: '41000',
@@ -443,6 +502,7 @@ function seedIfEmpty(store: RwaStore): RwaStore {
       nextPayoutDate: '2026-10-01',
       totalSupply: '80000',
       published: true,
+      dividendFrequency: 'monthly',
     },
   ]
   return store
@@ -454,9 +514,89 @@ function emptyStore(): RwaStore {
 
 function normalizeStore(store: RwaStore): RwaStore {
   return {
-    requests: store.requests ?? [],
-    listings: store.listings ?? [],
+    requests: (store.requests ?? []).map(normalizeRequest),
+    listings: (store.listings ?? []).map(normalizeListing),
     holdings: store.holdings ?? {},
+  }
+}
+
+function normalizeRequest(row: TokenizationRequest): TokenizationRequest {
+  const assetType = coerceAssetType(row.assetType)
+  return {
+    ...row,
+    assetType,
+    typeDetails:
+      row.typeDetails && row.typeDetails.kind === assetType
+        ? row.typeDetails
+        : emptyTypeDetails(assetType),
+    documents: Array.isArray(row.documents) ? row.documents : [],
+  }
+}
+
+function normalizeListing(row: MarketplaceListing): MarketplaceListing {
+  return {
+    ...row,
+    assetType: coerceAssetType(row.assetType),
+    dividendFrequency: row.dividendFrequency === 'quarterly' ? 'quarterly' : 'monthly',
+  }
+}
+
+function coerceAssetType(value: string): RwaAssetType {
+  if (
+    value === 'equity_inmobiliario' ||
+    value === 'renta_flujo_caja' ||
+    value === 'uso_fraccionado' ||
+    value === 'agricola_exportacion' ||
+    value === 'creditos_carbono'
+  ) {
+    return value
+  }
+  if (value === 'inmueble') {
+    return 'equity_inmobiliario'
+  }
+  return 'renta_flujo_caja'
+}
+
+function emptyTypeDetails(assetType: RwaAssetType): TokenizationTypeDetails {
+  switch (assetType) {
+    case 'equity_inmobiliario':
+      return {
+        kind: 'equity_inmobiliario',
+        projectPhase: 'en_plano',
+        estimatedStartDate: '',
+        estimatedDeliveryDate: '',
+        exitStrategy: '',
+      }
+    case 'renta_flujo_caja':
+      return {
+        kind: 'renta_flujo_caja',
+        operatingExpenses: '',
+        apyBasis: 'bruto',
+      }
+    case 'uso_fraccionado':
+      return {
+        kind: 'uso_fraccionado',
+        highSeasonDays: '',
+        midSeasonDays: '',
+        lowSeasonDays: '',
+        annualMaintenanceUsd: '',
+        subletRules: '',
+      }
+    case 'agricola_exportacion':
+      return {
+        kind: 'agricola_exportacion',
+        cropType: '',
+        cropVariety: '',
+        certifications: '',
+        hectaresInProduction: '',
+        agriculturalInsurance: '',
+      }
+    case 'creditos_carbono':
+      return {
+        kind: 'creditos_carbono',
+        certificationStandard: '',
+        vintageYear: '',
+      }
   }
 }
 

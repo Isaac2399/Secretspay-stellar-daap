@@ -7,6 +7,7 @@ import {
 } from './auth.js'
 import { loadStore } from './userStore.js'
 import { horizonUrl, loyaltyAssetFromEnv, usdcAssetFromEnv } from './provisionAccount.js'
+import { loadRwaStore, type RwaStore } from './rwaStore.js'
 
 export type AdminPayment = {
   id: string
@@ -30,6 +31,8 @@ export type AdminMerchantRow = {
   placeName?: string
   sales: TokenTotals
   receivedCount: number
+  monthlyUsdcReceived: Record<string, number>
+  monthlyUsdcSent: Record<string, number>
 }
 
 export type AdminCustomerRow = {
@@ -45,6 +48,38 @@ export type AdminOverview = {
   merchants: AdminMerchantRow[]
   customers: AdminCustomerRow[]
   merchantSalesTotal: TokenTotals
+  finance: AdminFinance
+}
+
+export type AdminMonthPoint = {
+  month: string
+  label: string
+  inflow: number
+  outflow: number
+  net: number
+}
+
+export type AdminFinance = {
+  merchantGmvUsdc: number
+  merchantGmvXlm: number
+  merchantLoyalty: number
+  rwaAumUsd: number
+  rwaTargetUsd: number
+  rwaBookUsd: number
+  rwaFundingGapUsd: number
+  rwaDividendsPaidUsd: number
+  rwaMonthlyObligationUsd: number
+  rwaAnnualObligationUsd: number
+  rwaInvestors: number
+  rwaListings: number
+  pendingRequests: number
+  rejectedRequests: number
+  failedPayments: number
+  listingRaised: { label: string; value: number }[]
+  listingObligation: { label: string; value: number }[]
+  requestStatus: { label: string; value: number }[]
+  merchantRanking: { label: string; value: number }[]
+  monthly: AdminMonthPoint[]
 }
 
 type HorizonPaymentRecord = {
@@ -96,25 +131,40 @@ export async function getAdminOverview(): Promise<AdminOverview> {
     addTotals(merchantSalesTotal, row.sales)
   }
 
+  const rwa = await loadRwaStore()
+  const finance = buildFinance(merchantRows, customerRows, merchantSalesTotal, rwa)
+
   return {
     distributorPublicKey: superAdminPublicKey(),
     merchants: merchantRows.sort((a, b) => a.email.localeCompare(b.email)),
     customers: customerRows.sort((a, b) => a.email.localeCompare(b.email)),
     merchantSalesTotal,
+    finance,
   }
 }
 
 async function loadMerchantRow(user: StoredUser): Promise<AdminMerchantRow> {
   const payments = await loadAccountPayments(user.publicKey, 200)
   const sales = emptySales()
+  const monthlyUsdcReceived: Record<string, number> = {}
+  const monthlyUsdcSent: Record<string, number> = {}
   let receivedCount = 0
   for (const item of payments) {
-    if (item.kind !== 'received' || item.status !== 'success') {
+    if (item.status !== 'success') {
       continue
     }
-    receivedCount += 1
-    const asset = saleAsset(item.asset)
-    sales[asset] = addAmounts(sales[asset] ?? '0', item.amount)
+    const month = item.createdAt.slice(0, 7)
+    if (item.kind === 'received') {
+      receivedCount += 1
+      const asset = saleAsset(item.asset)
+      sales[asset] = addAmounts(sales[asset] ?? '0', item.amount)
+      if (asset === 'USDC') {
+        monthlyUsdcReceived[month] = (monthlyUsdcReceived[month] ?? 0) + Number(item.amount)
+      }
+    }
+    if (item.kind === 'sent' && saleAsset(item.asset) === 'USDC') {
+      monthlyUsdcSent[month] = (monthlyUsdcSent[month] ?? 0) + Number(item.amount)
+    }
   }
   return {
     id: user.id,
@@ -124,6 +174,8 @@ async function loadMerchantRow(user: StoredUser): Promise<AdminMerchantRow> {
     placeName: user.place?.name,
     sales,
     receivedCount,
+    monthlyUsdcReceived,
+    monthlyUsdcSent,
   }
 }
 
@@ -259,6 +311,147 @@ function loyaltyCode(): string {
   } catch {
     return 'ROJOS'
   }
+}
+
+function buildFinance(
+  merchants: AdminMerchantRow[],
+  customers: AdminCustomerRow[],
+  sales: TokenTotals,
+  rwa: RwaStore,
+): AdminFinance {
+  const listings = rwa.listings.filter((row) => row.published)
+  const holdingRows = Object.values(rwa.holdings).flat()
+  const rwaAumUsd = listings.reduce((sum, row) => sum + Number(row.raisedUsd), 0)
+  const rwaTargetUsd = listings.reduce((sum, row) => sum + Number(row.targetUsd), 0)
+  const rwaBookUsd = holdingRows.reduce((sum, row) => sum + Number(row.investedUsd), 0)
+  const rwaDividendsPaidUsd = holdingRows.reduce(
+    (sum, row) => sum + Number(row.claimedDividendsUsd),
+    0,
+  )
+  const rwaMonthlyObligationUsd = listings.reduce((sum, row) => {
+    const apy = Number(row.apy) / 100
+    const raised = Number(row.raisedUsd)
+    if (!Number.isFinite(apy) || !Number.isFinite(raised)) {
+      return sum
+    }
+    return sum + (raised * apy) / 12
+  }, 0)
+  const rwaInvestors = Object.values(rwa.holdings).filter((rows) => rows.length > 0).length
+  const months = last12Months()
+  const inflow = Object.fromEntries(months.map((item) => [item.key, 0])) as Record<string, number>
+  const outflow = Object.fromEntries(months.map((item) => [item.key, 0])) as Record<string, number>
+
+  for (const merchant of merchants) {
+    for (const [month, amount] of Object.entries(merchant.monthlyUsdcReceived)) {
+      if (inflow[month] !== undefined) {
+        inflow[month] += amount
+      }
+    }
+    for (const [month, amount] of Object.entries(merchant.monthlyUsdcSent)) {
+      if (outflow[month] !== undefined) {
+        outflow[month] += amount
+      }
+    }
+  }
+  let failedPayments = 0
+  for (const customer of customers) {
+    for (const payment of customer.payments) {
+      if (payment.status === 'failed') {
+        failedPayments += 1
+      }
+      if (payment.status !== 'success' || payment.asset !== 'USDC') {
+        continue
+      }
+      const month = payment.createdAt.slice(0, 7)
+      if (payment.kind === 'received' && inflow[month] !== undefined) {
+        inflow[month] += Number(payment.amount)
+      }
+      if (payment.kind === 'sent' && outflow[month] !== undefined) {
+        outflow[month] += Number(payment.amount)
+      }
+    }
+  }
+
+  const requestStatus = [
+    {
+      label: 'Auditoría',
+      value: rwa.requests.filter((row) => row.status === 'pending_audit').length,
+    },
+    {
+      label: 'Legal',
+      value: rwa.requests.filter((row) => row.status === 'legal_review').length,
+    },
+    {
+      label: 'Aprobadas',
+      value: rwa.requests.filter((row) => row.status === 'approved').length,
+    },
+    {
+      label: 'Rechazadas',
+      value: rwa.requests.filter((row) => row.status === 'rejected').length,
+    },
+  ]
+
+  return {
+    merchantGmvUsdc: Number(sales.USDC ?? 0),
+    merchantGmvXlm: Number(sales.XLM ?? 0),
+    merchantLoyalty: Number(sales[loyaltyCode()] ?? 0),
+    rwaAumUsd,
+    rwaTargetUsd,
+    rwaBookUsd,
+    rwaFundingGapUsd: Math.max(0, rwaTargetUsd - rwaAumUsd),
+    rwaDividendsPaidUsd,
+    rwaMonthlyObligationUsd,
+    rwaAnnualObligationUsd: rwaMonthlyObligationUsd * 12,
+    rwaInvestors,
+    rwaListings: listings.length,
+    pendingRequests: rwa.requests.filter(
+      (row) => row.status === 'pending_audit' || row.status === 'legal_review',
+    ).length,
+    rejectedRequests: rwa.requests.filter((row) => row.status === 'rejected').length,
+    failedPayments,
+    listingRaised: listings.map((row) => ({
+      label: row.assetCode,
+      value: Number(row.raisedUsd) || 0,
+    })),
+    listingObligation: listings.map((row) => ({
+      label: row.assetCode,
+      value: ((Number(row.raisedUsd) || 0) * (Number(row.apy) || 0)) / 100 / 12,
+    })),
+    requestStatus: requestStatus.filter((row) => row.value > 0),
+    merchantRanking: merchants
+      .map((row) => ({
+        label: row.placeName || row.email,
+        value: Number(row.sales.USDC ?? 0),
+      }))
+      .filter((row) => row.value > 0)
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 6),
+    monthly: months.map((item) => {
+      const inAmount = inflow[item.key] ?? 0
+      const outAmount = outflow[item.key] ?? 0
+      return {
+        month: item.key,
+        label: item.label,
+        inflow: inAmount,
+        outflow: outAmount,
+        net: inAmount - outAmount,
+      }
+    }),
+  }
+}
+
+function last12Months(): { key: string; label: string }[] {
+  const labels = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
+  const now = new Date()
+  const months: { key: string; label: string }[] = []
+  for (let offset = 11; offset >= 0; offset -= 1) {
+    const date = new Date(now.getFullYear(), now.getMonth() - offset, 1)
+    months.push({
+      key: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`,
+      label: labels[date.getMonth()] ?? '',
+    })
+  }
+  return months
 }
 
 function addTotals(target: TokenTotals, extra: TokenTotals) {

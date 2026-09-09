@@ -20,6 +20,8 @@ export type AdminMerchantRow = {
   placeName?: string
   sales: TokenTotals
   receivedCount: number
+  monthlyUsdcReceived: Record<string, number>
+  monthlyUsdcSent: Record<string, number>
 }
 
 export type AdminCustomerRow = {
@@ -35,4 +37,36 @@ export type AdminOverview = {
   merchants: AdminMerchantRow[]
   customers: AdminCustomerRow[]
   merchantSalesTotal: TokenTotals
+  finance: AdminFinance
+}
+
+export type AdminMonthPoint = {
+  month: string
+  label: string
+  inflow: number
+  outflow: number
+  net: number
+}
+
+export type AdminFinance = {
+  merchantGmvUsdc: number
+  merchantGmvXlm: number
+  merchantLoyalty: number
+  rwaAumUsd: number
+  rwaTargetUsd: number
+  rwaBookUsd: number
+  rwaFundingGapUsd: number
+  rwaDividendsPaidUsd: number
+  rwaMonthlyObligationUsd: number
+  rwaAnnualObligationUsd: number
+  rwaInvestors: number
+  rwaListings: number
+  pendingRequests: number
+  rejectedRequests: number
+  failedPayments: number
+  listingRaised: { label: string; value: number }[]
+  listingObligation: { label: string; value: number }[]
+  requestStatus: { label: string; value: number }[]
+  merchantRanking: { label: string; value: number }[]
+  monthly: AdminMonthPoint[]
 }

@@ -1,16 +1,18 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Building2, Shield, Users } from 'lucide-react'
+import { Building2, Landmark, Shield, Users } from 'lucide-react'
 import { ActivityList } from '@/components/dashboard/ActivityList'
+import { AdminFinancePanel } from '@/components/admin/AdminFinancePanel'
 import { StructuringDashboard } from '@/components/rwa/StructuringDashboard'
 import { fetchAdminOverview } from '@/lib/admin/api'
 import { readableError } from '@/lib/auth/readableError'
 import { formatAmount } from '@/lib/stellar/useAccountBalances'
 import { shortenPublicKey } from '@/lib/userDisplay'
 import { stellarConfig } from '@/lib/stellar/config'
+import { formatUsd } from '@/lib/rwa/format'
 import type { AdminMerchantRow, TokenTotals } from '@/types/admin'
 
 export function AdminDashboard() {
-  const [tab, setTab] = useState<'merchants' | 'customers' | 'rwa'>('merchants')
+  const [tab, setTab] = useState<'finance' | 'merchants' | 'customers' | 'rwa'>('finance')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -73,6 +75,16 @@ export function AdminDashboard() {
           label="Clientes"
           value={String(overview?.customers.length ?? '—')}
         />
+        <SummaryCard
+          icon={Landmark}
+          label="AUM RWA"
+          value={overview ? formatUsd(overview.finance.rwaAumUsd) : '—'}
+        />
+        <SummaryCard
+          icon={Shield}
+          label="GMV USDC"
+          value={overview ? formatUsd(overview.finance.merchantGmvUsdc) : '—'}
+        />
       </div>
 
       {overview ? (
@@ -82,7 +94,15 @@ export function AdminDashboard() {
         </section>
       ) : null}
 
-      <div className="grid grid-cols-3 gap-2">
+      <div className="flex gap-2 overflow-x-auto pb-1">
+        <TabButton
+          active={tab === 'finance'}
+          label="Finanzas"
+          onClick={() => {
+            setTab('finance')
+            setSelectedId(null)
+          }}
+        />
         <TabButton
           active={tab === 'merchants'}
           label="Empresas"
@@ -113,6 +133,10 @@ export function AdminDashboard() {
         <p className="text-sm text-app-muted">Cargando panel…</p>
       ) : null}
       {error ? <p className="text-sm text-red-400">{error}</p> : null}
+
+      {tab === 'finance' && overview ? (
+        <AdminFinancePanel finance={overview.finance} />
+      ) : null}
 
       {tab === 'rwa' ? <StructuringDashboard /> : null}
 
@@ -287,7 +311,7 @@ function TabButton({
     <button
       type="button"
       onClick={onClick}
-      className={`rounded-2xl py-2.5 text-sm font-medium ${
+      className={`shrink-0 whitespace-nowrap rounded-2xl px-3 py-2.5 text-sm font-medium ${
         active ? 'bg-app-accent text-white' : 'bg-app-chip text-white/75'
       }`}
     >

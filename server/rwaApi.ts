@@ -162,15 +162,18 @@ function parseWizardPayload(body: Record<string, unknown>): TokenizationWizardPa
   if (name.length < 3) {
     throw new AuthError('Indique el nombre del activo', 400)
   }
+  const documents = parseDocuments(body.documents)
+  const typeDetails = parseTypeDetails(assetType, body.typeDetails, documents)
   return {
     assetName: name,
     assetType,
     estimatedValuationUsd: requireAmount(body.estimatedValuationUsd, 'valuación'),
+    typeDetails,
     legalGuarantee,
     ownerLegalName: String(body.ownerLegalName ?? '').trim(),
     ownerIdNumber: String(body.ownerIdNumber ?? '').trim(),
     ownerCompany: String(body.ownerCompany ?? '').trim(),
-    documents: parseDocuments(body.documents),
+    documents,
     raiseAmountUsd: requireAmount(body.raiseAmountUsd, 'monto a levantar'),
     expectedApy: requireAmount(body.expectedApy, 'rendimiento'),
     dividendFrequency: frequency,
@@ -181,11 +184,171 @@ function isAssetType(
   value: string,
 ): value is TokenizationWizardPayload['assetType'] {
   return (
-    value === 'inmueble' ||
-    value === 'vehiculo' ||
-    value === 'factura' ||
-    value === 'flujo_caja'
+    value === 'equity_inmobiliario' ||
+    value === 'renta_flujo_caja' ||
+    value === 'uso_fraccionado' ||
+    value === 'agricola_exportacion' ||
+    value === 'creditos_carbono'
   )
+}
+
+function parseTypeDetails(
+  assetType: TokenizationWizardPayload['assetType'],
+  value: unknown,
+  documents: TokenizationWizardPayload['documents'],
+): TokenizationWizardPayload['typeDetails'] {
+  const row =
+    value && typeof value === 'object' ? (value as Record<string, unknown>) : {}
+  const hasDoc = (kind: TokenizationWizardPayload['documents'][number]['kind']) =>
+    documents.some((item) => item.kind === kind && item.fileName.trim().length > 0)
+
+  if (assetType === 'equity_inmobiliario') {
+    const projectPhase = String(row.projectPhase ?? '')
+    if (
+      projectPhase !== 'en_plano' &&
+      projectPhase !== 'en_construccion' &&
+      projectPhase !== 'finalizado'
+    ) {
+      throw new AuthError('Seleccione la fase del proyecto', 400)
+    }
+    const estimatedStartDate = String(row.estimatedStartDate ?? '').trim()
+    const estimatedDeliveryDate = String(row.estimatedDeliveryDate ?? '').trim()
+    if (!estimatedStartDate || !estimatedDeliveryDate) {
+      throw new AuthError('Indique las fechas estimadas de inicio y entrega', 400)
+    }
+    if (estimatedDeliveryDate < estimatedStartDate) {
+      throw new AuthError('La fecha de entrega no puede ser anterior al inicio', 400)
+    }
+    const exitStrategy = String(row.exitStrategy ?? '').trim()
+    if (exitStrategy.length < 8) {
+      throw new AuthError('Describa la estrategia de salida / liquidación del capital', 400)
+    }
+    if (!hasDoc('permisos_viabilidad')) {
+      throw new AuthError(
+        'Adjunte los permisos de viabilidad/construcción (SETENA / Municipalidad)',
+        400,
+      )
+    }
+    return {
+      kind: 'equity_inmobiliario',
+      projectPhase,
+      estimatedStartDate,
+      estimatedDeliveryDate,
+      exitStrategy,
+    }
+  }
+
+  if (assetType === 'renta_flujo_caja') {
+    if (!hasDoc('historico_ocupacion')) {
+      throw new AuthError(
+        'Adjunte el histórico de ocupación o los contratos de arrendamiento vigentes',
+        400,
+      )
+    }
+    const operatingExpenses = String(row.operatingExpenses ?? '').trim()
+    if (!operatingExpenses) {
+      throw new AuthError('Indique el porcentaje o monto estimado de gastos operativos', 400)
+    }
+    const apyBasis = String(row.apyBasis ?? '')
+    if (apyBasis !== 'bruto' && apyBasis !== 'neto') {
+      throw new AuthError('Indique si el APY es bruto o neto', 400)
+    }
+    return {
+      kind: 'renta_flujo_caja',
+      operatingExpenses,
+      apyBasis,
+    }
+  }
+
+  if (assetType === 'uso_fraccionado') {
+    const highSeasonDays = String(row.highSeasonDays ?? '').trim()
+    const midSeasonDays = String(row.midSeasonDays ?? '').trim()
+    const lowSeasonDays = String(row.lowSeasonDays ?? '').trim()
+    if (!highSeasonDays || !midSeasonDays || !lowSeasonDays) {
+      throw new AuthError(
+        'Complete la matriz de días asignados por token (alta, media y baja temporada)',
+        400,
+      )
+    }
+    const annualMaintenanceUsd = requireAmount(
+      row.annualMaintenanceUsd,
+      'cuota de mantenimiento anual por token',
+    )
+    const subletRules = String(row.subletRules ?? '').trim()
+    if (subletRules.length < 8) {
+      throw new AuthError(
+        'Describa las reglas de subarriendo o acumulación de días no usados',
+        400,
+      )
+    }
+    return {
+      kind: 'uso_fraccionado',
+      highSeasonDays,
+      midSeasonDays,
+      lowSeasonDays,
+      annualMaintenanceUsd,
+      subletRules,
+    }
+  }
+
+  if (assetType === 'agricola_exportacion') {
+    const cropType = String(row.cropType ?? '').trim()
+    const cropVariety = String(row.cropVariety ?? '').trim()
+    const certifications = String(row.certifications ?? '').trim()
+    if (cropType.length < 2 || cropVariety.length < 2) {
+      throw new AuthError('Indique el tipo de cultivo y la variedad específica', 400)
+    }
+    if (certifications.length < 2) {
+      throw new AuthError('Indique las certificaciones aplicables', 400)
+    }
+    if (!hasDoc('offtake_agreement')) {
+      throw new AuthError(
+        'Adjunte el contrato de compraventa o carta de intención internacional (Offtake)',
+        400,
+      )
+    }
+    const hectaresInProduction = requireAmount(
+      row.hectaresInProduction,
+      'hectáreas en producción',
+    )
+    const agriculturalInsurance = String(row.agriculturalInsurance ?? '').trim()
+    if (agriculturalInsurance.length < 3) {
+      throw new AuthError('Indique el seguro agrícola', 400)
+    }
+    if (!hasDoc('plano_catastrado')) {
+      throw new AuthError('Adjunte el plano catastrado / respaldo de hectáreas y seguro', 400)
+    }
+    return {
+      kind: 'agricola_exportacion',
+      cropType,
+      cropVariety,
+      certifications,
+      hectaresInProduction,
+      agriculturalInsurance,
+    }
+  }
+
+  const certificationStandard = String(row.certificationStandard ?? '').trim()
+  if (certificationStandard.length < 3) {
+    throw new AuthError('Indique el estándar o metodología de certificación', 400)
+  }
+  if (!hasDoc('mrv_auditoria')) {
+    throw new AuthError('Adjunte el documento de auditoría/verificación MRV', 400)
+  }
+  const vintageYear = String(row.vintageYear ?? '').trim()
+  if (!/^\d{4}$/.test(vintageYear)) {
+    throw new AuthError('Indique el año de acreditación (Vintage Year) con 4 dígitos', 400)
+  }
+  const year = Number(vintageYear)
+  const maxYear = new Date().getFullYear() + 2
+  if (year < 1990 || year > maxYear) {
+    throw new AuthError('El año de acreditación está fuera de un rango válido', 400)
+  }
+  return {
+    kind: 'creditos_carbono',
+    certificationStandard,
+    vintageYear,
+  }
 }
 
 function requireAmount(value: unknown, label: string): string {
@@ -211,7 +374,17 @@ function parseDocuments(value: unknown): TokenizationWizardPayload['documents'] 
       if (!fileName) {
         return null
       }
-      const allowed = ['titulo', 'estados_financieros', 'identificacion', 'otro'] as const
+      const allowed = [
+        'titulo',
+        'estados_financieros',
+        'identificacion',
+        'otro',
+        'permisos_viabilidad',
+        'historico_ocupacion',
+        'offtake_agreement',
+        'plano_catastrado',
+        'mrv_auditoria',
+      ] as const
       const matched = allowed.find((entry) => entry === kind) ?? 'otro'
       return { kind: matched, fileName }
     })

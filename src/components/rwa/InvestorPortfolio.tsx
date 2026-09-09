@@ -1,9 +1,19 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { AreaChart, DonutChart } from '@/components/charts/Charts'
 import { useRwa } from '@/lib/rwa/RwaContext'
 import { estimatedMonthlyYieldUsd, formatUsd, nextPayoutLabel, poolSharePercent } from '@/lib/rwa/format'
+import {
+  allocationSlices,
+  claimedReturnPercent,
+  listingFrequency,
+  monthlyYieldUsd,
+  portfolioProjection,
+} from '@/lib/rwa/insights'
 import { readableError } from '@/lib/auth/readableError'
 import type { AccountActivity } from '@/lib/stellar/getPayments'
+
+const SLICE_COLORS = ['#1c8c62', '#60a5fa', '#fbbf24', '#a78bfa', '#f87171']
 
 export function InvestorPortfolio({
   activity = [],
@@ -24,8 +34,14 @@ export function InvestorPortfolio({
   const invested = holdings.reduce((sum, row) => sum + Number(row.investedUsd), 0)
   const claimed = holdings.reduce((sum, row) => sum + Number(row.claimedDividendsUsd), 0)
   const monthly = estimatedMonthlyYieldUsd(holdings, apyByListing)
+  const roi = claimedReturnPercent(invested, claimed)
   const dividendOps = activity.filter((item) =>
     /^(DIV|INV-|DIVID)/i.test(item.memo),
+  )
+  const slices = allocationSlices(holdings, listings)
+  const projection = useMemo(
+    () => portfolioProjection(holdings, listings, 12),
+    [holdings, listings],
   )
 
   async function onClaim() {
@@ -59,6 +75,13 @@ export function InvestorPortfolio({
           <Stat label="Renta mensual est." value={formatUsd(monthly)} />
           <Stat label="Dividendos cobrados" value={formatUsd(claimed)} />
         </div>
+        <div className="grid grid-cols-2 gap-2">
+          <Stat label="Retorno cobrado" value={`${roi.toFixed(2)}%`} />
+          <Stat
+            label="Renta 12 meses est."
+            value={formatUsd(projection.at(-1)?.cumulative ?? monthly * 12)}
+          />
+        </div>
       </div>
 
       {holdings.length === 0 ? (
@@ -70,21 +93,66 @@ export function InvestorPortfolio({
           {holdings.map((holding) => {
             const listing = listings.find((row) => row.id === holding.listingId)
             const share = poolSharePercent(holding.tokens, listing?.totalSupply ?? '0')
+            const holdingMonthly = listing
+              ? monthlyYieldUsd(Number(holding.investedUsd), Number(listing.apy))
+              : 0
             return (
               <li key={holding.listingId} className="rounded-[20px] bg-app-card p-4">
                 <p className="font-mono text-xs text-app-accent">{holding.assetCode}</p>
                 <p className="mt-1 text-sm font-semibold">{listing?.name ?? holding.assetCode}</p>
                 <p className="mt-1 text-xs text-app-muted">
-                  {formatUsd(holding.investedUsd)} · {share.toFixed(2)}% del pool
+                  {formatUsd(holding.investedUsd)} · {share.toFixed(2)}% del pool · APY {listing?.apy ?? '—'}%
+                </p>
+                <p className="mt-1 text-xs text-white/70">
+                  Renta est. {formatUsd(holdingMonthly)} / mes · cobrado {formatUsd(holding.claimedDividendsUsd)}
                 </p>
                 <p className="mt-1 text-xs text-white/70">
                   Próximo pago: {nextPayoutLabel(listing?.nextPayoutDate ?? '')}
+                  {listing ? ` · ${listingFrequency(listing) === 'quarterly' ? 'trimestral' : 'mensual'}` : ''}
                 </p>
               </li>
             )
           })}
         </ul>
       )}
+
+      {!compact && holdings.length > 0 ? (
+        <>
+          <div className="rounded-[24px] bg-app-card p-4">
+            <AreaChart
+              title="Ganancia proyectada del portafolio"
+              caption="Suma de rentas esperadas a 12 meses si el APY de cada ficha se mantiene. Source: portafolio actual."
+              xLabel="Mes"
+              yLabel="USDC acumulados"
+              formatY={(value) => formatUsd(value)}
+              series={[
+                {
+                  name: 'Renta acumulada',
+                  colorClass: 'stroke-app-accent',
+                  fillClass: 'fill-app-accent/20',
+                  points: projection.map((point) => ({
+                    label: point.label,
+                    value: point.cumulative,
+                  })),
+                },
+              ]}
+            />
+          </div>
+          {slices.length > 0 ? (
+            <div className="rounded-[24px] bg-app-card p-4">
+              <DonutChart
+                title="Asignación de capital"
+                caption="Distribución del USDC invertido entre emisiones."
+                formatValue={(value) => formatUsd(value)}
+                slices={slices.map((slice, index) => ({
+                  ...slice,
+                  color: SLICE_COLORS[index % SLICE_COLORS.length] ?? '#1c8c62',
+                }))}
+              />
+            </div>
+          ) : null}
+        </>
+      ) : null}
 
       <button
         type="button"
@@ -115,7 +183,7 @@ export function InvestorPortfolio({
           onClick={() => navigate('/rwa/dividendos')}
           className="text-sm text-app-accent"
         >
-          Ver detalle
+          Ver gráficos y detalle
         </button>
       ) : null}
     </section>

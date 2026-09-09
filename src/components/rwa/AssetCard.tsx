@@ -1,5 +1,12 @@
 import { ASSET_TYPE_LABELS, LEGAL_BADGE, type MarketplaceListing } from '@/types/rwa'
+import { Sparkline } from '@/components/charts/Charts'
 import { formatUsd, progressPercent } from '@/lib/rwa/format'
+import {
+  listingFrequency,
+  monthlyYieldUsd,
+  projectInvestment,
+  remainingCapacityUsd,
+} from '@/lib/rwa/insights'
 
 export function AssetCard({
   listing,
@@ -9,6 +16,13 @@ export function AssetCard({
   onOpen: (listing: MarketplaceListing) => void
 }) {
   const progress = progressPercent(listing.raisedUsd, listing.targetUsd)
+  const minYield = monthlyYieldUsd(Number(listing.minInvestmentUsd), Number(listing.apy))
+  const spark = projectInvestment(
+    Number(listing.minInvestmentUsd),
+    Number(listing.apy),
+    listingFrequency(listing),
+    12,
+  ).map((point) => point.cumulative)
 
   return (
     <button
@@ -24,10 +38,13 @@ export function AssetCard({
             {ASSET_TYPE_LABELS[listing.assetType]}
           </p>
         </div>
-        <p className="text-right text-lg font-semibold tabular-nums">
-          {listing.apy}%
-          <span className="block text-[11px] font-normal text-app-muted">APY</span>
-        </p>
+        <div className="text-right">
+          <p className="text-lg font-semibold tabular-nums">
+            {listing.apy}%
+            <span className="block text-[11px] font-normal text-app-muted">APY</span>
+          </p>
+          <Sparkline values={spark} label={`Proyección a 12 meses del mínimo en ${listing.name}`} />
+        </div>
       </div>
       <p className="mt-3 inline-flex rounded-full bg-app-chip px-2.5 py-1 text-[11px] text-app-accent">
         {LEGAL_BADGE[listing.legalBacking]}
@@ -39,8 +56,11 @@ export function AssetCard({
         />
       </div>
       <p className="mt-2 text-xs text-app-muted">
-        {formatUsd(listing.raisedUsd)} de {formatUsd(listing.targetUsd)} · mín.{' '}
-        {formatUsd(listing.minInvestmentUsd)}
+        {formatUsd(listing.raisedUsd)} de {formatUsd(listing.targetUsd)} · cupo{' '}
+        {formatUsd(remainingCapacityUsd(listing))}
+      </p>
+      <p className="mt-1 text-xs text-white/75">
+        Con el mínimo ({formatUsd(listing.minInvestmentUsd)}) estima {formatUsd(minYield)} / mes
       </p>
     </button>
   )

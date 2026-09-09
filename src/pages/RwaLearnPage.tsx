@@ -16,7 +16,7 @@ export default function RwaLearnPage() {
   return (
     <div className="space-y-8">
       {hasHoldings ? (
-        <InvestorPortfolio activity={activity.items} />
+        <InvestorPortfolio activity={activity.items} compact />
       ) : null}
 
       <RwaEducationView />
