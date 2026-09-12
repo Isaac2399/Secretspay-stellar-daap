@@ -7,7 +7,7 @@ import {
   findUserBySinpeCode,
   type PublicUser,
 } from '../auth.js'
-import { extractSinpeCode } from './code.js'
+import { extractSinpeCodes } from './code.js'
 import { AuthError } from '../errors.js'
 import { creditLoyaltyFromTreasury } from '../submitPayment.js'
 import { calculateRojos, formatRojosAmount } from './convert.js'
@@ -345,8 +345,7 @@ async function resolveDestination(
   comment: string,
   rawMessage?: string,
 ): Promise<{ id?: string; publicKey: string } | undefined> {
-  const sinpeCode = extractSinpeCode(comment, rawMessage ?? '')
-  if (sinpeCode) {
+  for (const sinpeCode of extractSinpeCodes(comment, rawMessage ?? '')) {
     const byCode = await findUserBySinpeCode(sinpeCode)
     if (byCode) {
       return byCode

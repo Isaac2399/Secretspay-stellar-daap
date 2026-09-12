@@ -161,8 +161,9 @@ function SinpeRecarga({
     <div className="space-y-4">
       <p className="text-sm text-app-muted">
         En la nota del SINPE pon solo tu código de 6 caracteres (no la public key).
-        Paridad: <span className="text-white">₡1,000 = 1 ROJO</span>. ₡9,000 → 10
-        ROJOS.
+        Cualquier monto en colones se convierte:{' '}
+        <span className="text-white">₡1,000 = 1 ROJO</span>, ₡0.50 = 0.0005 ROJOS.
+        Promo ₡9,000 → 10 ROJOS.
       </p>
       <p className="rounded-2xl bg-app-chip px-3 py-4 text-center font-mono text-3xl font-semibold tracking-[0.35em] text-white">
         {sinpeCode ?? '……'}

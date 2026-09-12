@@ -11,13 +11,15 @@ const REFERENCE_PATTERNS = [
   /referencias?\s*[:#-]?\s*(\d{6,32})/i,
   /(?:ref(?:erencia)?)\s*[:#-]?\s*(\d{6,32})/i,
   /autorizaci[oó]n\s*[:#-]?\s*(\d{6,32})/i,
+  /transacci[oó]n\s*(?:n[o°.]{0,2})?\s*[:#-]?\s*(\d{6,32})/i,
+  /clave\s*[:#-]?\s*(\d{6,32})/i,
 ]
 
 const AMOUNT_PATTERNS = [
-  /(?:ha\s+recibido|recibid[oa]|recibiste|recibio|recibió)\s+₡?\s*([\d][\d.,]*)\s*(?:colones|crc)?/i,
+  /(?:ha\s+recibido|recibid[oa]|recibiste|recibio|recibió)\s+[₡¢]?\s*([\d][\d.,]*)\s*(?:colones|crc)?/i,
   /([\d][\d.,]*)\s*(?:colones|crc)\b/i,
-  /₡\s*([\d][\d.,]*)/i,
-  /(?:por|monto)\s+crc\s*([\d][\d.,]*)/i,
+  /[₡¢]\s*([\d][\d.,]*)/,
+  /(?:por|monto)\s+(?:crc\s*)?([\d][\d.,]*)/i,
 ]
 
 const COMMENT_PATTERNS = [

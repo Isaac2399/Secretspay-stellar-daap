@@ -6,7 +6,12 @@ import { readableError } from '@/lib/auth/readableError'
 export function MySinpeCredits() {
   const [deposits, setDeposits] = useState<UnassignedDeposit[]>([])
   const [credits, setCredits] = useState<
-    Array<{ referenceId: string; calculatedRojos: number; status: string }>
+    Array<{
+      referenceId: string
+      calculatedRojos: number
+      crcAmount?: number
+      status: string
+    }>
   >([])
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
@@ -53,6 +58,11 @@ export function MySinpeCredits() {
             <span className="font-semibold tabular-nums">
               {formatAmount(String(row.calculatedRojos))} ROJOS
             </span>
+            {row.crcAmount != null ? (
+              <span className="ml-2 text-xs text-app-muted">
+                ₡{formatAmount(String(row.crcAmount))}
+              </span>
+            ) : null}
             <span className="ml-2 text-xs text-app-muted">{row.status}</span>
           </li>
         ))}
@@ -60,6 +70,9 @@ export function MySinpeCredits() {
           <li key={row.id} className="text-sm">
             <span className="font-semibold tabular-nums">
               {formatAmount(String(row.calculatedRojos))} ROJOS
+            </span>
+            <span className="ml-2 text-xs text-app-muted">
+              ₡{formatAmount(String(row.crcAmount))}
             </span>
             <span className="ml-2 text-xs text-app-muted">
               {row.stellarHash ? 'en Stellar' : 'detectada · pendiente de red'}

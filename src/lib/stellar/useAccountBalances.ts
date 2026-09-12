@@ -58,8 +58,10 @@ export function formatAmount(value: string): string {
   if (!Number.isFinite(numeric)) {
     return value
   }
+  const abs = Math.abs(numeric)
+  const minDigits = abs > 0 && abs < 0.01 ? 4 : 2
   return new Intl.NumberFormat('es-MX', {
-    minimumFractionDigits: 2,
+    minimumFractionDigits: minDigits,
     maximumFractionDigits: 7,
   }).format(numeric)
 }

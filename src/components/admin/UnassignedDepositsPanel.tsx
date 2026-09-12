@@ -7,6 +7,7 @@ import {
   type UnassignedDeposit,
 } from '@/lib/sinpe/api'
 import { readableError } from '@/lib/auth/readableError'
+import { formatAmount } from '@/lib/stellar/useAccountBalances'
 import { shortenPublicKey } from '@/lib/userDisplay'
 
 export function UnassignedDepositsPanel() {
@@ -96,8 +97,8 @@ export function UnassignedDepositsPanel() {
               {new Date(row.timestamp || row.createdAt).toLocaleString()}
             </p>
             <p className="mt-1 text-sm font-semibold">
-              ₡{row.crcAmount.toLocaleString('es-CR')} → {row.calculatedRojos}{' '}
-              ROJOS
+              ₡{row.crcAmount.toLocaleString('es-CR', { maximumFractionDigits: 2 })} →{' '}
+              {formatAmount(String(row.calculatedRojos))} ROJOS
               {row.promoApplied ? (
                 <span className="ml-2 text-[11px] text-app-accent">promo</span>
               ) : null}
@@ -171,7 +172,7 @@ function AssignModal({
           </button>
         </div>
         <p className="text-xs text-app-muted">
-          Comprobante {deposit.referenceId} · {deposit.calculatedRojos} ROJOS
+          Comprobante {deposit.referenceId} · {formatAmount(String(deposit.calculatedRojos))} ROJOS
         </p>
         <form
           className="mt-3 flex gap-2"

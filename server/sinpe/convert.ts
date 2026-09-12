@@ -12,20 +12,25 @@ export function calculateRojos(crcAmount: number): {
   if (!Number.isFinite(crcAmount) || crcAmount <= 0) {
     throw new Error('El monto en colones no es válido')
   }
-  if (crcAmount < 1) {
-    return { rojos: crcAmount, promoApplied: false }
-  }
   if (Math.abs(crcAmount - PROMO_CRC_AMOUNT) < 0.009) {
     return { rojos: PROMO_ROJOS_AMOUNT, promoApplied: true }
   }
-  return { rojos: crcAmount / CRC_PER_ROJO, promoApplied: false }
+  const rojos = roundRojos(crcAmount / CRC_PER_ROJO)
+  if (rojos <= 0) {
+    throw new Error('El monto en colones es demasiado pequeño para acreditar ROJOS')
+  }
+  return { rojos, promoApplied: false }
+}
+
+export function roundRojos(value: number): number {
+  return Number(value.toFixed(7))
 }
 
 export function formatRojosAmount(value: number): string {
   if (!Number.isFinite(value) || value <= 0) {
     throw new Error('El monto de ROJOS no es válido')
   }
-  const fixed = value.toFixed(7)
+  const fixed = roundRojos(value).toFixed(7)
   const trimmed = fixed.replace(/\.?0+$/, '')
   return trimmed || '0'
 }
