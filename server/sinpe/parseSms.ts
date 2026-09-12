@@ -1,4 +1,5 @@
 import { StrKey } from '@stellar/stellar-sdk'
+import { extractSinpeCodes } from './code.js'
 
 export type ParsedSinpeSms = {
   crcAmount: number
@@ -7,12 +8,12 @@ export type ParsedSinpeSms = {
 }
 
 const REFERENCE_PATTERNS = [
-  /comprobante\s*(?:n[o°.]{0,2}|num(?:ero)?)?\s*[:#-]?\s*(\d{6,32})/i,
-  /referencias?\s*[:#-]?\s*(\d{6,32})/i,
-  /(?:ref(?:erencia)?)\s*[:#-]?\s*(\d{6,32})/i,
-  /autorizaci[oó]n\s*[:#-]?\s*(\d{6,32})/i,
-  /transacci[oó]n\s*(?:n[o°.]{0,2})?\s*[:#-]?\s*(\d{6,32})/i,
-  /clave\s*[:#-]?\s*(\d{6,32})/i,
+  /comprobante\s*(?:n[o°.]{0,2}|num(?:ero)?)?\s*[:#-]?\s*(\d{6,40})/i,
+  /referencias?\s*[:#-]?\s*(\d{6,40})/i,
+  /(?:ref(?:erencia)?)\s*[:#-]?\s*(\d{6,40})/i,
+  /autorizaci[oó]n\s*[:#-]?\s*(\d{6,40})/i,
+  /transacci[oó]n\s*(?:n[o°.]{0,2})?\s*[:#-]?\s*(\d{6,40})/i,
+  /clave\s*[:#-]?\s*(\d{6,40})/i,
 ]
 
 const AMOUNT_PATTERNS = [
@@ -23,7 +24,8 @@ const AMOUNT_PATTERNS = [
 ]
 
 const COMMENT_PATTERNS = [
-  /por\s+sinpe\s+m[oó]vil\s*,\s*(.+?)\s*\.?\s*(?:trans\.?\s*)?referencia\b/i,
+  /por\s+sinpe\s+m[oó]vil\s*,\s*([A-Za-z0-9]{6})(?:\s|$|[.,])/i,
+  /por\s+sinpe\s+m[oó]vil\s*,\s*(.+?)(?:\s+transf\w*\.?)?\s*referencia\b/i,
   /detalle\s*[:.]?\s*(.+)$/i,
   /(?:nota|comentario|concept[oa]|descripci[oó]n)\s*[:.]?\s*(.+)$/i,
 ]
@@ -35,14 +37,13 @@ export function parseSinpeSms(message: string): ParsedSinpeSms | null {
   }
 
   const crcAmount = extractAmount(text)
-  const referenceId = extractReference(text)
-  if (crcAmount === null || !referenceId) {
+  if (crcAmount === null) {
     return null
   }
 
   return {
     crcAmount,
-    referenceId,
+    referenceId: extractReference(text) ?? fallbackReference(text),
     comment: extractComment(text),
   }
 }
@@ -72,6 +73,17 @@ function extractReference(text: string): string | undefined {
   return undefined
 }
 
+function fallbackReference(text: string): string {
+  const amountToken = text.match(
+    /(?:recib[\wí]*|colones|crc|₡|¢)\D{0,12}([\d][\d.,]*)/i,
+  )?.[1]
+  const runs = [...text.matchAll(/\d{6,40}/g)].map((match) => match[0])
+  const best = runs
+    .filter((run) => run !== amountToken?.replace(/[^\d]/g, ''))
+    .sort((a, b) => b.length - a.length)[0]
+  return best ?? `sms-${Math.abs(hashText(text))}`
+}
+
 function extractAmount(text: string): number | null {
   for (const pattern of AMOUNT_PATTERNS) {
     const match = text.match(pattern)
@@ -92,7 +104,7 @@ function extractComment(text: string): string {
       return match[1].replace(/\s+/g, ' ').trim()
     }
   }
-  return ''
+  return extractSinpeCodes(text)[0] ?? ''
 }
 
 export function parseCrcNumber(raw: string): number | null {
@@ -120,4 +132,12 @@ export function parseCrcNumber(raw: string): number | null {
   }
   const value = Number(cleaned)
   return Number.isFinite(value) ? value : null
+}
+
+function hashText(text: string): number {
+  let hash = 0
+  for (let i = 0; i < text.length; i += 1) {
+    hash = (hash * 31 + text.charCodeAt(i)) | 0
+  }
+  return hash
 }

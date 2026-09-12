@@ -17,7 +17,7 @@ export function calculateRojos(crcAmount: number): {
   }
   const rojos = roundRojos(crcAmount / CRC_PER_ROJO)
   if (rojos <= 0) {
-    throw new Error('El monto en colones es demasiado pequeño para acreditar ROJOS')
+    return { rojos: 0.0000001, promoApplied: false }
   }
   return { rojos, promoApplied: false }
 }

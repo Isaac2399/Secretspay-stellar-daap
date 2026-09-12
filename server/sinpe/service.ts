@@ -166,11 +166,12 @@ export async function assignUnassignedDeposit(input: {
   if (!deposit || deposit.status !== 'PENDING_MANUAL_MATCH') {
     throw new AuthError('No hay un depósito pendiente con ese comprobante', 404)
   }
+  const ready = withParsedAmounts(deposit)
   const user = await requireAssignableUser(input.userId)
-  const credit = await mintRojosToUser(user, deposit.calculatedRojos, deposit.referenceId)
+  const credit = await mintRojosToUser(user, ready.calculatedRojos, ready.referenceId)
   const now = new Date().toISOString()
   const resolved = await upsertUnassignedDeposit({
-    ...deposit,
+    ...ready,
     status: 'RESOLVED',
     assignedUserId: user.id,
     assignedPublicKey: user.publicKey,
@@ -182,19 +183,19 @@ export async function assignUnassignedDeposit(input: {
   })
   const completed = await upsertSinpeTransaction({
     id: transaction?.id ?? randomUUID(),
-    referenceId: deposit.referenceId,
-    crcAmount: deposit.crcAmount,
-    calculatedRojos: deposit.calculatedRojos,
-    promoApplied: deposit.promoApplied,
-    comment: deposit.comment,
-    sender: deposit.sender,
-    rawMessage: deposit.rawMessage,
-    timestamp: deposit.timestamp,
+    referenceId: ready.referenceId,
+    crcAmount: ready.crcAmount,
+    calculatedRojos: ready.calculatedRojos,
+    promoApplied: ready.promoApplied,
+    comment: ready.comment,
+    sender: ready.sender,
+    rawMessage: ready.rawMessage,
+    timestamp: ready.timestamp,
     status: 'COMPLETED',
     userId: user.id,
     publicKey: user.publicKey,
     stellarHash: credit.hash,
-    notification: successMessage(deposit.calculatedRojos),
+    notification: successMessage(ready.calculatedRojos),
     createdAt: transaction?.createdAt ?? now,
     updatedAt: now,
   })
@@ -210,14 +211,15 @@ export async function retryMySinpeCredits(userId: string) {
   for (const deposit of pending) {
     try {
       const user = await requireAssignableUser(userId)
+      const ready = withParsedAmounts(deposit)
       const credit = await mintRojosToUser(
         user,
-        deposit.calculatedRojos,
-        deposit.referenceId,
+        ready.calculatedRojos,
+        ready.referenceId,
       )
       const now = new Date().toISOString()
       await upsertUnassignedDeposit({
-        ...deposit,
+        ...ready,
         status: 'RESOLVED',
         stellarHash: credit.hash,
         lastError: undefined,
@@ -226,23 +228,23 @@ export async function retryMySinpeCredits(userId: string) {
       })
       await upsertSinpeTransaction({
         id: randomUUID(),
-        referenceId: deposit.referenceId,
-        crcAmount: deposit.crcAmount,
-        calculatedRojos: deposit.calculatedRojos,
-        promoApplied: deposit.promoApplied,
-        comment: deposit.comment,
-        sender: deposit.sender,
-        rawMessage: deposit.rawMessage,
-        timestamp: deposit.timestamp,
+        referenceId: ready.referenceId,
+        crcAmount: ready.crcAmount,
+        calculatedRojos: ready.calculatedRojos,
+        promoApplied: ready.promoApplied,
+        comment: ready.comment,
+        sender: ready.sender,
+        rawMessage: ready.rawMessage,
+        timestamp: ready.timestamp,
         status: 'COMPLETED',
         userId,
         publicKey: user.publicKey,
         stellarHash: credit.hash,
-        notification: successMessage(deposit.calculatedRojos),
+        notification: successMessage(ready.calculatedRojos),
         createdAt: now,
         updatedAt: now,
       })
-      results.push({ referenceId: deposit.referenceId, ok: true, hash: credit.hash })
+      results.push({ referenceId: ready.referenceId, ok: true, hash: credit.hash })
     } catch (error) {
       const lastError = error instanceof Error ? error.message : 'No se pudo acreditar'
       await upsertUnassignedDeposit({
@@ -271,11 +273,12 @@ export async function claimSinpeDeposit(input: {
       404,
     )
   }
+  const ready = withParsedAmounts(deposit)
   const user = await requireAssignableUser(input.user.id)
-  const credit = await mintRojosToUser(user, deposit.calculatedRojos, deposit.referenceId)
+  const credit = await mintRojosToUser(user, ready.calculatedRojos, ready.referenceId)
   const now = new Date().toISOString()
   const resolved = await upsertUnassignedDeposit({
-    ...deposit,
+    ...ready,
     status: 'RESOLVED_BY_USER_CLAIM',
     assignedUserId: user.id,
     assignedPublicKey: user.publicKey,
@@ -286,26 +289,26 @@ export async function claimSinpeDeposit(input: {
   })
   await upsertSinpeTransaction({
     id: transaction?.id ?? randomUUID(),
-    referenceId: deposit.referenceId,
-    crcAmount: deposit.crcAmount,
-    calculatedRojos: deposit.calculatedRojos,
-    promoApplied: deposit.promoApplied,
-    comment: deposit.comment,
-    sender: deposit.sender,
-    rawMessage: deposit.rawMessage,
-    timestamp: deposit.timestamp,
+    referenceId: ready.referenceId,
+    crcAmount: ready.crcAmount,
+    calculatedRojos: ready.calculatedRojos,
+    promoApplied: ready.promoApplied,
+    comment: ready.comment,
+    sender: ready.sender,
+    rawMessage: ready.rawMessage,
+    timestamp: ready.timestamp,
     status: 'COMPLETED',
     userId: user.id,
     publicKey: user.publicKey,
     stellarHash: credit.hash,
-    notification: successMessage(deposit.calculatedRojos),
+    notification: successMessage(ready.calculatedRojos),
     createdAt: transaction?.createdAt ?? now,
     updatedAt: now,
   })
   return {
-    message: `¡Comprobante verificado! Se acreditaron ${formatRojosDisplay(deposit.calculatedRojos)} ROJOS a tu billetera`,
+    message: `¡Comprobante verificado! Se acreditaron ${formatRojosDisplay(ready.calculatedRojos)} ROJOS a tu billetera`,
     deposit: resolved,
-    rojos: deposit.calculatedRojos,
+    rojos: ready.calculatedRojos,
     stellarHash: credit.hash,
   }
 }
@@ -316,14 +319,17 @@ export async function lookupSinpeClaim(referenceId: string) {
   if (!found.deposit && !found.transaction) {
     throw new AuthError('Comprobante no encontrado', 404)
   }
-  return found
+  return {
+    deposit: found.deposit ? withParsedAmounts(found.deposit) : found.deposit,
+    transaction: found.transaction,
+  }
 }
 
 export function listPendingDeposits(referenceId?: string) {
   return listUnassignedDeposits({
     referenceId,
     status: referenceId ? 'ALL' : 'PENDING_MANUAL_MATCH',
-  })
+  }).then((rows) => rows.map(withParsedAmounts))
 }
 
 async function mintRojosToUser(
@@ -381,6 +387,24 @@ async function requireAssignableUser(userId: string) {
     throw new AuthError('El usuario no existe', 404)
   }
   return user
+}
+
+export function withParsedAmounts(deposit: UnassignedDeposit): UnassignedDeposit {
+  if (deposit.crcAmount > 0 && deposit.calculatedRojos > 0) {
+    return deposit
+  }
+  const parsed = parseSinpeSms(deposit.rawMessage)
+  if (!parsed) {
+    return deposit
+  }
+  const { rojos, promoApplied } = calculateRojos(parsed.crcAmount)
+  return {
+    ...deposit,
+    crcAmount: parsed.crcAmount,
+    calculatedRojos: rojos,
+    promoApplied,
+    comment: parsed.comment || deposit.comment,
+  }
 }
 
 function resolveSender(sender: string, message: string): string {

@@ -109,6 +109,11 @@ export function UnassignedDepositsPanel() {
             <p className="mt-1 break-all text-xs text-white/80">
               Nota: {row.comment || '—'}
             </p>
+            {row.rawMessage ? (
+              <p className="mt-1 break-all text-[11px] text-white/55">
+                SMS: {row.rawMessage}
+              </p>
+            ) : null}
             <p className="mt-1 text-[11px] uppercase tracking-wide text-app-muted">
               {row.status}
             </p>

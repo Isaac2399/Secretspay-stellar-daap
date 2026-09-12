@@ -12,6 +12,9 @@ export function isSinpeCode(value: string): boolean {
   return new RegExp(`^R${CODE_BODY}$`).test(normalizeSinpeCode(value))
 }
 
+const CODE_NOISE =
+  /TRANSFERENCIAS?|TRANSFERENCI|REFERENCIAS?|RECIBISTE|RECIBIDO|RECIBIO|COLONES/g
+
 export function extractSinpeCodes(...texts: string[]): string[] {
   const joined = texts.filter(Boolean).join(' ').toUpperCase()
   const found: string[] = []
@@ -25,11 +28,19 @@ export function extractSinpeCodes(...texts: string[]): string[] {
     found.push(code)
   }
 
-  const spaced = joined.replace(/[^A-Z0-9]+/g, ' ')
+  const afterNote = joined.split(/SINPE\s+M[OÓ]VIL\s*,\s*/i)[1]
+  if (afterNote) {
+    const token = afterNote.replace(/[^A-Z0-9]+/g, ' ').trim().split(/\s+/)[0]
+    if (token) {
+      add(token)
+    }
+  }
+
+  const spaced = joined.replace(CODE_NOISE, ' ').replace(/[^A-Z0-9]+/g, ' ')
   for (const token of spaced.split(/\s+/)) {
     add(token)
   }
-  const compact = joined.replace(/[^A-Z0-9]/g, '')
+  const compact = joined.replace(CODE_NOISE, ' ').replace(/[^A-Z0-9]/g, '')
   const glued = new RegExp(`R${CODE_BODY}`, 'g')
   for (const match of compact.matchAll(glued)) {
     add(match[0] ?? '')

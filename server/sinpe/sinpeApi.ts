@@ -8,8 +8,10 @@ import {
   lookupSinpeClaim,
   processSinpeSmsWebhook,
   retryMySinpeCredits,
+  withParsedAmounts,
 } from './service.js'
 import { listSinpeForUser } from './store.js'
+import { extractSinpeWebhookFields } from './webhookPayload.js'
 
 type ApiInput = {
   method: string
@@ -41,29 +43,7 @@ export async function handleSinpeRoutes(
 
   if (method === 'POST' && path === '/api/payments/sinpe-sms-webhook') {
     assertSinpeWebhookAuth(input)
-    const result = await processSinpeSmsWebhook({
-      sender: firstString(
-        input.body.sender,
-        input.body.from,
-        input.body.number,
-        input.body.phone,
-      ),
-      message: firstString(
-        input.body.message,
-        input.body.text,
-        input.body.body,
-        input.body.sms,
-        input.body.content,
-        input.body.msg,
-        input.body.key,
-      ),
-      timestamp: Number(
-        input.body.timestamp ??
-          input.body.sentStamp ??
-          input.body.time ??
-          Date.now(),
-      ),
-    })
+    const result = await processSinpeSmsWebhook(extractSinpeWebhookFields(input.body))
     return { status: 200, body: result }
   }
 
@@ -76,7 +56,13 @@ export async function handleSinpeRoutes(
   if (method === 'GET' && path === '/api/payments/sinpe-mine') {
     const session = await requireSession(input.cookie)
     const mine = await listSinpeForUser(session.id)
-    return { status: 200, body: mine }
+    return {
+      status: 200,
+      body: {
+        ...mine,
+        deposits: mine.deposits.map(withParsedAmounts),
+      },
+    }
   }
 
   if (method === 'POST' && path === '/api/payments/claim-sinpe') {
@@ -165,16 +151,4 @@ function optionalString(value: unknown): string | undefined {
     return undefined
   }
   return value.trim()
-}
-
-function firstString(...values: unknown[]): string {
-  for (const value of values) {
-    if (typeof value === 'string' && value.trim()) {
-      return value.trim()
-    }
-    if (typeof value === 'number' && Number.isFinite(value)) {
-      return String(value)
-    }
-  }
-  return ''
 }

@@ -1,4 +1,5 @@
 import { loadLocalEnv } from './loadLocalEnv.js'
+import { decodeHttpBody } from './httpBody.js'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { Plugin } from 'vite'
 import { ensureDevSuperAdmin } from './auth.js'
@@ -83,7 +84,7 @@ async function readJson(req: IncomingMessage): Promise<Record<string, unknown>> 
   if (!raw) {
     return {}
   }
-  return JSON.parse(raw) as Record<string, unknown>
+  return decodeHttpBody(raw)
 }
 
 function headerValue(value: string | string[] | undefined): string | undefined {

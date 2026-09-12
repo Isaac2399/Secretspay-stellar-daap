@@ -1,6 +1,7 @@
 /// <reference types="node" />
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { loadLocalEnv } from './loadLocalEnv.js'
+import { decodeHttpBody } from './httpBody.js'
 import { dispatchApi } from './dispatchApi.js'
 
 loadLocalEnv()
@@ -139,13 +140,13 @@ function parseBody(body: unknown): Record<string, unknown> {
   }
   if (typeof Buffer !== 'undefined' && Buffer.isBuffer(body)) {
     const raw = body.toString('utf8')
-    return raw ? (JSON.parse(raw) as Record<string, unknown>) : {}
+    return raw ? decodeHttpBody(raw) : {}
   }
   if (typeof body === 'string') {
     if (!body.trim()) {
       return {}
     }
-    return JSON.parse(body) as Record<string, unknown>
+    return decodeHttpBody(body)
   }
   if (typeof body === 'object') {
     return body as Record<string, unknown>
@@ -173,7 +174,7 @@ async function readRequestBody(req: VercelRequest): Promise<Record<string, unkno
   if (!raw.trim()) {
     return {}
   }
-  return JSON.parse(raw) as Record<string, unknown>
+  return decodeHttpBody(raw)
 }
 
 function headerAuth(req: IncomingMessage): string | undefined {
