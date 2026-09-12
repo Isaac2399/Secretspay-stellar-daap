@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { AdminDashboard } from '@/components/admin/AdminDashboard'
 import { AccountStrip } from '@/components/dashboard/AccountStrip'
+import { MySinpeCredits } from '@/components/dashboard/MySinpeCredits'
 import { ActivityList } from '@/components/dashboard/ActivityList'
 import { DashboardHero } from '@/components/dashboard/DashboardHero'
 import { CreateInvoiceQR } from '@/components/merchant/CreateInvoiceQR'
@@ -50,9 +51,15 @@ export default function HomePage() {
           void reload()
           void activity.reloadAfterDeposit(tx)
         }}
+        onRojosCredited={() => {
+          void reload()
+          void activity.reload()
+        }}
       />
 
       <AccountStrip balances={balances} />
+
+      <MySinpeCredits />
 
       <ActivityList
         publicKey={user.publicKey}

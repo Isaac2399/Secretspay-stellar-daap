@@ -1,13 +1,16 @@
 /// <reference types="node" />
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import { loadLocalEnv } from './loadLocalEnv.js'
 import { dispatchApi } from './dispatchApi.js'
+
+loadLocalEnv()
 
 type VercelRequest = IncomingMessage & {
   body?: unknown
 }
 
 const DYNAMIC_SEGMENT = /\/\[(?:\.\.\.)?[^\]]+\]/g
-const API_PREFIX = /^\/(auth|payments|sep24|places|cards|admin|rwa)(\/|$)/
+const API_PREFIX = /^\/(v1\/)?(auth|payments|sep24|places|cards|admin|rwa|invoices)(\/|$)/
 
 export const config = {
   maxDuration: 30,
@@ -22,6 +25,8 @@ export default async function handler(
       method: req.method ?? 'GET',
       path: requestPath(req),
       cookie: req.headers.cookie,
+      authorization: headerAuth(req),
+      apiKey: headerApiKey(req),
       body: await readRequestBody(req),
     })
 
@@ -169,4 +174,16 @@ async function readRequestBody(req: VercelRequest): Promise<Record<string, unkno
     return {}
   }
   return JSON.parse(raw) as Record<string, unknown>
+}
+
+function headerAuth(req: IncomingMessage): string | undefined {
+  const value = req.headers.authorization
+  const raw = Array.isArray(value) ? value[0] : value
+  return raw?.trim() || undefined
+}
+
+function headerApiKey(req: IncomingMessage): string | undefined {
+  const value = req.headers['x-api-key']
+  const raw = Array.isArray(value) ? value[0] : value
+  return raw?.trim() || undefined
 }

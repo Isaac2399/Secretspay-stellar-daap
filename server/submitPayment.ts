@@ -15,6 +15,60 @@ import {
   networkPassphrase,
 } from './provisionAccount.js'
 
+export async function creditLoyaltyFromTreasury(input: {
+  destination: string
+  amount: string
+  memo?: string
+}): Promise<{ hash: string; status: string }> {
+  if (!StrKey.isValidEd25519PublicKey(input.destination)) {
+    throw new AuthError('La cuenta destino no es válida', 400)
+  }
+  if (!/^\d+(\.\d{1,7})?$/.test(input.amount) || Number(input.amount) <= 0) {
+    throw new AuthError('El monto de ROJOS no es válido', 400)
+  }
+  const loyalty = loyaltyAssetFromEnv()
+  if (!loyalty) {
+    throw new AuthError('El token de lealtad no está configurado', 503)
+  }
+  const sourceSecret = treasurySecret()
+  const server = new Horizon.Server(horizonUrl())
+  const passphrase = networkPassphrase()
+  const sponsor = sponsorKeypair()
+  const baseFee = String(await server.fetchBaseFee())
+  return submitHorizonPayment({
+    server,
+    passphrase,
+    sponsor,
+    baseFee,
+    sourceSecret,
+    destination: input.destination,
+    asset: loyalty,
+    amount: input.amount,
+    memo: input.memo ?? 'SINPE',
+  })
+}
+
+function treasurySecret(): string {
+  const secret = (
+    process.env.SINPE_TREASURY_SECRET_KEY ??
+    process.env.ROJOS_DISTRIBUTOR_SECRET_KEY ??
+    process.env.SPONSOR_SECRET_KEY ??
+    ''
+  )
+    .trim()
+    .replace(/^['"]+|['"]+$/g, '')
+  if (!secret || /ENTER_YOUR_/i.test(secret)) {
+    throw new AuthError(
+      'Falta SINPE_TREASURY_SECRET_KEY (cuenta distribuidora de ROJOS).',
+      503,
+    )
+  }
+  if (!StrKey.isValidEd25519SecretSeed(secret)) {
+    throw new AuthError('SINPE_TREASURY_SECRET_KEY no es una secret key válida', 503)
+  }
+  return secret
+}
+
 export async function submitCustodialPayment(input: {
   userId: string
   destination: string

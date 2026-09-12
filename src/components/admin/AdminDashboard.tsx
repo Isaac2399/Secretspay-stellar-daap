@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Building2, Landmark, Shield, Users } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { Building2, Landmark, Shield, Smartphone, Users } from 'lucide-react'
 import { ActivityList } from '@/components/dashboard/ActivityList'
 import { AdminFinancePanel } from '@/components/admin/AdminFinancePanel'
+import { ClaimLookupPanel } from '@/components/admin/ClaimLookupPanel'
+import { UnassignedDepositsPanel } from '@/components/admin/UnassignedDepositsPanel'
 import { StructuringDashboard } from '@/components/rwa/StructuringDashboard'
 import { fetchAdminOverview } from '@/lib/admin/api'
 import { readableError } from '@/lib/auth/readableError'
@@ -12,7 +15,9 @@ import { formatUsd } from '@/lib/rwa/format'
 import type { AdminMerchantRow, TokenTotals } from '@/types/admin'
 
 export function AdminDashboard() {
-  const [tab, setTab] = useState<'finance' | 'merchants' | 'customers' | 'rwa'>('finance')
+  const [tab, setTab] = useState<
+    'finance' | 'merchants' | 'customers' | 'rwa' | 'sinpe'
+  >('finance')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -127,6 +132,14 @@ export function AdminDashboard() {
             setSelectedId(null)
           }}
         />
+        <TabButton
+          active={tab === 'sinpe'}
+          label="SINPE"
+          onClick={() => {
+            setTab('sinpe')
+            setSelectedId(null)
+          }}
+        />
       </div>
 
       {loading ? (
@@ -139,6 +152,23 @@ export function AdminDashboard() {
       ) : null}
 
       {tab === 'rwa' ? <StructuringDashboard /> : null}
+
+      {tab === 'sinpe' ? (
+        <div className="space-y-8">
+          <p className="flex items-center gap-2 text-xs text-app-muted">
+            <Smartphone className="h-4 w-4 text-app-accent" />
+            <Link className="underline" to="/admin/unassigned-deposits">
+              /admin/unassigned-deposits
+            </Link>
+            <span>·</span>
+            <Link className="underline" to="/admin/claim-lookup">
+              /admin/claim-lookup
+            </Link>
+          </p>
+          <UnassignedDepositsPanel />
+          <ClaimLookupPanel />
+        </div>
+      ) : null}
 
       {tab === 'merchants' && overview ? (
         <ul className="space-y-2">

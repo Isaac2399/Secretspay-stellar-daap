@@ -1,7 +1,10 @@
+import { loadLocalEnv } from './loadLocalEnv.js'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { Plugin } from 'vite'
 import { ensureDevSuperAdmin } from './auth.js'
 import { dispatchApi } from './dispatchApi.js'
+
+loadLocalEnv()
 
 export function authApiPlugin(): Plugin {
   return {
@@ -24,14 +27,18 @@ async function handleApi(
   next: () => void,
 ) {
   const url = req.url ?? ''
+  const pathOnly = url.split('?')[0] ?? url
   if (
-    !url.startsWith('/api/auth') &&
-    !url.startsWith('/api/payments') &&
-    !url.startsWith('/api/sep24') &&
-    !url.startsWith('/api/places') &&
-    !url.startsWith('/api/admin') &&
-    !url.startsWith('/api/cards') &&
-    !url.startsWith('/api/rwa')
+    !pathOnly.startsWith('/api/auth') &&
+    !pathOnly.startsWith('/api/payments') &&
+    !pathOnly.startsWith('/api/sep24') &&
+    !pathOnly.startsWith('/api/places') &&
+    !pathOnly.startsWith('/api/admin') &&
+    !pathOnly.startsWith('/api/cards') &&
+    !pathOnly.startsWith('/api/rwa') &&
+    !pathOnly.startsWith('/api/invoices') &&
+    !pathOnly.startsWith('/api/v1/') &&
+    !pathOnly.includes('sinpe-sms-webhook')
   ) {
     next()
     return
@@ -44,10 +51,13 @@ async function handleApi(
       req.method === 'GET' || req.method === 'HEAD'
         ? Object.fromEntries(parsedUrl.searchParams.entries())
         : await readJson(req)
+    const authorization = headerValue(req.headers.authorization)
     const result = await dispatchApi({
       method: req.method ?? 'GET',
       path,
       cookie: req.headers.cookie,
+      authorization,
+      apiKey: headerValue(req.headers['x-api-key']),
       body,
     })
     const payload = JSON.stringify(result.body)
@@ -74,4 +84,9 @@ async function readJson(req: IncomingMessage): Promise<Record<string, unknown>> 
     return {}
   }
   return JSON.parse(raw) as Record<string, unknown>
+}
+
+function headerValue(value: string | string[] | undefined): string | undefined {
+  const raw = Array.isArray(value) ? value[0] : value
+  return raw?.trim() || undefined
 }

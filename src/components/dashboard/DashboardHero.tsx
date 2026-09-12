@@ -27,6 +27,7 @@ type DashboardHeroProps = {
   onScan: () => void
   onSend: () => void
   onDepositCompleted?: (tx: Sep24Transaction) => void
+  onRojosCredited?: () => void
 }
 
 type AssetKey = 'loyalty' | 'xlm' | 'usdc'
@@ -38,6 +39,7 @@ export function DashboardHero({
   onScan,
   onSend,
   onDepositCompleted,
+  onRojosCredited,
 }: DashboardHeroProps) {
   const [asset, setAsset] = useState<AssetKey>('loyalty')
   const [copied, setCopied] = useState(false)
@@ -152,11 +154,13 @@ export function DashboardHero({
       {receiveOpen ? (
         <AddFundsSheet
           publicKey={user.publicKey}
+          sinpeCode={user.sinpeCode}
           copied={copied}
           hasUsdcTrustline={hasUsdcTrustline(balances)}
           onCopy={() => void copyPublicKey()}
           onClose={() => setReceiveOpen(false)}
           onDepositCompleted={onDepositCompleted}
+          onRojosCredited={onRojosCredited}
         />
       ) : null}
     </section>

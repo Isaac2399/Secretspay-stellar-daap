@@ -7,6 +7,8 @@ import MapPage from '@/pages/MapPage'
 import ProfilePage from '@/pages/ProfilePage'
 import RegisterPage from '@/pages/RegisterPage'
 import CardPage from '@/pages/CardPage'
+import UnassignedDepositsPage from '@/pages/UnassignedDepositsPage'
+import ClaimLookupPage from '@/pages/ClaimLookupPage'
 import RwaLearnPage from '@/pages/RwaLearnPage'
 import RwaTokenizePage from '@/pages/RwaTokenizePage'
 import RwaMarketplacePage from '@/pages/RwaMarketplacePage'
@@ -30,6 +32,8 @@ export function AppRoutes() {
           <Route path="/card" element={<CardPage />} />
           <Route path="/map" element={<MapPage />} />
           <Route path="/profile" element={<ProfilePage />} />
+          <Route path="/admin/unassigned-deposits" element={<UnassignedDepositsPage />} />
+          <Route path="/admin/claim-lookup" element={<ClaimLookupPage />} />
           <Route path="/rwa" element={<RwaLearnPage />} />
           <Route path="/rwa/tokenizar" element={<RwaTokenizePage />} />
           <Route path="/rwa/invertir" element={<RwaMarketplacePage />} />

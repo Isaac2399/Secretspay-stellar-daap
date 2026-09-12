@@ -23,6 +23,7 @@ export type AppUser = {
   id?: string
   email: string
   publicKey: string
+  sinpeCode?: string
   role: UserRole
   place?: BusinessPlace
 }

@@ -10,6 +10,7 @@ import {
 import { AuthError } from './errors.js'
 import { ensureLoyaltyTrustline, provisionStellarAccount } from './provisionAccount.js'
 import { loadStore, saveStore } from './userStore.js'
+import { generateSinpeCode, isSinpeCode, normalizeSinpeCode } from './sinpe/code.js'
 
 export const DEFAULT_SUPER_ADMIN_PUBLIC_KEY =
   'GC5IQE74UCRCKXJII3G3AYNJHB75JGVD2TQKMDNNR2QZVLKEDVU5E4NJ'
@@ -112,6 +113,7 @@ export type StoredUser = {
   publicKey: string
   secretKeyEnc?: string
   createdAt: string
+  sinpeCode?: string
   place?: {
     name: string
     address: string
@@ -133,6 +135,7 @@ export type PublicUser = {
   email: string
   role: UserRole
   publicKey: string
+  sinpeCode?: string
   place?: StoredUser['place']
 }
 
@@ -152,6 +155,7 @@ export function toPublicUser(user: StoredUser): PublicUser {
     email: user.email,
     role: admin ? 'admin' : user.role,
     publicKey: admin ? superAdminPublicKey() : user.publicKey,
+    sinpeCode: admin ? undefined : user.sinpeCode,
     place: admin ? undefined : user.place,
   }
 }
@@ -174,6 +178,62 @@ export async function findUserByPublicKey(
 ): Promise<StoredUser | undefined> {
   const store = await loadStore()
   return store.users.find((user) => user.publicKey === publicKey)
+}
+
+export async function findUserBySinpeCode(
+  code: string,
+): Promise<StoredUser | undefined> {
+  const key = normalizeSinpeCode(code)
+  if (!isSinpeCode(key)) {
+    return undefined
+  }
+  const store = await loadStore()
+  return store.users.find((user) => normalizeSinpeCode(user.sinpeCode ?? '') === key)
+}
+
+function takenSinpeCodes(users: StoredUser[]): Set<string> {
+  return new Set(
+    users
+      .map((user) => normalizeSinpeCode(user.sinpeCode ?? ''))
+      .filter((code) => isSinpeCode(code)),
+  )
+}
+
+export async function ensureUserSinpeCode(
+  userId: string,
+): Promise<StoredUser | undefined> {
+  const store = await loadStore()
+  const user = store.users.find((entry) => entry.id === userId)
+  if (!user) {
+    return undefined
+  }
+  if (isSuperAdminRecord(user)) {
+    return user
+  }
+  if (user.sinpeCode && isSinpeCode(user.sinpeCode)) {
+    return user
+  }
+  user.sinpeCode = generateSinpeCode(takenSinpeCodes(store.users))
+  await saveStore(store)
+  return user
+}
+
+export async function searchAssignableUsers(query: string): Promise<PublicUser[]> {
+  const store = await loadStore()
+  const q = query.trim().toLowerCase()
+  const users = store.users.filter(
+    (user) => !isSuperAdminRecord(user) && user.role !== 'admin',
+  )
+  const matched = q
+    ? users.filter(
+        (user) =>
+          user.email.includes(q) ||
+          user.publicKey.toLowerCase().includes(q) ||
+          user.id.toLowerCase() === q ||
+          (user.sinpeCode ?? '').toLowerCase() === q,
+      )
+    : users
+  return matched.slice(0, 30).map(toPublicUser)
 }
 
 export async function createUser(input: {
@@ -231,6 +291,9 @@ export async function createUser(input: {
   }
 
   const store = await loadStore()
+  if (!adminSignup) {
+    user.sinpeCode = generateSinpeCode(takenSinpeCodes(store.users))
+  }
   store.users.push(user)
   await saveStore(store)
   return toPublicUser(user)
@@ -251,7 +314,8 @@ export async function authenticate(
   if (!isSuperAdminRecord(promoted)) {
     await ensureUserLoyaltyTrustline(promoted.id)
   }
-  return toPublicUser(promoted)
+  const withCode = (await ensureUserSinpeCode(promoted.id)) ?? promoted
+  return toPublicUser(withCode)
 }
 
 export async function ensureUserLoyaltyTrustline(userId: string): Promise<void> {
@@ -363,7 +427,11 @@ export async function userFromCookieHeader(
     return null
   }
   const user = await findUserById(userId)
-  return user ? toPublicUser(user) : null
+  if (!user) {
+    return null
+  }
+  const withCode = (await ensureUserSinpeCode(user.id)) ?? user
+  return toPublicUser(withCode)
 }
 
 export async function secretKeyForUser(userId: string): Promise<string> {

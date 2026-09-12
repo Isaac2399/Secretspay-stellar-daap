@@ -1,3 +1,4 @@
+import { loadLocalEnv } from './loadLocalEnv.js'
 import { submitCustodialPayment } from './submitPayment.js'
 import {
   AuthError,
@@ -23,6 +24,10 @@ import {
 import { parsePlaceBody, reverseNominatim, searchNominatim } from './places.js'
 import { handleCardRoutes } from './cardApi.js'
 import { handleRwaRoutes } from './rwaApi.js'
+import { handleInvoiceRoutes } from './invoicing/invoiceApi.js'
+import { handleSinpeRoutes } from './sinpe/sinpeApi.js'
+
+loadLocalEnv()
 
 function isAuthError(error: unknown): error is AuthError {
   if (error instanceof AuthError) {
@@ -40,6 +45,8 @@ export async function dispatchApi(input: {
   method: string
   path: string
   cookie?: string
+  authorization?: string
+  apiKey?: string
   body: Record<string, unknown>
 }): Promise<{ status: number; body: unknown; setCookie?: string }> {
   try {
@@ -66,11 +73,18 @@ async function route(input: {
   method: string
   path: string
   cookie?: string
+  authorization?: string
+  apiKey?: string
   body: Record<string, unknown>
 }): Promise<{ status: number; body: unknown; setCookie?: string }> {
   await ensureDevSuperAdmin()
   const path = (input.path.split('?')[0] ?? input.path).replace(/\/$/, '') || '/'
   const method = input.method.toUpperCase()
+
+  const sinpeResult = await handleSinpeRoutes({ ...input, path, method })
+  if (sinpeResult) {
+    return sinpeResult
+  }
 
   const rwaResult = await handleRwaRoutes({ ...input, path, method })
   if (rwaResult) {
@@ -80,6 +94,11 @@ async function route(input: {
   const cardResult = await handleCardRoutes({ ...input, path, method })
   if (cardResult) {
     return cardResult
+  }
+
+  const invoiceResult = await handleInvoiceRoutes({ ...input, path, method })
+  if (invoiceResult) {
+    return invoiceResult
   }
 
   if (method === 'POST' && path === '/api/payments') {

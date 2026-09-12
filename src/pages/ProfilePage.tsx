@@ -63,6 +63,10 @@ export default function ProfilePage() {
           </div>
         ) : null}
         <div>
+          <p className="text-xs text-app-muted">Código SINPE (nota de recarga)</p>
+          <p className="mt-1 font-mono text-lg tracking-[0.3em]">{account.sinpeCode ?? '—'}</p>
+        </div>
+        <div>
           <p className="text-xs text-app-muted">Public key</p>
           <p className="mt-1 break-all font-mono text-xs text-white/80">
             {account.publicKey}
