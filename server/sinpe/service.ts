@@ -19,6 +19,7 @@ import { AuthError } from '../errors.js'
 import { creditLoyaltyFromTreasury } from '../submitPayment.js'
 import { calculateRojos, formatRojosAmount } from './convert.js'
 import { extractStellarPublicKey, extractPhoneFromSms, parseSinpeSms } from './parseSms.js'
+import { isTemplatePlaceholder } from './webhookPayload.js'
 import {
   findByMessageQuery,
   findByReference,
@@ -73,7 +74,9 @@ export async function processSinpeSmsWebhook(payload: WebhookPayload) {
       rawMessage: payload.message,
       timestamp: Number.isFinite(payload.timestamp) ? payload.timestamp : Date.now(),
       status: 'PENDING_MANUAL_MATCH',
-      lastError: 'SMS no reconocido (monto o referencia). El mensaje se guardó completo.',
+      lastError: isTemplatePlaceholder(payload.message)
+        ? 'SMS Forwarder mandó la plantilla vacía (%text%). En el celular el JSON debe llevar el SMS real, no el texto %text%.'
+        : 'SMS no reconocido (monto o referencia). El mensaje se guardó completo.',
       assignedUserId: matched?.id,
       assignedPublicKey: matched?.publicKey,
       createdAt: now,

@@ -98,8 +98,12 @@ export function UnassignedDepositsPanel() {
               {new Date(row.timestamp || row.createdAt).toLocaleString()}
             </p>
             <p className="mt-1 text-sm font-semibold">
-              ₡{row.crcAmount.toLocaleString('es-CR', { maximumFractionDigits: 2 })} →{' '}
-              {formatAmount(String(row.calculatedRojos))} ROJOS
+              ₡
+              {row.crcAmount.toLocaleString('es-CR', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}{' '}
+              → {formatAmount(String(row.calculatedRojos))} ROJOS
               {row.promoApplied ? (
                 <span className="ml-2 text-[11px] text-app-accent">promo</span>
               ) : null}

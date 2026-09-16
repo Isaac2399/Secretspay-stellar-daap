@@ -155,16 +155,15 @@ function parseBody(body: unknown): Record<string, unknown> {
 }
 
 async function readRequestBody(req: VercelRequest): Promise<Record<string, unknown>> {
+  const query = Object.fromEntries(
+    new URLSearchParams((req.url ?? '').split('?')[1] ?? '').entries(),
+  )
   const parsed = parseBody(req.body)
   if (Object.keys(parsed).length > 0) {
-    return parsed
+    return { ...query, ...parsed }
   }
   if (req.method === 'GET' || req.method === 'HEAD') {
-    const search = (req.url ?? '').split('?')[1]
-    if (!search) {
-      return {}
-    }
-    return Object.fromEntries(new URLSearchParams(search).entries())
+    return query
   }
   const chunks: Buffer[] = []
   for await (const chunk of req) {
@@ -172,9 +171,9 @@ async function readRequestBody(req: VercelRequest): Promise<Record<string, unkno
   }
   const raw = Buffer.concat(chunks).toString('utf8')
   if (!raw.trim()) {
-    return {}
+    return query
   }
-  return decodeHttpBody(raw)
+  return { ...query, ...decodeHttpBody(raw) }
 }
 
 function headerAuth(req: IncomingMessage): string | undefined {

@@ -32,26 +32,22 @@ export async function handleSinpeRoutes(
   const method = input.method.toUpperCase()
 
   if (method === 'GET' && path === '/api/payments/sinpe-sms-webhook') {
-    return {
-      status: 200,
-      body: {
-        ok: true,
-        method: 'GET',
-        hint: 'Este endpoint está vivo. Para recargar usa POST con JSON sender, message y timestamp.',
-      },
+    const fields = extractSinpeWebhookFields(input.body)
+    if (!fields.message.trim()) {
+      return {
+        status: 200,
+        body: {
+          ok: true,
+          method: 'GET',
+          hint: 'Este endpoint está vivo. Para recargar usa POST con JSON sender, message y timestamp.',
+        },
+      }
     }
+    return handleSinpeWebhook(input, fields)
   }
 
   if (method === 'POST' && path === '/api/payments/sinpe-sms-webhook') {
-    assertSinpeWebhookAuth(input)
-    const fields = extractSinpeWebhookFields(input.body)
-    const result = await processSinpeSmsWebhook(fields)
-    console.info('[sinpe-webhook]', {
-      sender: fields.sender,
-      preview: fields.message.slice(0, 180),
-      status: (result as { status?: string }).status,
-    })
-    return { status: 200, body: result }
+    return handleSinpeWebhook(input, extractSinpeWebhookFields(input.body))
   }
 
   if (method === 'POST' && path === '/api/payments/sinpe-retry') {
@@ -139,6 +135,20 @@ function canonicalPath(raw: string): string {
   return path.replace(/^\/api\/v1\//, '/api/')
 }
 
+async function handleSinpeWebhook(
+  input: ApiInput,
+  fields: { sender: string; message: string; timestamp: number },
+): Promise<ApiResult> {
+  assertSinpeWebhookAuth(input)
+  const result = await processSinpeSmsWebhook(fields)
+  console.info('[sinpe-webhook]', {
+    sender: fields.sender,
+    preview: fields.message.slice(0, 180),
+    status: (result as { status?: string }).status,
+  })
+  return { status: 200, body: result }
+}
+
 function assertSinpeWebhookAuth(input: ApiInput): void {
   const secret = (process.env.SINPE_SMS_API_KEY ?? '').trim()
   if (!secret) {
@@ -149,7 +159,10 @@ function assertSinpeWebhookAuth(input: ApiInput): void {
   }
   const headerKey = (input.apiKey ?? '').trim()
   const bearer = (input.authorization ?? '').replace(/^Bearer\s+/i, '').trim()
-  if (headerKey === secret || bearer === secret) {
+  const fromBody = String(
+    input.body.api_key ?? input.body.apiKey ?? input.body['x-api-key'] ?? '',
+  ).trim()
+  if (headerKey === secret || bearer === secret || fromBody === secret) {
     return
   }
   throw new AuthError('Webhook SINPE no autorizado', 401)

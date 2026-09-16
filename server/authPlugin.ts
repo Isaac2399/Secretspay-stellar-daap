@@ -50,10 +50,10 @@ async function handleApi(
   try {
     const parsedUrl = new URL(url, 'http://local')
     const path = parsedUrl.pathname
-    const body =
-      req.method === 'GET' || req.method === 'HEAD'
-        ? Object.fromEntries(parsedUrl.searchParams.entries())
-        : await readJson(req)
+    const query = Object.fromEntries(parsedUrl.searchParams.entries())
+    const posted =
+      req.method === 'GET' || req.method === 'HEAD' ? {} : await readJson(req)
+    const body = { ...query, ...posted }
     const authorization = headerValue(req.headers.authorization)
     const result = await dispatchApi({
       method: req.method ?? 'GET',

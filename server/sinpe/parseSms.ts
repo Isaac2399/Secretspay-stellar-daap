@@ -17,10 +17,11 @@ const REFERENCE_PATTERNS = [
 ]
 
 const AMOUNT_PATTERNS = [
-  /(?:ha\s+recibido|recibid[oa]|recibiste|recibio|recibió)\s+[₡¢]?\s*([\d][\d.,]*)\s*(?:colones|crc)?/i,
-  /([\d][\d.,]*)\s*(?:colones|crc)\b/i,
-  /[₡¢]\s*([\d][\d.,]*)/,
-  /(?:por|monto)\s+(?:crc\s*)?([\d][\d.,]*)/i,
+  /(?:ha\s+recibido|recibid[oa]|recibiste|recibio|recibió)\s+[₡¢]?\s*([\d][\d.\s,]*)\s*(?:colones|crc)?/i,
+  /([\d][\d.\s,]*)\s*(?:colones|crc)\b/i,
+  /[₡¢]\s*([\d][\d.\s,]*)/,
+  /(?:por|monto|importe)\s+(?:de\s+)?(?:crc\s*)?[₡¢]?\s*([\d][\d.\s,]*)/i,
+  /crc\s*([\d][\d.\s,]*)/i,
 ]
 
 const COMMENT_PATTERNS = [
@@ -95,6 +96,31 @@ function extractAmount(text: string): number | null {
       }
     }
   }
+  return extractLooseCrcAmount(text)
+}
+
+/** ₡0.01, 1,23 y 234 deben contar aunque el banco no ponga la palabra colones. */
+function extractLooseCrcAmount(text: string): number | null {
+  const matches = [...text.matchAll(/(\d{1,7}(?:[.,]\d{1,2})?)/g)]
+  for (const match of matches) {
+    const raw = match[1] ?? ''
+    const start = match.index ?? 0
+    const end = start + raw.length
+    const before = text[start - 1] ?? ''
+    const after = text[end] ?? ''
+    if (/\d/.test(before) || /\d/.test(after)) {
+      continue
+    }
+    const amount = parseCrcNumber(raw)
+    if (amount === null || amount <= 0 || amount >= 100_000_000) {
+      continue
+    }
+    const digits = raw.replace(/[^\d]/g, '')
+    if (!/[.,]/.test(raw) && digits.length >= 6) {
+      continue
+    }
+    return amount
+  }
   return null
 }
 
@@ -120,7 +146,7 @@ export function parseCrcNumber(raw: string): number | null {
       lastComma > lastDot
         ? Number(cleaned.replace(/\./g, '').replace(',', '.'))
         : Number(cleaned.replace(/,/g, ''))
-    return Number.isFinite(value) ? value : null
+    return Number.isFinite(value) && value > 0 ? value : null
   }
   if (cleaned.includes(',')) {
     const parts = cleaned.split(',')
@@ -129,10 +155,10 @@ export function parseCrcNumber(raw: string): number | null {
       decimals.length === 3
         ? Number(cleaned.replace(/,/g, ''))
         : Number(cleaned.replace(',', '.'))
-    return Number.isFinite(value) ? value : null
+    return Number.isFinite(value) && value > 0 ? value : null
   }
   const value = Number(cleaned)
-  return Number.isFinite(value) ? value : null
+  return Number.isFinite(value) && value > 0 ? value : null
 }
 
 function hashText(text: string): number {
