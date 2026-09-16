@@ -2,7 +2,7 @@ import { loadLocalEnv } from './loadLocalEnv.js'
 import { decodeHttpBody } from './httpBody.js'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { Plugin } from 'vite'
-import { ensureDevSuperAdmin } from './auth.js'
+import { ensureDevSuperAdmin, ensureDevEventStaff } from './auth.js'
 import { dispatchApi } from './dispatchApi.js'
 
 loadLocalEnv()
@@ -13,10 +13,12 @@ export function authApiPlugin(): Plugin {
     enforce: 'pre',
     configureServer(server) {
       void ensureDevSuperAdmin()
+      void ensureDevEventStaff()
       server.middlewares.use(handleApi)
     },
     configurePreviewServer(server) {
       void ensureDevSuperAdmin()
+      void ensureDevEventStaff()
       server.middlewares.use(handleApi)
     },
   }

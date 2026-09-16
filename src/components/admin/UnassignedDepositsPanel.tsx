@@ -60,6 +60,7 @@ export function UnassignedDepositsPanel() {
       <div>
         <h2 className="text-sm font-semibold">Depósitos SINPE sin asignar</h2>
         <p className="mt-1 text-xs text-app-muted">
+          Buscá por el SMS completo, el código sc…ts o el comprobante del banco.
           Paridad ₡1,000 = 1 ROJO. Promo ₡9,000 = 10 ROJOS.
         </p>
       </div>
@@ -73,7 +74,7 @@ export function UnassignedDepositsPanel() {
         <input
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="Buscar comprobante"
+          placeholder="SMS, comprobante o código del banco"
           className="min-w-0 flex-1 rounded-2xl bg-app-chip px-3 py-2 text-sm outline-none"
         />
         <button
@@ -158,6 +159,9 @@ function AssignModal({
   const [query, setQuery] = useState('')
   const [users, setUsers] = useState<AssignableUser[]>([])
   const [selected, setSelected] = useState<AssignableUser | null>(null)
+  const [crc, setCrc] = useState(
+    deposit.crcAmount > 0 ? String(deposit.crcAmount) : '',
+  )
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
@@ -177,8 +181,21 @@ function AssignModal({
           </button>
         </div>
         <p className="text-xs text-app-muted">
-          Comprobante {deposit.referenceId} · {formatAmount(String(deposit.calculatedRojos))} ROJOS
+          Comprobante {deposit.referenceId}
         </p>
+        {deposit.rawMessage ? (
+          <p className="mt-2 max-h-28 overflow-y-auto break-all rounded-2xl bg-app-chip px-3 py-2 text-[11px] text-white/70">
+            {deposit.rawMessage}
+          </p>
+        ) : null}
+        <label className="mt-3 block text-xs text-app-muted">Monto CRC del SMS</label>
+        <input
+          value={crc}
+          onChange={(event) => setCrc(event.target.value)}
+          inputMode="decimal"
+          placeholder="Monto en colones"
+          className="mt-1 w-full rounded-2xl bg-app-chip px-3 py-2 text-sm outline-none"
+        />
         <form
           className="mt-3 flex gap-2"
           onSubmit={(event) => {
@@ -224,7 +241,7 @@ function AssignModal({
         {error ? <p className="mt-2 text-sm text-red-400">{error}</p> : null}
         <button
           type="button"
-          disabled={!selected || busy}
+          disabled={!selected || busy || !(Number(crc.replace(/,/g, '.')) > 0)}
           className="mt-4 w-full rounded-2xl bg-app-accent py-3 text-sm font-medium disabled:opacity-40"
           onClick={() => {
             if (!selected) {
@@ -234,6 +251,7 @@ function AssignModal({
             void assignDeposit({
               referenceId: deposit.referenceId,
               userId: selected.id,
+              crcAmount: Number(crc.replace(/,/g, '.')),
             })
               .then(onAssigned)
               .catch((err) => {

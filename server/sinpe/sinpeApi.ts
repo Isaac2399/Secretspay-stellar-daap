@@ -1,9 +1,10 @@
 import { AuthError } from '../errors.js'
 import { searchAssignableUsers, userFromCookieHeader } from '../auth.js'
-import { requireSuperAdmin } from '../superAdmin.js'
+import { requireSinpeOps, requireUserSearch } from '../superAdmin.js'
 import {
   assignUnassignedDeposit,
   claimSinpeDeposit,
+  getSinpeIntent,
   listPendingDeposits,
   lookupSinpeClaim,
   processSinpeSmsWebhook,
@@ -43,7 +44,13 @@ export async function handleSinpeRoutes(
 
   if (method === 'POST' && path === '/api/payments/sinpe-sms-webhook') {
     assertSinpeWebhookAuth(input)
-    const result = await processSinpeSmsWebhook(extractSinpeWebhookFields(input.body))
+    const fields = extractSinpeWebhookFields(input.body)
+    const result = await processSinpeSmsWebhook(fields)
+    console.info('[sinpe-webhook]', {
+      sender: fields.sender,
+      preview: fields.message.slice(0, 180),
+      status: (result as { status?: string }).status,
+    })
     return { status: 200, body: result }
   }
 
@@ -65,6 +72,11 @@ export async function handleSinpeRoutes(
     }
   }
 
+  if (method === 'GET' && path === '/api/payments/sinpe-intent') {
+    const session = await requireSession(input.cookie)
+    return { status: 200, body: await getSinpeIntent(session) }
+  }
+
   if (method === 'POST' && path === '/api/payments/claim-sinpe') {
     const session = await requireSession(input.cookie)
     const result = await claimSinpeDeposit({
@@ -76,7 +88,7 @@ export async function handleSinpeRoutes(
 
   if (method === 'GET' && path === '/api/admin/unassigned-deposits') {
     const session = await userFromCookieHeader(input.cookie)
-    await requireSuperAdmin(session)
+    await requireSinpeOps(session)
     const deposits = await listPendingDeposits(
       optionalString(input.body.reference_id ?? input.body.q),
     )
@@ -85,18 +97,23 @@ export async function handleSinpeRoutes(
 
   if (method === 'POST' && path === '/api/admin/assign-deposit') {
     const session = await userFromCookieHeader(input.cookie)
-    const admin = await requireSuperAdmin(session)
+    const admin = await requireSinpeOps(session)
+    const crcRaw = input.body.crc_amount ?? input.body.crcAmount
     const result = await assignUnassignedDeposit({
       referenceId: String(input.body.reference_id ?? input.body.referenceId ?? ''),
       userId: String(input.body.user_id ?? input.body.userId ?? ''),
       adminId: admin.id,
+      crcAmount:
+        crcRaw === undefined || crcRaw === null || crcRaw === ''
+          ? undefined
+          : Number(crcRaw),
     })
     return { status: 200, body: result }
   }
 
   if (method === 'GET' && path === '/api/admin/claim-lookup') {
     const session = await userFromCookieHeader(input.cookie)
-    await requireSuperAdmin(session)
+    await requireSinpeOps(session)
     const referenceId = optionalString(
       input.body.reference_id ?? input.body.q ?? input.body.referenceId,
     )
@@ -109,7 +126,7 @@ export async function handleSinpeRoutes(
 
   if (method === 'GET' && path === '/api/admin/users') {
     const session = await userFromCookieHeader(input.cookie)
-    await requireSuperAdmin(session)
+    await requireUserSearch(session)
     const users = await searchAssignableUsers(String(input.body.q ?? ''))
     return { status: 200, body: { users } }
   }

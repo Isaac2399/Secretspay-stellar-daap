@@ -7,15 +7,25 @@ import {
   scryptSync,
   timingSafeEqual,
 } from 'node:crypto'
+import { Keypair } from '@stellar/stellar-sdk'
 import { AuthError } from './errors.js'
 import { ensureLoyaltyTrustline, provisionStellarAccount } from './provisionAccount.js'
 import { loadStore, saveStore } from './userStore.js'
-import { generateSinpeCode, isSinpeCode, normalizeSinpeCode } from './sinpe/code.js'
+import {
+  generateSinpeCode,
+  isSecretsCode,
+  isSinpeCode,
+  normalizeSinpeCode,
+} from './sinpe/code.js'
 
 export const DEFAULT_SUPER_ADMIN_PUBLIC_KEY =
   'GC5IQE74UCRCKXJII3G3AYNJHB75JGVD2TQKMDNNR2QZVLKEDVU5E4NJ'
 export const DEFAULT_SUPER_ADMIN_EMAIL = 'admin@stellarpay.local'
 export const DEV_SUPER_ADMIN_PASSWORD = 'Admin1234!'
+export const DEFAULT_CASHIER_EMAIL = 'caja@stellarpay.local'
+export const DEV_CASHIER_PASSWORD = 'CajaRojo#16Sep26'
+export const DEFAULT_SINPE_OPS_EMAIL = 'sinpe@stellarpay.local'
+export const DEV_SINPE_OPS_PASSWORD = 'SinpeMatch#16Sep26'
 
 export function superAdminPublicKey(): string {
   const fromEnv = (process.env.SUPER_ADMIN_PUBLIC_KEY ?? '').trim()
@@ -97,9 +107,105 @@ async function upsertDevSuperAdmin(): Promise<void> {
   await saveStore(store)
 }
 
+let seedEventStaffPromise: Promise<void> | null = null
+
+export async function ensureDevEventStaff(): Promise<void> {
+  if (seedStaffDisabled()) {
+    return
+  }
+  if (!seedEventStaffPromise) {
+    seedEventStaffPromise = upsertDevEventStaff().catch((error) => {
+      seedEventStaffPromise = null
+      throw error
+    })
+  }
+  await seedEventStaffPromise
+}
+
+function seedStaffDisabled(): boolean {
+  const flag = (process.env.STAFF_SEED ?? '').trim().toLowerCase()
+  return flag === '0' || flag === 'false' || flag === 'off'
+}
+
+function cashierEmail(): string {
+  return normalizeEmail(process.env.CASHIER_EMAIL ?? '') || DEFAULT_CASHIER_EMAIL
+}
+
+function cashierPassword(): string {
+  return (process.env.CASHIER_PASSWORD ?? '').trim() || DEV_CASHIER_PASSWORD
+}
+
+function sinpeOpsEmail(): string {
+  return normalizeEmail(process.env.SINPE_OPS_EMAIL ?? '') || DEFAULT_SINPE_OPS_EMAIL
+}
+
+function sinpeOpsPassword(): string {
+  return (process.env.SINPE_OPS_PASSWORD ?? '').trim() || DEV_SINPE_OPS_PASSWORD
+}
+
+async function upsertDevEventStaff(): Promise<void> {
+  const store = await loadStore()
+  const specs: Array<{ email: string; password: string; role: UserRole }> = [
+    { email: cashierEmail(), password: cashierPassword(), role: 'cashier' },
+    { email: sinpeOpsEmail(), password: sinpeOpsPassword(), role: 'sinpe_ops' },
+  ]
+  let changed = false
+  for (const spec of specs) {
+    if (upsertStaffRecord(store, spec)) {
+      changed = true
+    }
+  }
+  if (changed) {
+    await saveStore(store)
+  }
+}
+
+function upsertStaffRecord(
+  store: { users: StoredUser[] },
+  spec: { email: string; password: string; role: UserRole },
+): boolean {
+  const existing = store.users.find((user) => user.email === spec.email)
+  if (
+    existing &&
+    existing.role === spec.role &&
+    verifyPassword(spec.password, existing.salt, existing.passwordHash)
+  ) {
+    return false
+  }
+  const salt = randomBytes(16).toString('hex')
+  const passwordHash = hashPassword(spec.password, salt)
+  if (existing) {
+    existing.role = spec.role
+    existing.salt = salt
+    existing.passwordHash = passwordHash
+    delete existing.secretKeyEnc
+    delete existing.sinpeCode
+    delete existing.place
+    return true
+  }
+  store.users.push({
+    id: randomBytes(12).toString('hex'),
+    email: spec.email,
+    salt,
+    passwordHash,
+    role: spec.role,
+    publicKey: Keypair.random().publicKey(),
+    createdAt: new Date().toISOString(),
+  })
+  return true
+}
+
 export { AuthError } from './errors.js'
 
-export type UserRole = 'customer' | 'merchant' | 'admin'
+export type UserRole = 'customer' | 'merchant' | 'admin' | 'cashier' | 'sinpe_ops'
+
+export function isEventStaffRole(role: UserRole): boolean {
+  return role === 'cashier' || role === 'sinpe_ops'
+}
+
+export function isAssignableAccount(user: { role: UserRole }): boolean {
+  return user.role === 'customer' || user.role === 'merchant'
+}
 
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000
 const COOKIE_NAME = 'stellar_session'
@@ -191,14 +297,6 @@ export async function findUserBySinpeCode(
   return store.users.find((user) => normalizeSinpeCode(user.sinpeCode ?? '') === key)
 }
 
-function takenSinpeCodes(users: StoredUser[]): Set<string> {
-  return new Set(
-    users
-      .map((user) => normalizeSinpeCode(user.sinpeCode ?? ''))
-      .filter((code) => isSinpeCode(code)),
-  )
-}
-
 export async function ensureUserSinpeCode(
   userId: string,
 ): Promise<StoredUser | undefined> {
@@ -207,13 +305,14 @@ export async function ensureUserSinpeCode(
   if (!user) {
     return undefined
   }
-  if (isSuperAdminRecord(user)) {
+  if (isSuperAdminRecord(user) || isEventStaffRole(user.role)) {
     return user
   }
-  if (user.sinpeCode && isSinpeCode(user.sinpeCode)) {
+  const expected = generateSinpeCode(user.publicKey)
+  if (user.sinpeCode === expected && isSecretsCode(expected)) {
     return user
   }
-  user.sinpeCode = generateSinpeCode(takenSinpeCodes(store.users))
+  user.sinpeCode = expected
   await saveStore(store)
   return user
 }
@@ -222,7 +321,7 @@ export async function searchAssignableUsers(query: string): Promise<PublicUser[]
   const store = await loadStore()
   const q = query.trim().toLowerCase()
   const users = store.users.filter(
-    (user) => !isSuperAdminRecord(user) && user.role !== 'admin',
+    (user) => isAssignableAccount(user) && !isSuperAdminRecord(user),
   )
   const matched = q
     ? users.filter(
@@ -230,7 +329,7 @@ export async function searchAssignableUsers(query: string): Promise<PublicUser[]
           user.email.includes(q) ||
           user.publicKey.toLowerCase().includes(q) ||
           user.id.toLowerCase() === q ||
-          (user.sinpeCode ?? '').toLowerCase() === q,
+          (user.sinpeCode ?? '').toLowerCase().includes(q)
       )
     : users
   return matched.slice(0, 30).map(toPublicUser)
@@ -292,7 +391,7 @@ export async function createUser(input: {
 
   const store = await loadStore()
   if (!adminSignup) {
-    user.sinpeCode = generateSinpeCode(takenSinpeCodes(store.users))
+    user.sinpeCode = generateSinpeCode(user.publicKey)
   }
   store.users.push(user)
   await saveStore(store)
@@ -353,6 +452,9 @@ export async function updateUserPublicKey(
   user.publicKey = publicKey
   if (publicKey === superAdminPublicKey()) {
     user.role = 'admin'
+    delete user.sinpeCode
+  } else if (!isEventStaffRole(user.role)) {
+    user.sinpeCode = generateSinpeCode(publicKey)
   }
   await saveStore(store)
   return toPublicUser(user)

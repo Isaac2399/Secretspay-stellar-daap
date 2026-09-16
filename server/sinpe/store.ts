@@ -64,15 +64,20 @@ export async function upsertUnassignedDeposit(
 
 export async function listUnassignedDeposits(input?: {
   referenceId?: string
+  query?: string
   status?: string
 }): Promise<UnassignedDeposit[]> {
   const store = await loadSinpeStore()
   const reference = input?.referenceId
     ? normalizeReference(input.referenceId)
     : ''
+  const query = (input?.query ?? '').trim().toLowerCase()
   const status = input?.status?.trim().toUpperCase()
   return store.unassignedDeposits.filter((row) => {
     if (reference && normalizeReference(row.referenceId) !== reference) {
+      return false
+    }
+    if (query && !depositMatchesQuery(row, query)) {
       return false
     }
     if (status && status !== 'ALL' && row.status !== status) {
@@ -83,6 +88,37 @@ export async function listUnassignedDeposits(input?: {
     }
     return true
   })
+}
+
+export async function findByMessageQuery(query: string): Promise<{
+  transaction?: SinpeTransaction
+  deposit?: UnassignedDeposit
+}> {
+  const store = await loadSinpeStore()
+  const q = query.trim().toLowerCase()
+  if (!q) {
+    return {}
+  }
+  const deposit = store.unassignedDeposits.find((row) => depositMatchesQuery(row, q))
+  const transaction = store.sinpeTransactions.find((row) => {
+    const hay = `${row.rawMessage} ${row.comment} ${row.referenceId} ${row.sender}`.toLowerCase()
+    return hay.includes(q)
+  })
+  return { deposit, transaction }
+}
+
+function depositMatchesQuery(row: UnassignedDeposit, query: string): boolean {
+  const hay = [
+    row.rawMessage,
+    row.comment,
+    row.referenceId,
+    row.sender,
+    row.lastError ?? '',
+    row.assignedPublicKey ?? '',
+  ]
+    .join(' ')
+    .toLowerCase()
+  return hay.includes(query)
 }
 
 export async function listSinpeForUser(userId: string): Promise<{

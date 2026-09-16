@@ -7,7 +7,7 @@ export default function UnassignedDepositsPage() {
   if (!user) {
     return null
   }
-  if (user.role !== 'admin') {
+  if (user.role !== 'admin' && user.role !== 'sinpe_ops' && user.role !== 'cashier') {
     return <Navigate to="/" replace />
   }
   return <UnassignedDepositsPanel />

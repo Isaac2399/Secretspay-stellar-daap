@@ -68,6 +68,7 @@ function smsScore(text: string): number {
   if (/colones|\bcrc\b|₡|¢/.test(value)) score += 4
   if (/sinpe/.test(value)) score += 3
   if (/referencia|comprobante/.test(value)) score += 3
+  if (/sc[a-z0-9]{8}ts/i.test(text)) score += 5
   if (/\bR[A-HJ-NP-Z2-9]{5}\b/i.test(text)) score += 2
   return score
 }

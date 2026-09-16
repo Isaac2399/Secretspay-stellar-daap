@@ -154,7 +154,6 @@ export function DashboardHero({
       {receiveOpen ? (
         <AddFundsSheet
           publicKey={user.publicKey}
-          sinpeCode={user.sinpeCode}
           copied={copied}
           hasUsdcTrustline={hasUsdcTrustline(balances)}
           onCopy={() => void copyPublicKey()}

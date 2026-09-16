@@ -13,7 +13,7 @@ export function ClaimLookupPanel() {
       <div>
         <h2 className="text-sm font-semibold">Búsqueda por reclamo</h2>
         <p className="mt-1 text-xs text-app-muted">
-          Verifica el estado de un comprobante SINPE.
+          Verifica un comprobante o cualquier parte del SMS guardado.
         </p>
       </div>
       <form
@@ -34,7 +34,7 @@ export function ClaimLookupPanel() {
         <input
           value={referenceId}
           onChange={(event) => setReferenceId(event.target.value)}
-          placeholder="Número de comprobante"
+          placeholder="Comprobante o texto del SMS"
           className="min-w-0 flex-1 rounded-2xl bg-app-chip px-3 py-2 text-sm outline-none"
         />
         <button
@@ -69,6 +69,11 @@ export function ClaimLookupPanel() {
           <p className="mt-1 break-all text-xs">
             Nota: {result.deposit.comment || '—'}
           </p>
+          {result.deposit.rawMessage ? (
+            <p className="mt-2 max-h-28 overflow-y-auto break-all text-[11px] text-white/55">
+              {result.deposit.rawMessage}
+            </p>
+          ) : null}
         </div>
       ) : null}
     </section>

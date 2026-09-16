@@ -13,6 +13,7 @@ import {
   listPublicPlaces,
   type UserRole,
   ensureDevSuperAdmin,
+  ensureDevEventStaff,
 } from './auth.js'
 import { getAdminOverview, requireSuperAdmin } from './superAdmin.js'
 import {
@@ -26,6 +27,7 @@ import { handleCardRoutes } from './cardApi.js'
 import { handleRwaRoutes } from './rwaApi.js'
 import { handleInvoiceRoutes } from './invoicing/invoiceApi.js'
 import { handleSinpeRoutes } from './sinpe/sinpeApi.js'
+import { handleCashRoutes } from './cash/cashApi.js'
 
 loadLocalEnv()
 
@@ -78,12 +80,18 @@ async function route(input: {
   body: Record<string, unknown>
 }): Promise<{ status: number; body: unknown; setCookie?: string }> {
   await ensureDevSuperAdmin()
+  await ensureDevEventStaff()
   const path = (input.path.split('?')[0] ?? input.path).replace(/\/$/, '') || '/'
   const method = input.method.toUpperCase()
 
   const sinpeResult = await handleSinpeRoutes({ ...input, path, method })
   if (sinpeResult) {
     return sinpeResult
+  }
+
+  const cashResult = await handleCashRoutes({ ...input, path, method })
+  if (cashResult) {
+    return cashResult
   }
 
   const rwaResult = await handleRwaRoutes({ ...input, path, method })

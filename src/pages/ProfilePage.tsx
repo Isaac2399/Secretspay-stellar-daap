@@ -43,6 +43,8 @@ export default function ProfilePage() {
             <Shield className="h-4 w-4 text-app-accent" />
           ) : account.role === 'merchant' ? (
             <Store className="h-4 w-4 text-app-accent" />
+          ) : account.role === 'cashier' || account.role === 'sinpe_ops' ? (
+            <Shield className="h-4 w-4 text-app-accent" />
           ) : (
             <User className="h-4 w-4 text-app-accent" />
           )}
@@ -50,7 +52,11 @@ export default function ProfilePage() {
             ? 'Super admin / Distribuidor'
             : account.role === 'merchant'
               ? 'Empresa'
-              : 'Cliente'}
+              : account.role === 'cashier'
+                ? 'Caja del evento'
+                : account.role === 'sinpe_ops'
+                  ? 'Mesa SINPE'
+                  : 'Cliente'}
         </div>
         {account.role === 'merchant' && account.place ? (
           <div>
@@ -62,10 +68,12 @@ export default function ProfilePage() {
             <p className="mt-1 text-xs text-white/70">{account.place.address}</p>
           </div>
         ) : null}
-        <div>
-          <p className="text-xs text-app-muted">Código SINPE (nota de recarga)</p>
-          <p className="mt-1 font-mono text-lg tracking-[0.3em]">{account.sinpeCode ?? '—'}</p>
-        </div>
+        {account.role !== 'cashier' && account.role !== 'sinpe_ops' && account.role !== 'admin' ? (
+          <div>
+            <p className="text-xs text-app-muted">Código SINPE (sc…ts)</p>
+            <p className="mt-1 break-all font-mono text-lg tracking-wide">{account.sinpeCode ?? '—'}</p>
+          </div>
+        ) : null}
         <div>
           <p className="text-xs text-app-muted">Public key</p>
           <p className="mt-1 break-all font-mono text-xs text-white/80">
@@ -82,13 +90,15 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      <Link
-        to="/rwa"
-        className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-app-card py-3 text-sm font-medium"
-      >
-        <Landmark className="h-4 w-4 text-app-accent" />
-        Activos reales (RWA)
-      </Link>
+      {account.role === 'customer' || account.role === 'merchant' || account.role === 'admin' ? (
+        <Link
+          to="/rwa"
+          className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-app-card py-3 text-sm font-medium"
+        >
+          <Landmark className="h-4 w-4 text-app-accent" />
+          Activos reales (RWA)
+        </Link>
+      ) : null}
 
       <button
         type="button"

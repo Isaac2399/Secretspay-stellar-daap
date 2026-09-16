@@ -24,7 +24,8 @@ const AMOUNT_PATTERNS = [
 ]
 
 const COMMENT_PATTERNS = [
-  /por\s+sinpe\s+m[oó]vil\s*,\s*([A-Za-z0-9]{6})(?:\s|$|[.,])/i,
+  /por\s+sinpe\s+m[oó]vil\s*,\s*(sc[a-z0-9]{8}ts)/i,
+  /por\s+sinpe\s+m[oó]vil\s*,\s*([A-Za-z0-9]{6,16})(?:\s|$|[.,])/i,
   /por\s+sinpe\s+m[oó]vil\s*,\s*(.+?)(?:\s+transf\w*\.?)?\s*referencia\b/i,
   /detalle\s*[:.]?\s*(.+)$/i,
   /(?:nota|comentario|concept[oa]|descripci[oó]n)\s*[:.]?\s*(.+)$/i,

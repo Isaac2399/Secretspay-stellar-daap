@@ -1,5 +1,5 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
-import { GuestRoute, ProtectedRoute } from '@/routes/AuthGates'
+import { GuestRoute, ProtectedRoute, ConsumerRoute } from '@/routes/AuthGates'
 import { AppShell } from '@/layouts/AppShell'
 import HomePage from '@/pages/HomePage'
 import LoginPage from '@/pages/LoginPage'
@@ -29,16 +29,18 @@ export function AppRoutes() {
       <Route element={<ProtectedRoute />}>
         <Route element={<AppShell />}>
           <Route path="/" element={<HomePage />} />
-          <Route path="/card" element={<CardPage />} />
-          <Route path="/map" element={<MapPage />} />
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/admin/unassigned-deposits" element={<UnassignedDepositsPage />} />
           <Route path="/admin/claim-lookup" element={<ClaimLookupPage />} />
-          <Route path="/rwa" element={<RwaLearnPage />} />
-          <Route path="/rwa/tokenizar" element={<RwaTokenizePage />} />
-          <Route path="/rwa/invertir" element={<RwaMarketplacePage />} />
-          <Route path="/rwa/dividendos" element={<RwaPortfolioPage />} />
-          <Route path="/rwa/panel" element={<RwaStructuringPage />} />
+          <Route element={<ConsumerRoute />}>
+            <Route path="/card" element={<CardPage />} />
+            <Route path="/map" element={<MapPage />} />
+            <Route path="/rwa" element={<RwaLearnPage />} />
+            <Route path="/rwa/tokenizar" element={<RwaTokenizePage />} />
+            <Route path="/rwa/invertir" element={<RwaMarketplacePage />} />
+            <Route path="/rwa/dividendos" element={<RwaPortfolioPage />} />
+            <Route path="/rwa/panel" element={<RwaStructuringPage />} />
+          </Route>
         </Route>
       </Route>
 

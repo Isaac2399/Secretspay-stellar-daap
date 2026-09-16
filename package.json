@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "seed:super-admin": "node scripts/seed-super-admin.mjs",
+    "seed:event-staff": "node scripts/seed-event-staff.mjs",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",

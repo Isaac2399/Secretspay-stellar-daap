@@ -114,6 +114,44 @@ export async function requireSuperAdmin(session: PublicUser | null): Promise<Pub
   return session
 }
 
+export async function requireSinpeOps(session: PublicUser | null): Promise<PublicUser> {
+  if (!session) {
+    throw new AuthError('No hay sesión', 401)
+  }
+  if (
+    session.role !== 'admin' &&
+    session.role !== 'sinpe_ops' &&
+    session.role !== 'cashier'
+  ) {
+    throw new AuthError('Solo caja, mesa SINPE o super admin puede ver este panel', 403)
+  }
+  return session
+}
+
+export async function requireCashier(session: PublicUser | null): Promise<PublicUser> {
+  if (!session) {
+    throw new AuthError('No hay sesión', 401)
+  }
+  if (session.role !== 'admin' && session.role !== 'cashier') {
+    throw new AuthError('Solo caja del evento o super admin puede acreditar efectivo', 403)
+  }
+  return session
+}
+
+export async function requireUserSearch(session: PublicUser | null): Promise<PublicUser> {
+  if (!session) {
+    throw new AuthError('No hay sesión', 401)
+  }
+  if (
+    session.role !== 'admin' &&
+    session.role !== 'sinpe_ops' &&
+    session.role !== 'cashier'
+  ) {
+    throw new AuthError('No tienes permiso para buscar cuentas', 403)
+  }
+  return session
+}
+
 export async function getAdminOverview(): Promise<AdminOverview> {
   const store = await loadStore()
   const merchants = store.users.filter(

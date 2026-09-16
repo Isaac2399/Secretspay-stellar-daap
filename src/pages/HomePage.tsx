@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { AdminDashboard } from '@/components/admin/AdminDashboard'
+import { SinpeOpsDashboard } from '@/components/admin/SinpeOpsDashboard'
+import { CashierDashboard } from '@/components/cashier/CashierDashboard'
 import { AccountStrip } from '@/components/dashboard/AccountStrip'
 import { MySinpeCredits } from '@/components/dashboard/MySinpeCredits'
 import { ActivityList } from '@/components/dashboard/ActivityList'
@@ -33,6 +35,14 @@ export default function HomePage() {
 
   if (user.role === 'admin') {
     return <AdminDashboard />
+  }
+
+  if (user.role === 'cashier') {
+    return <CashierDashboard />
+  }
+
+  if (user.role === 'sinpe_ops') {
+    return <SinpeOpsDashboard />
   }
 
   const isCustomer = user.role === 'customer'

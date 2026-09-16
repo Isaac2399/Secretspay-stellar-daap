@@ -1,18 +1,26 @@
 import { randomUUID } from 'node:crypto'
 import {
   ensureUserLoyaltyTrustline,
+  ensureUserSinpeCode,
   findUserByEmail,
   findUserById,
   findUserByPublicKey,
   findUserBySinpeCode,
   type PublicUser,
 } from '../auth.js'
-import { extractSinpeCodes } from './code.js'
+import {
+  codeMatchesPublicKey,
+  extractSinpeCodes,
+  formatSinpePhone,
+  normalizeSinpeCode,
+  sinpeReceivePhone,
+} from './code.js'
 import { AuthError } from '../errors.js'
 import { creditLoyaltyFromTreasury } from '../submitPayment.js'
 import { calculateRojos, formatRojosAmount } from './convert.js'
 import { extractStellarPublicKey, extractPhoneFromSms, parseSinpeSms } from './parseSms.js'
 import {
+  findByMessageQuery,
   findByReference,
   listUnassignedDeposits,
   listSinpeForUser,
@@ -27,23 +35,47 @@ type WebhookPayload = {
   timestamp: number
 }
 
+export async function getSinpeIntent(session: PublicUser) {
+  const user = await ensureUserSinpeCode(session.id)
+  if (!user?.sinpeCode) {
+    throw new AuthError('No se pudo crear el código SINPE', 500)
+  }
+  const phone = sinpeReceivePhone()
+  return {
+    phone,
+    phoneDisplay: formatSinpePhone(phone),
+    code: user.sinpeCode,
+    publicKey: user.publicKey,
+  }
+}
+
 export async function processSinpeSmsWebhook(payload: WebhookPayload) {
   const sender = resolveSender(payload.sender, payload.message)
   const parsed = parseSinpeSms(payload.message)
   if (!parsed) {
     const now = new Date().toISOString()
+    const codes = extractSinpeCodes(payload.message)
+    const destination = codes[0]
+      ? await findUserBySinpeCode(codes[0])
+      : undefined
+    const matched =
+      destination && codeMatchesPublicKey(codes[0] ?? '', destination.publicKey)
+        ? destination
+        : undefined
     const deposit = await upsertUnassignedDeposit({
       id: randomUUID(),
       referenceId: `unparsed-${Date.now()}`,
       crcAmount: 0,
       calculatedRojos: 0,
       promoApplied: false,
-      comment: '',
+      comment: codes[0] ?? '',
       sender,
       rawMessage: payload.message,
       timestamp: Number.isFinite(payload.timestamp) ? payload.timestamp : Date.now(),
       status: 'PENDING_MANUAL_MATCH',
-      lastError: 'SMS no reconocido (monto o referencia)',
+      lastError: 'SMS no reconocido (monto o referencia). El mensaje se guardó completo.',
+      assignedUserId: matched?.id,
+      assignedPublicKey: matched?.publicKey,
       createdAt: now,
       updatedAt: now,
     })
@@ -83,7 +115,7 @@ export async function processSinpeSmsWebhook(payload: WebhookPayload) {
       status: 'PENDING_MANUAL_MATCH',
       lastError: parsed.comment
         ? `No hay cuenta con el código de la nota (${parsed.comment})`
-        : 'La nota del SINPE no trajo el código de 6 caracteres',
+        : 'La nota del SINPE no trajo el código sc…ts',
       createdAt: existing.deposit?.createdAt ?? now,
       updatedAt: now,
     })
@@ -154,6 +186,7 @@ export async function assignUnassignedDeposit(input: {
   referenceId: string
   userId: string
   adminId: string
+  crcAmount?: number
 }) {
   requireReference(input.referenceId)
   if (!input.userId.trim()) {
@@ -166,7 +199,20 @@ export async function assignUnassignedDeposit(input: {
   if (!deposit || deposit.status !== 'PENDING_MANUAL_MATCH') {
     throw new AuthError('No hay un depósito pendiente con ese comprobante', 404)
   }
-  const ready = withParsedAmounts(deposit)
+  let ready = withParsedAmounts(deposit)
+  const crcOverride = input.crcAmount
+  if (crcOverride != null && Number.isFinite(crcOverride) && crcOverride > 0) {
+    const { rojos, promoApplied } = calculateRojos(crcOverride)
+    ready = {
+      ...ready,
+      crcAmount: crcOverride,
+      calculatedRojos: rojos,
+      promoApplied,
+    }
+  }
+  if (!(ready.calculatedRojos > 0)) {
+    throw new AuthError('Indica el monto en colones de este SMS para acreditar', 400)
+  }
   const user = await requireAssignableUser(input.userId)
   const credit = await mintRojosToUser(user, ready.calculatedRojos, ready.referenceId)
   const now = new Date().toISOString()
@@ -315,7 +361,10 @@ export async function claimSinpeDeposit(input: {
 
 export async function lookupSinpeClaim(referenceId: string) {
   requireReference(referenceId)
-  const found = await findByReference(referenceId)
+  let found = await findByReference(referenceId)
+  if (!found.deposit && !found.transaction) {
+    found = await findByMessageQuery(referenceId)
+  }
   if (!found.deposit && !found.transaction) {
     throw new AuthError('Comprobante no encontrado', 404)
   }
@@ -325,10 +374,10 @@ export async function lookupSinpeClaim(referenceId: string) {
   }
 }
 
-export function listPendingDeposits(referenceId?: string) {
+export function listPendingDeposits(query?: string) {
   return listUnassignedDeposits({
-    referenceId,
-    status: referenceId ? 'ALL' : 'PENDING_MANUAL_MATCH',
+    query,
+    status: query ? 'ALL' : 'PENDING_MANUAL_MATCH',
   }).then((rows) => rows.map(withParsedAmounts))
 }
 
@@ -353,7 +402,11 @@ async function resolveDestination(
 ): Promise<{ id?: string; publicKey: string } | undefined> {
   for (const sinpeCode of extractSinpeCodes(comment, rawMessage ?? '')) {
     const byCode = await findUserBySinpeCode(sinpeCode)
-    if (byCode) {
+    if (
+      byCode &&
+      (codeMatchesPublicKey(sinpeCode, byCode.publicKey) ||
+        normalizeSinpeCode(byCode.sinpeCode ?? '') === normalizeSinpeCode(sinpeCode))
+    ) {
       return byCode
     }
   }
@@ -385,6 +438,9 @@ async function requireAssignableUser(userId: string) {
   const user = await findUserById(userId)
   if (!user) {
     throw new AuthError('El usuario no existe', 404)
+  }
+  if (user.role !== 'customer' && user.role !== 'merchant') {
+    throw new AuthError('Esa cuenta no puede recibir recargas', 400)
   }
   return user
 }

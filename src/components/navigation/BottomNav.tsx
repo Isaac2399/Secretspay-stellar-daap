@@ -1,7 +1,9 @@
 import { NavLink } from 'react-router-dom'
 import { CreditCard, Home, Landmark, Map, UserRound } from 'lucide-react'
+import { useAuth } from '@/lib/auth/AuthContext'
+import { isEventStaffRole } from '@/lib/auth/roles'
 
-const items = [
+const consumerItems = [
   { to: '/', label: 'Inicio', icon: Home, end: true },
   { to: '/card', label: 'Tarjeta', icon: CreditCard, end: false },
   { to: '/map', label: 'Mapa', icon: Map, end: false },
@@ -9,7 +11,14 @@ const items = [
   { to: '/profile', label: 'Perfil', icon: UserRound, end: false },
 ] as const
 
+const staffItems = [
+  { to: '/', label: 'Inicio', icon: Home, end: true },
+  { to: '/profile', label: 'Perfil', icon: UserRound, end: false },
+] as const
+
 export function BottomNav() {
+  const { user } = useAuth()
+  const items = user && isEventStaffRole(user.role) ? staffItems : consumerItems
   return (
     <nav
       className="fixed inset-x-0 bottom-0 z-40 border-t border-white/5 bg-black/90 backdrop-blur-md"

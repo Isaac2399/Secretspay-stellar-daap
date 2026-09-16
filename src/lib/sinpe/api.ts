@@ -78,9 +78,19 @@ export async function searchAdminUsers(query: string) {
   return request<{ users: AssignableUser[] }>(`/api/admin/users${qs}`)
 }
 
+export async function fetchSinpeIntent() {
+  return request<{
+    phone: string
+    phoneDisplay: string
+    code: string
+    publicKey: string
+  }>('/api/payments/sinpe-intent')
+}
+
 export async function assignDeposit(input: {
   referenceId: string
   userId: string
+  crcAmount?: number
 }) {
   return request<{ deposit: UnassignedDeposit }>(
     '/api/admin/assign-deposit',
@@ -89,6 +99,7 @@ export async function assignDeposit(input: {
       body: JSON.stringify({
         reference_id: input.referenceId,
         user_id: input.userId,
+        crc_amount: input.crcAmount,
       }),
     },
   )

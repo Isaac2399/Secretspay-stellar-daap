@@ -1,15 +1,14 @@
-import { useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { ArrowLeft, Banknote, Check, Copy, CreditCard, QrCode, Smartphone } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
 import { Sep24DepositPanel } from '@/components/sep24/Sep24DepositPanel'
-import { claimSinpe } from '@/lib/sinpe/api'
+import { claimSinpe, fetchSinpeIntent } from '@/lib/sinpe/api'
 import { readableError } from '@/lib/auth/readableError'
 import { stellarConfig } from '@/lib/stellar/config'
 import type { Sep24Transaction } from '@/lib/sep24/types'
 
 type AddFundsSheetProps = {
   publicKey: string
-  sinpeCode?: string
   copied: boolean
   hasUsdcTrustline: boolean
   onCopy: () => void
@@ -22,7 +21,6 @@ type FundsView = 'pick' | 'cash' | 'card' | 'receive' | 'sinpe'
 
 export function AddFundsSheet({
   publicKey,
-  sinpeCode,
   copied,
   hasUsdcTrustline,
   onCopy,
@@ -90,7 +88,7 @@ export function AddFundsSheet({
             <MethodCard
               icon={<Smartphone className="h-5 w-5" />}
               title="SINPE Móvil"
-              subtitle="Nota: tu código de 6 letras (ej. RAKV9E)"
+              subtitle="Nota sc…ts · copiá el número y el código"
               onClick={() => setView('sinpe')}
             />
             <MethodCard
@@ -119,7 +117,7 @@ export function AddFundsSheet({
         ) : null}
 
         {view === 'sinpe' ? (
-          <SinpeRecarga sinpeCode={sinpeCode} onClaim={() => setClaimOpen(true)} />
+          <SinpeRecarga onClaim={() => setClaimOpen(true)} />
         ) : null}
 
         {view === 'receive' ? (
@@ -140,38 +138,95 @@ export function AddFundsSheet({
 }
 
 function SinpeRecarga({
-  sinpeCode,
   onClaim,
 }: {
-  sinpeCode?: string
   onClaim: () => void
 }) {
   const [copiedCode, setCopiedCode] = useState(false)
+  const [copiedPhone, setCopiedPhone] = useState(false)
+  const [code, setCode] = useState<string | null>(null)
+  const [phoneDisplay, setPhoneDisplay] = useState<string | null>(null)
+  const [phone, setPhone] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let cancelled = false
+    void fetchSinpeIntent()
+      .then((intent) => {
+        if (cancelled) {
+          return
+        }
+        setCode(intent.code)
+        setPhone(intent.phone)
+        setPhoneDisplay(intent.phoneDisplay)
+        setError(null)
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setError(readableError(err))
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLoading(false)
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   async function copyCode() {
-    if (!sinpeCode) {
+    if (!code) {
       return
     }
-    await navigator.clipboard.writeText(sinpeCode)
+    await navigator.clipboard.writeText(code)
     setCopiedCode(true)
     window.setTimeout(() => setCopiedCode(false), 1600)
+  }
+
+  async function copyPhone() {
+    if (!phone) {
+      return
+    }
+    await navigator.clipboard.writeText(phone)
+    setCopiedPhone(true)
+    window.setTimeout(() => setCopiedPhone(false), 1600)
   }
 
   return (
     <div className="space-y-4">
       <p className="text-sm text-app-muted">
-        En la nota del SINPE pon solo tu código de 6 caracteres (no la public key).
-        Cualquier monto en colones se convierte:{' '}
-        <span className="text-white">₡1,000 = 1 ROJO</span>, ₡0.50 = 0.0005 ROJOS.
-        Promo ₡9,000 → 10 ROJOS.
+        En SINPE Móvil enviá a nuestro número y en el comentario pegá solo este
+        código (empieza con sc y termina en ts). El SMS del banco llega completo;
+        si el código coincide con tu cuenta, se acreditan ROJOS:{' '}
+        <span className="text-white">₡1,000 = 1 ROJO</span>. Promo ₡9,000 → 10 ROJOS.
       </p>
-      <p className="rounded-2xl bg-app-chip px-3 py-4 text-center font-mono text-3xl font-semibold tracking-[0.35em] text-white">
-        {sinpeCode ?? '……'}
+      {loading ? <p className="text-sm text-app-muted">Creando código…</p> : null}
+      {error ? <p className="text-sm text-red-400">{error}</p> : null}
+      <div className="rounded-2xl bg-app-chip px-3 py-4 text-center">
+        <p className="text-[11px] uppercase tracking-wide text-app-muted">Número SINPE</p>
+        <p className="mt-1 font-mono text-2xl font-semibold tracking-wide text-white">
+          {phoneDisplay ?? '……'}
+        </p>
+      </div>
+      <button
+        type="button"
+        onClick={() => void copyPhone()}
+        disabled={!phone}
+        className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-app-chip py-3 text-sm font-medium disabled:opacity-40"
+      >
+        {copiedPhone ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+        {copiedPhone ? 'Número copiado' : 'Copiar número'}
+      </button>
+      <p className="rounded-2xl bg-app-chip px-3 py-4 text-center font-mono text-2xl font-semibold tracking-[0.12em] text-white">
+        {code ?? 'sc••••ts'}
       </p>
       <button
         type="button"
         onClick={() => void copyCode()}
-        disabled={!sinpeCode}
+        disabled={!code}
         className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-app-chip py-3 text-sm font-medium disabled:opacity-40"
       >
         {copiedCode ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
