@@ -1,3 +1,5 @@
+import { recoverBrokenJsonSms } from './sinpe/webhookPayload.js'
+
 /** Accept JSON, form-urlencoded, or a raw SMS string from SMS Forwarder. */
 export function decodeHttpBody(raw: string): Record<string, unknown> {
   const trimmed = raw.trim()
@@ -15,7 +17,10 @@ export function decodeHttpBody(raw: string): Record<string, unknown> {
         return { message: parsed }
       }
     } catch {
-      // Fall through to form / raw SMS.
+      const recovered = recoverBrokenJsonSms(trimmed)
+      if (recovered) {
+        return recovered
+      }
     }
   }
 

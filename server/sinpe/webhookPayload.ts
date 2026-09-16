@@ -2,22 +2,22 @@ const PLACEHOLDER =
   /^(?:\{+[a-z][a-z0-9_]*\}+|%+[a-z][a-z0-9_]*%+|\$+[a-z][a-z0-9_]*\$+|\{%[a-z][a-z0-9_]*%\})$/i
 
 const MESSAGE_KEYS = [
-  'message',
-  'text',
-  'sms',
-  'body',
-  'content',
-  'msg',
-  'sms_text',
-  'smsText',
-  'sms_body',
-  'smsBody',
   'fullMessage',
   'full_message',
   'originalMessage',
   'original_message',
   'smsContent',
   'sms_content',
+  'sms_text',
+  'smsText',
+  'sms_body',
+  'smsBody',
+  'message',
+  'text',
+  'sms',
+  'body',
+  'content',
+  'msg',
   'm',
 ]
 
@@ -31,21 +31,31 @@ const IGNORE_KEYS = new Set([
   'authorization',
 ])
 
+const PART_ARRAY_KEYS = ['parts', 'pdus', 'messages', 'smsParts', 'fragments']
+
 export function extractSinpeWebhookFields(body: Record<string, unknown>): {
   sender: string
   message: string
   timestamp: number
 } {
   const strings = flattenStrings(body)
-  const namedMessage = firstString(...MESSAGE_KEYS.map((key) => body[key]))
-  const scored = strings
-    .map((value) => ({ value, score: smsScore(value) }))
+  const named = MESSAGE_KEYS.flatMap((key) => flattenStrings(body[key]))
+  const joined = joinMessageParts(body)
+  const unwrapped = strings.flatMap((value) => {
+    const inner = unwrapJsonSms(value)
+    return inner && inner !== value ? [inner] : []
+  })
+  const candidates = unique(
+    [...named, ...strings, ...unwrapped, joined].filter(Boolean),
+  )
+  const scored = candidates
+    .map((value) => ({
+      value,
+      score: smsScore(value) + lengthBonus(value),
+    }))
     .sort((a, b) => b.score - a.score || b.value.length - a.value.length)
-  const message =
-    (namedMessage && smsScore(namedMessage) > 0 ? namedMessage : '') ||
-    scored.find((row) => row.score > 0)?.value ||
-    namedMessage ||
-    ''
+
+  const message = scored.find((row) => row.score > 0)?.value || named[0] || ''
 
   return {
     sender: firstString(
@@ -96,6 +106,36 @@ export function isRouteNoise(value: string): boolean {
   )
 }
 
+export function looksTruncatedSinpeSms(message: string): boolean {
+  const text = message.replace(/\s+/g, ' ').trim()
+  if (text.length < 24) {
+    return true
+  }
+  const hasCode = /sc[a-z0-9]{8}ts/i.test(text.replace(/[^a-z0-9]/gi, ''))
+  const mentionsNote = /sinpe\s+m[oó]vil/i.test(text)
+  const noReference = !/referencia|comprobante/i.test(text)
+  const endsBroken = /[,:;]\s*$/.test(text) || /\bsc[a-z0-9]{1,7}$/i.test(text)
+  return (!hasCode && (mentionsNote || noReference)) || endsBroken
+}
+
+export function recoverBrokenJsonSms(raw: string): Record<string, unknown> | null {
+  const trimmed = raw.trim()
+  if (!trimmed.startsWith('{')) {
+    return null
+  }
+  const fields: Record<string, unknown> = {}
+  const pattern =
+    /"(from|sender|text|message|sms|body|content|msg|sim|sentStamp|receivedStamp|timestamp)"\s*:\s*(?:"((?:\\.|[^"\\])*)(?:"|$)|(-?\d+))/gi
+  for (const match of trimmed.matchAll(pattern)) {
+    const key = match[1]
+    if (!key) {
+      continue
+    }
+    fields[key] = match[3] ?? unescapeJson(match[2] ?? '')
+  }
+  return Object.keys(fields).length > 0 ? fields : null
+}
+
 function flattenStrings(value: unknown, depth = 0): string[] {
   if (depth > 8 || value == null) {
     return []
@@ -124,6 +164,55 @@ function flattenStrings(value: unknown, depth = 0): string[] {
   return []
 }
 
+function joinMessageParts(body: Record<string, unknown>): string {
+  for (const key of PART_ARRAY_KEYS) {
+    const value = body[key]
+    if (!Array.isArray(value)) {
+      continue
+    }
+    const joined = flattenStrings(value).join(' ').replace(/\s+/g, ' ').trim()
+    if (joined.length > 20) {
+      return joined
+    }
+  }
+  const numbered = Object.entries(body)
+    .filter(([key]) => /^(?:text|message|sms|part)_?\d+$/i.test(key))
+    .sort(([a], [b]) => a.localeCompare(b, undefined, { numeric: true }))
+    .flatMap(([, value]) => flattenStrings(value))
+  return numbered.join(' ').replace(/\s+/g, ' ').trim()
+}
+
+function unwrapJsonSms(text: string): string {
+  const trimmed = text.trim()
+  if (!trimmed.startsWith('{')) {
+    return text
+  }
+  try {
+    const parsed = JSON.parse(trimmed) as unknown
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      const inner = extractInnerMessage(parsed as Record<string, unknown>)
+      if (inner) {
+        return inner
+      }
+    }
+  } catch {
+    const recovered = recoverBrokenJsonSms(trimmed)
+    const inner = recovered ? extractInnerMessage(recovered) : ''
+    if (inner) {
+      return inner
+    }
+  }
+  return text
+}
+
+function extractInnerMessage(body: Record<string, unknown>): string {
+  const named = MESSAGE_KEYS.flatMap((key) => flattenStrings(body[key]))
+  const scored = named
+    .map((value) => ({ value, score: smsScore(value) + lengthBonus(value) }))
+    .sort((a, b) => b.score - a.score || b.value.length - a.value.length)
+  return scored[0]?.value ?? ''
+}
+
 function smsScore(text: string): number {
   if (isTemplatePlaceholder(text) || isRouteNoise(text)) {
     return -1
@@ -134,11 +223,15 @@ function smsScore(text: string): number {
   if (/colones|\bcrc\b|₡|¢/.test(value)) score += 4
   if (/sinpe/.test(value) && value.length > 24) score += 3
   if (/referencia|comprobante/.test(value)) score += 3
-  if (/sc[a-z0-9]{8}ts/i.test(text)) score += 5
+  if (/sc[a-z0-9]{8}ts/i.test(text.replace(/[^a-z0-9]/gi, ''))) score += 8
   if (/\bR[A-HJ-NP-Z2-9]{5}\b/i.test(text)) score += 2
   if (/\d+[.,]\d{1,2}/.test(text) || /[₡¢]\s*\d/.test(text)) score += 2
   if (/\d{1,7}\s*(colones|crc)/i.test(text)) score += 3
   return score
+}
+
+function lengthBonus(text: string): number {
+  return Math.min(6, Math.floor(text.length / 40))
 }
 
 function firstString(...values: unknown[]): string {
@@ -177,4 +270,27 @@ function decodeValue(raw: string): string {
   } catch {
     return trimmed
   }
+}
+
+function unescapeJson(value: string): string {
+  return value
+    .replace(/\\"/g, '"')
+    .replace(/\\n/g, '\n')
+    .replace(/\\r/g, '\r')
+    .replace(/\\t/g, '\t')
+    .replace(/\\\\/g, '\\')
+}
+
+function unique(values: string[]): string[] {
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const value of values) {
+    const key = value.trim()
+    if (!key || seen.has(key)) {
+      continue
+    }
+    seen.add(key)
+    out.push(key)
+  }
+  return out
 }

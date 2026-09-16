@@ -19,7 +19,11 @@ import { AuthError } from '../errors.js'
 import { creditLoyaltyFromTreasury } from '../submitPayment.js'
 import { calculateRojos, formatRojosAmount } from './convert.js'
 import { extractStellarPublicKey, extractPhoneFromSms, parseSinpeSms } from './parseSms.js'
-import { isTemplatePlaceholder, isRouteNoise } from './webhookPayload.js'
+import {
+  isTemplatePlaceholder,
+  isRouteNoise,
+  looksTruncatedSinpeSms,
+} from './webhookPayload.js'
 import {
   findByMessageQuery,
   findByReference,
@@ -91,7 +95,11 @@ export async function processSinpeSmsWebhook(payload: WebhookPayload) {
   if (existing.transaction?.status === 'COMPLETED' || isResolved(existing.deposit)) {
     return { status: 'duplicate_ignored' as const }
   }
-  if (existing.deposit?.status === 'PENDING_MANUAL_MATCH' && !existing.transaction) {
+  if (
+    existing.deposit?.status === 'PENDING_MANUAL_MATCH' &&
+    !existing.transaction &&
+    !isRicherSms(payload.message, existing.deposit.rawMessage)
+  ) {
     return { status: 'duplicate_ignored' as const }
   }
 
@@ -114,9 +122,7 @@ export async function processSinpeSmsWebhook(payload: WebhookPayload) {
       rawMessage: payload.message,
       timestamp,
       status: 'PENDING_MANUAL_MATCH',
-      lastError: parsed.comment
-        ? `No hay cuenta con el código de la nota (${parsed.comment})`
-        : 'La nota del SINPE no trajo el código sc…ts',
+      lastError: destinationError(parsed.comment, payload.message),
       createdAt: existing.deposit?.createdAt ?? now,
       updatedAt: now,
     })
@@ -439,7 +445,33 @@ function webhookEmptyError(message: string): string {
   if (isTemplatePlaceholder(message) || isRouteNoise(message) || !message.trim()) {
     return 'El POST llegó, pero no trajo el texto del SMS. En Forwarder el JSON debe usar "text": "%text%" y hay que guardar la regla. No uses el nombre de la ruta.'
   }
+  if (looksTruncatedSinpeSms(message)) {
+    return 'El SMS llegó cortado. En el celular usá POST JSON (no GET), el token %text% completo (no %Regex%) y reenviá el mensaje entero.'
+  }
   return 'SMS no reconocido (monto o referencia). El mensaje se guardó completo.'
+}
+
+function destinationError(comment: string, message: string): string {
+  if (looksTruncatedSinpeSms(message) && !extractSinpeCodes(message)[0]) {
+    return 'El SMS llegó cortado y no trae el código sc…ts de la cuenta. Forwarder tiene que mandar el mensaje entero (POST, %text%, sin Regex). El depósito corto no se acredita solo.'
+  }
+  if (comment) {
+    return `No hay cuenta con el código de la nota (${comment})`
+  }
+  return 'La nota del SINPE no trajo el código sc…ts'
+}
+
+function isRicherSms(next: string, prev: string): boolean {
+  const previous = prev.trim()
+  if (!previous) {
+    return Boolean(next.trim())
+  }
+  const nextCodes = extractSinpeCodes(next).length
+  const prevCodes = extractSinpeCodes(previous).length
+  if (nextCodes > prevCodes) {
+    return true
+  }
+  return next.trim().length > previous.length + 5
 }
 
 async function requireAssignableUser(userId: string) {
