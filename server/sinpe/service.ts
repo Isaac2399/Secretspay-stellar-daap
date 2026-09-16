@@ -19,7 +19,7 @@ import { AuthError } from '../errors.js'
 import { creditLoyaltyFromTreasury } from '../submitPayment.js'
 import { calculateRojos, formatRojosAmount } from './convert.js'
 import { extractStellarPublicKey, extractPhoneFromSms, parseSinpeSms } from './parseSms.js'
-import { isTemplatePlaceholder } from './webhookPayload.js'
+import { isTemplatePlaceholder, isRouteNoise } from './webhookPayload.js'
 import {
   findByMessageQuery,
   findByReference,
@@ -71,12 +71,10 @@ export async function processSinpeSmsWebhook(payload: WebhookPayload) {
       promoApplied: false,
       comment: codes[0] ?? '',
       sender,
-      rawMessage: payload.message,
+      rawMessage: isRouteNoise(payload.message) ? '' : payload.message,
       timestamp: Number.isFinite(payload.timestamp) ? payload.timestamp : Date.now(),
       status: 'PENDING_MANUAL_MATCH',
-      lastError: isTemplatePlaceholder(payload.message)
-        ? 'SMS Forwarder mandó la plantilla vacía (%text%). En el celular el JSON debe llevar el SMS real, no el texto %text%.'
-        : 'SMS no reconocido (monto o referencia). El mensaje se guardó completo.',
+      lastError: webhookEmptyError(payload.message),
       assignedUserId: matched?.id,
       assignedPublicKey: matched?.publicKey,
       createdAt: now,
@@ -435,6 +433,13 @@ async function resolveDestination(
     }
   }
   return undefined
+}
+
+function webhookEmptyError(message: string): string {
+  if (isTemplatePlaceholder(message) || isRouteNoise(message) || !message.trim()) {
+    return 'El POST llegó, pero no trajo el texto del SMS. En Forwarder el JSON debe usar "text": "%text%" y hay que guardar la regla. No uses el nombre de la ruta.'
+  }
+  return 'SMS no reconocido (monto o referencia). El mensaje se guardó completo.'
 }
 
 async function requireAssignableUser(userId: string) {

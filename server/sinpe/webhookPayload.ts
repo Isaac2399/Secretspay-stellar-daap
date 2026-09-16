@@ -21,6 +21,16 @@ const MESSAGE_KEYS = [
   'm',
 ]
 
+const IGNORE_KEYS = new Set([
+  'action',
+  'path',
+  'url',
+  'api_key',
+  'apiKey',
+  'x-api-key',
+  'authorization',
+])
+
 export function extractSinpeWebhookFields(body: Record<string, unknown>): {
   sender: string
   message: string
@@ -35,7 +45,6 @@ export function extractSinpeWebhookFields(body: Record<string, unknown>): {
     (namedMessage && smsScore(namedMessage) > 0 ? namedMessage : '') ||
     scored.find((row) => row.score > 0)?.value ||
     namedMessage ||
-    scored.find((row) => !isTemplatePlaceholder(row.value))?.value ||
     ''
 
   return {
@@ -52,6 +61,7 @@ export function extractSinpeWebhookFields(body: Record<string, unknown>): {
       body.timestamp ??
         body.sentStamp ??
         body.sent_stamp ??
+        body.receivedStamp ??
         body.time ??
         body.date ??
         Date.now(),
@@ -75,13 +85,24 @@ export function isTemplatePlaceholder(value: string): boolean {
   return withoutTokens.length === 0
 }
 
+export function isRouteNoise(value: string): boolean {
+  const compact = value.trim().toLowerCase().replace(/[^a-z]/g, '')
+  return (
+    compact === 'sinpesmswebhook' ||
+    compact === 'webhook' ||
+    compact === 'payments' ||
+    compact === 'action' ||
+    /apipayments/.test(compact)
+  )
+}
+
 function flattenStrings(value: unknown, depth = 0): string[] {
   if (depth > 8 || value == null) {
     return []
   }
   if (typeof value === 'string') {
     const trimmed = decodeValue(value)
-    if (!trimmed || isTemplatePlaceholder(trimmed)) {
+    if (!trimmed || isTemplatePlaceholder(trimmed) || isRouteNoise(trimmed)) {
       return []
     }
     return [trimmed]
@@ -93,24 +114,30 @@ function flattenStrings(value: unknown, depth = 0): string[] {
     return value.flatMap((entry) => flattenStrings(entry, depth + 1))
   }
   if (typeof value === 'object') {
-    return Object.values(value).flatMap((entry) => flattenStrings(entry, depth + 1))
+    return Object.entries(value as Record<string, unknown>).flatMap(([key, entry]) => {
+      if (IGNORE_KEYS.has(key)) {
+        return []
+      }
+      return flattenStrings(entry, depth + 1)
+    })
   }
   return []
 }
 
 function smsScore(text: string): number {
-  if (isTemplatePlaceholder(text)) {
+  if (isTemplatePlaceholder(text) || isRouteNoise(text)) {
     return -1
   }
   const value = text.toLowerCase()
   let score = 0
   if (/recib/.test(value)) score += 4
   if (/colones|\bcrc\b|₡|¢/.test(value)) score += 4
-  if (/sinpe/.test(value)) score += 3
+  if (/sinpe/.test(value) && value.length > 24) score += 3
   if (/referencia|comprobante/.test(value)) score += 3
   if (/sc[a-z0-9]{8}ts/i.test(text)) score += 5
   if (/\bR[A-HJ-NP-Z2-9]{5}\b/i.test(text)) score += 2
   if (/\d+[.,]\d{1,2}/.test(text) || /[₡¢]\s*\d/.test(text)) score += 2
+  if (/\d{1,7}\s*(colones|crc)/i.test(text)) score += 3
   return score
 }
 
@@ -118,7 +145,7 @@ function firstString(...values: unknown[]): string {
   for (const value of values) {
     if (typeof value === 'string') {
       const trimmed = decodeValue(value)
-      if (trimmed && !isTemplatePlaceholder(trimmed)) {
+      if (trimmed && !isTemplatePlaceholder(trimmed) && !isRouteNoise(trimmed)) {
         return trimmed
       }
     }

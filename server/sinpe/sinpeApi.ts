@@ -144,6 +144,7 @@ async function handleSinpeWebhook(
   console.info('[sinpe-webhook]', {
     sender: fields.sender,
     preview: fields.message.slice(0, 180),
+    keys: Object.keys(input.body),
     status: (result as { status?: string }).status,
   })
   return { status: 200, body: result }
