@@ -1,8 +1,15 @@
-# Stellar Pay
+# SecretsPay
 
-A Web2.5 wallet for **Stellar Testnet**: **customer** and **merchant** accounts, QR payments, the **ROJOS** loyalty token, a store map, and SEP-24 USDC deposits.
+**SecretsPay** is a Web2.5 Stellar dApp (`Secretspay-stellar-daap`) for **Stellar Testnet**: **customer** and **merchant** accounts, QR payments, the **ROJOS** loyalty token, a store map, and SEP-24 USDC deposits.
+
+Repository: [github.com/Isaac2399/Secretspay-stellar-daap](https://github.com/Isaac2399/Secretspay-stellar-daap)
 
 This is not a mainnet app and not a bank. Balances are test funds (Friendbot / Horizon Testnet).
+
+```bash
+git clone https://github.com/Isaac2399/Secretspay-stellar-daap.git
+cd Secretspay-stellar-daap
+```
 
 ## What it does
 
