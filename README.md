@@ -107,6 +107,7 @@ API prefix: `/api/events/*` (`api/events/[action].ts` on Vercel).
 - Create a **KV Store** and set `KV_REST_API_URL` and `KV_REST_API_TOKEN`.
 - Accounts in your local `users.json` **do not exist** in KV — register again on the deployed URL.
 - Session cookies are `Secure` when `VERCEL=1`.
+- Hobby allows **12 serverless functions**. Keep that count: `api/places/[action].ts` covers search/reverse so `api/events/[action].ts` can exist.
 
 ## SINPE recargas
 
