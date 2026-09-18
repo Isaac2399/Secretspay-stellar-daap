@@ -28,6 +28,7 @@ import { handleRwaRoutes } from './rwaApi.js'
 import { handleInvoiceRoutes } from './invoicing/invoiceApi.js'
 import { handleSinpeRoutes } from './sinpe/sinpeApi.js'
 import { handleCashRoutes } from './cash/cashApi.js'
+import { handleEventRoutes } from './events/eventApi.js'
 
 loadLocalEnv()
 
@@ -92,6 +93,11 @@ async function route(input: {
   const cashResult = await handleCashRoutes({ ...input, path, method })
   if (cashResult) {
     return cashResult
+  }
+
+  const eventResult = await handleEventRoutes({ ...input, path, method })
+  if (eventResult) {
+    return eventResult
   }
 
   const rwaResult = await handleRwaRoutes({ ...input, path, method })

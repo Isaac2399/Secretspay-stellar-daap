@@ -1,0 +1,9 @@
+flowchart TD
+  A([Admin home]) --> B{Tab}
+  B -->|Finance| C[Distributor balances and issuance]
+  B -->|Merchants| D[List + merchant detail]
+  B -->|Customers| E[List + payment activity]
+  B -->|RWA| F[Tokenization files]
+  B -->|SINPE| G[Unassigned + claim lookup]
+  G --> H[Assign deposit to account]
+  H --> I([Credit ROJOS])

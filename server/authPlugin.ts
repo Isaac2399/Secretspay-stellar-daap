@@ -40,6 +40,7 @@ async function handleApi(
     !pathOnly.startsWith('/api/cards') &&
     !pathOnly.startsWith('/api/rwa') &&
     !pathOnly.startsWith('/api/invoices') &&
+    !pathOnly.startsWith('/api/events') &&
     !pathOnly.startsWith('/api/v1/') &&
     !pathOnly.includes('sinpe-sms-webhook')
   ) {

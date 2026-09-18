@@ -1,0 +1,7 @@
+flowchart TD
+  A([Login screen]) --> B[Email + password]
+  B --> C[POST login]
+  C -->|OK| D[Session cookie]
+  D --> E([Home by role])
+  C -->|Invalid credentials| F([Show error])
+  G([Already signed in]) --> E

@@ -1,0 +1,11 @@
+flowchart TD
+  A([Send]) --> B[Destination G… + amount + asset + memo]
+  B --> C{Valid public key?}
+  C -->|No| D([Destination error])
+  C -->|Yes| E{Amount > 0?}
+  E -->|No| F([Amount error])
+  E -->|Yes| G[POST /api/payments]
+  G --> H[Server signs with custodial key]
+  H --> I{Horizon OK?}
+  I -->|Yes| J([Show hash])
+  I -->|No| K([Show error])

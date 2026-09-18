@@ -1,0 +1,10 @@
+flowchart TD
+  A([/profile]) --> B[Email and role]
+  B --> C{Role}
+  C -->|Merchant| D[Show published venue]
+  C -->|Customer/Merchant| E[SINPE code]
+  C -->|Anyone| F[Public key + copy]
+  C -->|Customer/Merchant/Admin| G[Shortcut to RWA]
+  A --> H[Sign out]
+  H --> I[Invalidate cookie]
+  I --> J([/login])

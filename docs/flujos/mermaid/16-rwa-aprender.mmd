@@ -1,0 +1,10 @@
+flowchart TD
+  A([/rwa]) --> B[Education content + FAQ]
+  A --> C{Has holdings?}
+  C -->|Yes| D[Portfolio summary]
+  A --> E{Role}
+  E -->|Merchant or admin| F[Tokenize my asset]
+  E -->|Customer| G[Explore opportunities only]
+  F --> H([/rwa/tokenizar])
+  G --> I([/rwa/invertir])
+  D --> J([/rwa/dividendos])

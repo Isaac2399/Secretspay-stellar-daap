@@ -30,3 +30,6 @@ data/
 .env.*
 !.env.example
 .vercel
+
+# Word lock files
+~$*.docx

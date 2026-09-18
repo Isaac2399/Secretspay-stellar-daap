@@ -1,0 +1,11 @@
+flowchart TD
+  A([Simulate charge]) --> B[Merchant + amount + USDC/XLM]
+  B --> C[POST simulate-transaction]
+  C --> D{Card active?}
+  D -->|Frozen| E([Declined])
+  D -->|Yes| F{Enough balance?}
+  F -->|No| E
+  F -->|Yes| G[Stellar payment to treasury]
+  G --> H{Horizon OK?}
+  H -->|Yes| I([Approved + txHash])
+  H -->|No| E

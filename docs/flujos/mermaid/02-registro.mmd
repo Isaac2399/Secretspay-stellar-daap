@@ -1,0 +1,14 @@
+flowchart TD
+  A([Create account]) --> B[Email + password min 8]
+  B --> C{Role}
+  C -->|Customer| D[role = customer]
+  C -->|Merchant| E[role = merchant]
+  D --> F[POST register]
+  E --> F
+  F --> G[Generate Stellar keypair]
+  G --> H[Friendbot Testnet]
+  H --> I[Open ROJOS trustline]
+  I --> J[Encrypt secret key and save user]
+  J --> K[Assign SINPE code sc…ts]
+  K --> L([Session + Home])
+  F -->|Email taken / error| M([Show error])

@@ -90,7 +90,7 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      {account.role === 'customer' || account.role === 'merchant' || account.role === 'admin' ? (
+      {account.role === 'admin' ? (
         <Link
           to="/rwa"
           className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-app-card py-3 text-sm font-medium"

@@ -1,0 +1,11 @@
+flowchart TD
+  A([Cash desk]) --> B[Search user]
+  B --> C[Select account]
+  C --> D[Enter colones]
+  D --> E[Preview ROJOS]
+  E --> F{Confirm credit?}
+  F -->|No| D
+  F -->|Yes| G[Credit ROJOS]
+  G -->|OK| H([Credit history])
+  G -->|Error| I([Show error])
+  A --> J[Can also see unassigned SINPE deposits]

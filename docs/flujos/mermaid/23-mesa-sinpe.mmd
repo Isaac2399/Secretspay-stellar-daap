@@ -1,0 +1,10 @@
+flowchart TD
+  A([SINPE desk]) --> B[List PENDING_MANUAL_MATCH]
+  B --> C[Search by SMS / receipt / sc…ts]
+  C --> D[Pick deposit]
+  D --> E[Search destination user]
+  E --> F[Assign]
+  F --> G[Calculate ROJOS and credit]
+  G --> H([Deposit closed])
+  A --> I[Claim lookup]
+  I --> J([View related tx or deposit])

@@ -1,0 +1,10 @@
+flowchart TD
+  A([Files]) --> B[Filter by status]
+  B --> C[Open request]
+  C --> D{Action}
+  D -->|Audit OK| E[legal_review]
+  D -->|RUGM data / contract hash| F[Save legal]
+  D -->|Approve| G[approved + marketplace listing]
+  D -->|Reject| H[rejected + reason]
+  E --> C
+  F --> C

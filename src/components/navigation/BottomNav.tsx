@@ -1,13 +1,11 @@
 import { NavLink } from 'react-router-dom'
-import { CreditCard, Home, Landmark, Map, UserRound } from 'lucide-react'
+import { GlassWater, Home, UserRound } from 'lucide-react'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { isEventStaffRole } from '@/lib/auth/roles'
 
 const consumerItems = [
   { to: '/', label: 'Inicio', icon: Home, end: true },
-  { to: '/card', label: 'Tarjeta', icon: CreditCard, end: false },
-  { to: '/map', label: 'Mapa', icon: Map, end: false },
-  { to: '/rwa', label: 'RWA', icon: Landmark, end: false },
+  { to: '/event', label: 'Evento', icon: GlassWater, end: false },
   { to: '/profile', label: 'Perfil', icon: UserRound, end: false },
 ] as const
 

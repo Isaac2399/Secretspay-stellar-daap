@@ -1,0 +1,8 @@
+flowchart TD
+  A([/rwa/dividendos]) --> B[View holdings and charts]
+  B --> C{Pending dividends?}
+  C -->|Yes| D[Claim]
+  D --> E{OK?}
+  E -->|Yes| F([claimedDividendsUsd updated])
+  E -->|No| G([Show error])
+  C -->|No| H([View only])

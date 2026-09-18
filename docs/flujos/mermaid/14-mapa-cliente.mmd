@@ -1,0 +1,10 @@
+flowchart TD
+  A([/map]) --> B[Load published venues]
+  B --> C[Dark Leaflet map]
+  C --> D{Filter}
+  D -->|Type| E[Hotel, restaurant, etc.]
+  D -->|Promo| F[Story / purchase / USDC]
+  D -->|All| C
+  E --> G[Tap pin]
+  F --> G
+  G --> H([Card: name, address, promos, accepts ROJOS])

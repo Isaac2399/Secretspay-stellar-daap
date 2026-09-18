@@ -1,0 +1,10 @@
+flowchart TD
+  A([Add]) --> B{Method}
+  B -->|MoneyGram| C[SEP-24 cash rail]
+  B -->|Visa/MC card| D[SEP-24 card rail]
+  B -->|SINPE Movil| E[Code sc…ts + phone]
+  B -->|On-chain| F[QR / copy public key]
+  C --> G([USDC in wallet])
+  D --> G
+  E --> H([ROJOS credited])
+  F --> I([XLM/USDC/ROJOS by transfer])

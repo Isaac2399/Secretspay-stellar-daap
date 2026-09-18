@@ -1,0 +1,11 @@
+flowchart TD
+  A([/rwa/invertir]) --> B[Published listings]
+  B --> C[Compare APY / capacity / yield]
+  C --> D[Open detail]
+  D --> E[Investment amount]
+  E --> F{>= min and <= capacity?}
+  F -->|No| G([Min/capacity error])
+  F -->|Yes| H{Enough USDC?}
+  H -->|No| I([Go to Add funds])
+  H -->|Yes| J[Invest]
+  J --> K([txHash + holding])

@@ -1,0 +1,13 @@
+flowchart TD
+  A([/card]) --> B{Has a card?}
+  B -->|No| C[Issue card]
+  C --> D[Bind to custodial public key]
+  D --> E[Show card face and balance]
+  B -->|Yes| E
+  E --> F{Action}
+  F -->|Reveal details| G[GET secure-details]
+  G --> H([PAN/CVV for 20 seconds])
+  F -->|Freeze / unfreeze| I[Change status]
+  F -->|Apple / Google Pay| J[Wallet sandbox sheet]
+  F -->|Deposit USDC| K[SEP-24 card]
+  F -->|POS| L([POS simulator])

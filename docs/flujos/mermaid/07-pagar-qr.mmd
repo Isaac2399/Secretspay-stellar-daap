@@ -1,0 +1,13 @@
+flowchart TD
+  A([Pay with QR]) --> B{Camera allowed?}
+  B -->|Yes| C[Scan QR]
+  B -->|No| D[Paste QR text]
+  C --> E{Valid payload?}
+  D --> E
+  E -->|No| F([Read error])
+  E -->|Yes| G[Show merchant, amount, memo]
+  G --> H{Confirm?}
+  H -->|Back| A
+  H -->|Yes| I[POST /api/payments]
+  I -->|OK| J([Hash + optional ROJOS reward])
+  I -->|Fail| K([Error])

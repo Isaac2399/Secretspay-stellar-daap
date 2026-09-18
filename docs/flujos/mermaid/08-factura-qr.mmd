@@ -1,0 +1,9 @@
+flowchart TD
+  A([Charge]) --> B[Amount]
+  B --> C[Asset USDC / XLM / ROJOS]
+  C --> D[Memo / note]
+  D --> E[Optional ROJOS reward]
+  E --> F[Serialize payload]
+  F --> G[Show QR + text]
+  G --> H([Customer pays with ScanAndPay])
+  H --> I([Merchant sees inflow in activity])

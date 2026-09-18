@@ -1,0 +1,10 @@
+flowchart TD
+  A([Merchant map]) --> B[Name, category, note]
+  B --> C[Search address]
+  C --> D[Pick result or drop pin]
+  D --> E[Accepts ROJOS?]
+  E --> F[Promos: story / purchase / USDC]
+  F --> G[Save venue]
+  G --> H([Visible to customers])
+  A --> I[Delete venue]
+  I --> J([Removed from the map])

@@ -1,0 +1,11 @@
+flowchart TD
+  A([Customer home]) --> B[View balances and copy public key]
+  A --> C{Action}
+  C -->|Add| D[Add-funds sheet]
+  C -->|Send| E[Public-key form]
+  C -->|Scan / QR| F[Pay with QR]
+  C -->|Activity| G[Horizon list]
+  A --> H[SINPE top-ups block if any]
+  D --> I([Funding flows])
+  E --> J([Custodial payment])
+  F --> J

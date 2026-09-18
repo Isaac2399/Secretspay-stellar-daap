@@ -1,0 +1,15 @@
+flowchart TD
+  A([SINPE Movil]) --> B[Show phone and code sc…ts]
+  B --> C[User transfers via SINPE]
+  C --> D[Webhook / SMS parsed]
+  D --> E{Account code recognized?}
+  E -->|Yes| F[Calculate ROJOS]
+  F --> G[Credit on Stellar]
+  G --> H([Shows in SINPE top-ups])
+  E -->|No| I[PENDING_MANUAL_MATCH]
+  I --> J{Customer claim?}
+  J -->|Yes| K[Claim with receipt]
+  K --> L{Match?}
+  L -->|Yes| F
+  L -->|No| M([SINPE desk assigns])
+  J -->|No| M

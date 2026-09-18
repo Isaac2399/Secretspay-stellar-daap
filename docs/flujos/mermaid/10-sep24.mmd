@@ -1,0 +1,13 @@
+flowchart TD
+  A([Pick rail]) --> B{USDC trustline?}
+  B -->|No| C[Open trustline]
+  B -->|Yes| D[Start deposit]
+  C --> D
+  D --> E[SEP-10 server signing]
+  E --> F[SEP-24 interactive session]
+  F --> G[User completes the anchor]
+  G --> H[Poll transaction]
+  H --> I{Terminal status?}
+  I -->|completed| J([Refresh USDC balance])
+  I -->|error| K([Show error])
+  I -->|pending| H

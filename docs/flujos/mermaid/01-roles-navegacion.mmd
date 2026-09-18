@@ -1,0 +1,10 @@
+flowchart TD
+  A([Open app]) --> B{Session exists?}
+  B -->|No| C[Login / Register]
+  B -->|Yes| D{Role}
+  D -->|Customer| E[Home · Card · Map · RWA · Profile]
+  D -->|Merchant| F[Home · Card · Map · RWA · Profile]
+  D -->|Admin| G[Distributor panel + Profile]
+  D -->|Cashier| H[Cash desk + Profile]
+  D -->|SINPE desk| I[Unassigned deposits + Profile]
+  C --> B

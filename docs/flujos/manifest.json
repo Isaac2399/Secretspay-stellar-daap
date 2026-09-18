@@ -1,0 +1,146 @@
+[
+  {
+    "file": "01-roles-navegacion",
+    "title": "1. Roles and navigation",
+    "caption": "Who reaches each screen. Event staff (cashier and SINPE desk) do not see Card, Map, or RWA.",
+    "png": "C:\\Users\\camac\\stellar-web-app\\docs\\flujos\\png\\01-roles-navegacion.png"
+  },
+  {
+    "file": "02-registro",
+    "title": "2. Account registration",
+    "caption": "The user picks Customer or Merchant. The server creates a keypair, funds it on Testnet, and stores the secret encrypted. The browser never sees the private key.",
+    "png": "C:\\Users\\camac\\stellar-web-app\\docs\\flujos\\png\\02-registro.png"
+  },
+  {
+    "file": "03-login",
+    "title": "3. Sign in",
+    "caption": "Guests go to /login. If a session cookie already exists, they are redirected to Home.",
+    "png": "C:\\Users\\camac\\stellar-web-app\\docs\\flujos\\png\\03-login.png"
+  },
+  {
+    "file": "04-inicio-cliente",
+    "title": "4. Home — Customer",
+    "caption": "Dashboard with ROJOS / XLM / USDC balances, SINPE top-ups, activity, and QR pay.",
+    "png": "C:\\Users\\camac\\stellar-web-app\\docs\\flujos\\png\\04-inicio-cliente.png"
+  },
+  {
+    "file": "05-inicio-empresa",
+    "title": "5. Home — Merchant",
+    "caption": "Same wallet as the customer, plus charge via invoice QR instead of scanning to pay.",
+    "png": "C:\\Users\\camac\\stellar-web-app\\docs\\flujos\\png\\05-inicio-empresa.png"
+  },
+  {
+    "file": "06-enviar",
+    "title": "6. Send by public key",
+    "caption": "Custodial Testnet payment. The backend signs and may wrap a fee-bump. Default asset: ROJOS.",
+    "png": "C:\\Users\\camac\\stellar-web-app\\docs\\flujos\\png\\06-enviar.png"
+  },
+  {
+    "file": "07-pagar-qr",
+    "title": "7. Pay with QR",
+    "caption": "The customer opens the camera or pastes SP1|… text. Confirms destination, amount, memo, and optional ROJOS reward.",
+    "png": "C:\\Users\\camac\\stellar-web-app\\docs\\flujos\\png\\07-pagar-qr.png"
+  },
+  {
+    "file": "08-factura-qr",
+    "title": "8. Charge / invoice QR",
+    "caption": "The merchant does not send the payment: they generate a QR that the customer settles on Testnet.",
+    "png": "C:\\Users\\camac\\stellar-web-app\\docs\\flujos\\png\\08-factura-qr.png"
+  },
+  {
+    "file": "09-agregar-fondos",
+    "title": "9. Add funds",
+    "caption": "Home → Add sheet. Four funding rails.",
+    "png": "C:\\Users\\camac\\stellar-web-app\\docs\\flujos\\png\\09-agregar-fondos.png"
+  },
+  {
+    "file": "10-sep24",
+    "title": "10. SEP-24 USDC deposit",
+    "caption": "MoneyGram cash or card. Requires a USDC trustline. The interactive anchor runs through server-side SEP-10/24.",
+    "png": "C:\\Users\\camac\\stellar-web-app\\docs\\flujos\\png\\10-sep24.png"
+  },
+  {
+    "file": "11-sinpe-cliente",
+    "title": "11. SINPE Movil top-up (customer)",
+    "caption": "Parity CRC 1,000 = 1 ROJO. Promo CRC 9,000 = 10 ROJOS. If the SMS has no account code, the deposit waits for a manual match.",
+    "png": "C:\\Users\\camac\\stellar-web-app\\docs\\flujos\\png\\11-sinpe-cliente.png"
+  },
+  {
+    "file": "12-tarjeta-virtual",
+    "title": "12. Virtual Visa",
+    "caption": "Rain Cards-style sandbox. Spendable balance is the Stellar account USDC. PAN/CVV only after Reveal details (20 s).",
+    "png": "C:\\Users\\camac\\stellar-web-app\\docs\\flujos\\png\\12-tarjeta-virtual.png"
+  },
+  {
+    "file": "13-pos",
+    "title": "13. POS simulator",
+    "caption": "Sandbox Visa charge. If funds exist they are debited on Testnet to treasury. Frozen card or insufficient funds = declined.",
+    "png": "C:\\Users\\camac\\stellar-web-app\\docs\\flujos\\png\\13-pos.png"
+  },
+  {
+    "file": "14-mapa-cliente",
+    "title": "14. Map — Customer / Admin",
+    "caption": "Pins for published venues. Filter by category or ROJOS promo.",
+    "png": "C:\\Users\\camac\\stellar-web-app\\docs\\flujos\\png\\14-mapa-cliente.png"
+  },
+  {
+    "file": "15-mapa-empresa",
+    "title": "15. Publish venue — Merchant",
+    "caption": "Nominatim geocoding. ROJOS promos are visible to customers on the map.",
+    "png": "C:\\Users\\camac\\stellar-web-app\\docs\\flujos\\png\\15-mapa-empresa.png"
+  },
+  {
+    "file": "16-rwa-aprender",
+    "title": "16. RWA — Learn",
+    "caption": "Education and FAQ. Tokenization is merchant/admin only. Customers go to the marketplace.",
+    "png": "C:\\Users\\camac\\stellar-web-app\\docs\\flujos\\png\\16-rwa-aprender.png"
+  },
+  {
+    "file": "17-rwa-tokenizar",
+    "title": "17. RWA — Tokenize asset",
+    "caption": "Five-step wizard. The file lands in audit for the structuring panel.",
+    "png": "C:\\Users\\camac\\stellar-web-app\\docs\\flujos\\png\\17-rwa-tokenizar.png"
+  },
+  {
+    "file": "18-rwa-invertir",
+    "title": "18. RWA — Marketplace",
+    "caption": "Buy with wallet USDC. Enforces minimum, remaining capacity, and the asset token trustline.",
+    "png": "C:\\Users\\camac\\stellar-web-app\\docs\\flujos\\png\\18-rwa-invertir.png"
+  },
+  {
+    "file": "19-rwa-dividendos",
+    "title": "19. RWA — Portfolio and dividends",
+    "caption": "Invested capital, estimated yield, and claiming pending dividends.",
+    "png": "C:\\Users\\camac\\stellar-web-app\\docs\\flujos\\png\\19-rwa-dividendos.png"
+  },
+  {
+    "file": "20-rwa-estructuracion",
+    "title": "20. RWA — Structuring panel",
+    "caption": "Admin only. Audit → legal → approve (marketplace) or reject.",
+    "png": "C:\\Users\\camac\\stellar-web-app\\docs\\flujos\\png\\20-rwa-estructuracion.png"
+  },
+  {
+    "file": "21-admin",
+    "title": "21. Super admin / Distributor",
+    "caption": "Admin home: finance, merchants, customers, RWA, and SINPE. Event staff do not use this panel.",
+    "png": "C:\\Users\\camac\\stellar-web-app\\docs\\flujos\\png\\21-admin.png"
+  },
+  {
+    "file": "22-caja",
+    "title": "22. Event cash desk",
+    "caption": "Cashier role. Takes colones, finds the account, and credits ROJOS at the same SINPE parity.",
+    "png": "C:\\Users\\camac\\stellar-web-app\\docs\\flujos\\png\\22-caja.png"
+  },
+  {
+    "file": "23-mesa-sinpe",
+    "title": "23. SINPE desk",
+    "caption": "sinpe_ops role. Same assignment tool as admin, without the rest of the panel.",
+    "png": "C:\\Users\\camac\\stellar-web-app\\docs\\flujos\\png\\23-mesa-sinpe.png"
+  },
+  {
+    "file": "24-perfil",
+    "title": "24. Profile and sign out",
+    "caption": "Account details, SINPE code when applicable, public key, and logout.",
+    "png": "C:\\Users\\camac\\stellar-web-app\\docs\\flujos\\png\\24-perfil.png"
+  }
+]

@@ -1,0 +1,11 @@
+flowchart TD
+  A([Wizard]) --> B[1 Asset profile]
+  B --> C[2 Type-specific form]
+  C --> D[3 Legal backing and documents]
+  D --> E[4 Params: raise, APY, frequency]
+  E --> F[5 Summary]
+  F --> G{Validation OK?}
+  G -->|No| H([Fix the step])
+  G -->|Yes| I[Submit request]
+  I --> J([pending_audit])
+  J --> K([Admin reviews in panel])

@@ -1,0 +1,9 @@
+flowchart TD
+  A([Merchant home]) --> B[ROJOS / XLM / USDC balances]
+  A --> C{Action}
+  C -->|Add| D[Add-funds sheet]
+  C -->|Send| E[Transfer to public key]
+  C -->|Charge| F[Invoice QR]
+  F --> G[Amount + asset + memo + ROJOS reward]
+  G --> H[Generate payload and QR]
+  H --> I([Customer scans and pays])

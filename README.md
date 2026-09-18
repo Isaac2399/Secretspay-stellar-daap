@@ -1,6 +1,6 @@
 # SecretsPay
 
-**SecretsPay** is a Web2.5 Stellar dApp (`Secretspay-stellar-daap`) for **Stellar Testnet**: **customer** and **merchant** accounts, QR payments, the **ROJOS** loyalty token, a store map, and SEP-24 USDC deposits.
+**SecretsPay** is a Web2.5 Stellar dApp (`Secretspay-stellar-daap`) for **Stellar Testnet**: **customer** and **merchant** wallets, QR payments, the **ROJOS** loyalty token, **SINPE recargas**, and **event bar** ordering.
 
 Repository: [github.com/Isaac2399/Secretspay-stellar-daap](https://github.com/Isaac2399/Secretspay-stellar-daap)
 
@@ -11,21 +11,34 @@ git clone https://github.com/Isaac2399/Secretspay-stellar-daap.git
 cd Secretspay-stellar-daap
 ```
 
+## MVP (this phase)
+
+Customer and merchant accounts share a short bottom nav: **Inicio**, **Evento**, **Perfil**.
+
+**Not in the MVP nav** (routes still exist in the codebase for later phases):
+
+- `/card` — virtual Visa sandbox
+- `/map` — merchant map
+- `/rwa` — RWA learn / tokenize / invest (admin can still open RWA from Perfil)
+
 ## What it does
 
 On sign-up, the server creates a Stellar keypair, funds it on Testnet, and stores the secret **encrypted** (custodial). The browser never sees the private key.
 
-| Role | In the app |
+| Role | In the MVP app |
 | --- | --- |
-| **Customer** | Balances (ROJOS, XLM, USDC), send, pay with QR, **virtual Visa**, activity, USDC on-ramp (SEP-24), browse merchants on the map |
-| **Merchant** | Same wallet features, plus **charge** (invoice QR) and **publish a venue** (address, category, map pin) |
+| **Customer** | Balances (ROJOS, XLM, USDC), send, pay with QR, SINPE recargas, **order at the event bar**, activity |
+| **Merchant** | Same wallet features, plus **charge** (invoice QR) and **event bar** catalog, order queue, and TV display |
+| **Cashier** | Event cash desk |
+| **SINPE desk** | Match unassigned SINPE deposits |
+| **Admin** | Distributor / ops panel |
 
 Routes:
 
 - `/login`, `/register` — guests
-- `/` — home (dashboard)
-- `/card` — virtual Visa (issue, freeze, limits, POS sandbox)
-- `/map` — map (merchants publish; customers filter by type)
+- `/` — home (wallet dashboard)
+- `/event` — event bar (customer menu or merchant catalog/orders)
+- `/event/display/:merchantId` — public TV board for a venue (no app login)
 - `/profile` — session and public key
 
 ## Stack
@@ -69,14 +82,23 @@ Do not commit `.env.local` or secret keys (`S…`).
 ## Layout
 
 ```
-src/                 UI, auth, Stellar (balances, payments, SEP-24 client), cards
-server/              Auth, custodial payments, card issuing sandbox, SEP-10/24, places, KV
+src/                 UI, auth, Stellar (balances, payments, SEP-24 client), event bar, cards
+server/              Auth, custodial payments, events, SINPE, card issuing sandbox, SEP-10/24, places, KV
 api/                 Vercel entry files that call server/vercelHandler.ts
+docs/flujos          Feature flowcharts (Mermaid + PNG + Word)
 data/users.json      Local users (not for production)
 data/cards.json      Local cards + settlement history (not for production)
 ```
 
 HTTP routing lives in `server/dispatchApi.ts`. Locally it is mounted by `server/authPlugin.ts`. On Vercel, each file under `api/` re-exports the same handler.
+
+## Event bar
+
+Customers pick a venue, order from the catalog, pay in the app (ROJOS / Testnet), and show a pickup QR.
+
+Merchants maintain products, mark orders ready, and can open `/event/display/:merchantId` on a TV.
+
+API prefix: `/api/events/*` (`api/events/[action].ts` on Vercel).
 
 ## Deploy (Vercel)
 
@@ -86,11 +108,17 @@ HTTP routing lives in `server/dispatchApi.ts`. Locally it is mounted by `server/
 - Accounts in your local `users.json` **do not exist** in KV — register again on the deployed URL.
 - Session cookies are `Secure` when `VERCEL=1`.
 
+## SINPE recargas
+
+Customers send a SINPE Móvil transfer; staff match SMS / unassigned deposits and credit ROJOS on Testnet. Keep staff passwords out of git; set `CASHIER_*` and `SINPE_OPS_*` on Vercel.
+
 ## SEP-24 (USDC deposit)
 
 The **Add** button runs SEP-10 (server-side signing) and SEP-24 interactive deposit. In local and Vercel **dev**, keep `SEP24_HOME_DOMAIN=testanchor.stellar.org`: that SDF Testnet anchor simulates cash (MoneyGram-style) and card rails (limits are typically 1–10 USDC). MoneyGram Access (`extmgxanchor.moneygram.com`) needs public-key / domain allowlisting and will fail without it.
 
-## Virtual Visa (sandbox)
+## Later phases (in the repo, off the MVP nav)
+
+### Virtual Visa (sandbox)
 
 `/card` issues a virtual Visa tied to the signed-in user's custodial public key. The HTTP API is a local BaaS stand-in (Rain Cards–shaped) so production can swap the provider without changing the UI:
 
@@ -98,17 +126,17 @@ The **Add** button runs SEP-10 (server-side signing) and SEP-24 interactive depo
 - `GET /api/cards/[id]` (also `GET /api/cards/me`)
 - `POST /api/cards/simulate-transaction`
 
-`simulate-transaction` checks USDC (or XLM in the sandbox datáfono), then debits the user's Testnet wallet to the platform treasury with `@stellar/stellar-sdk`. Approved charges store the Horizon `txHash` and a StellarExpert link. Insufficient funds, a frozen card, or a network error become a declined authorization.
+`simulate-transaction` checks USDC (or XLM in the sandbox datáfono), then debits the user's Testnet wallet to the platform treasury with `@stellar/stellar-sdk`. PAN / CVV stay encrypted on the server.
 
-PAN / CVV stay encrypted on the server. The browser only receives them from `GET /api/cards/[id]/secure-details` after **Ver detalles**. Secret keys never go to the client.
+Optional env: `CARD_TREASURY_SECRET_KEY`, `CARD_DAILY_LIMIT_USD`. Leave `CARD_PROVIDER` unset (sandbox).
 
-The same `/api/cards/:action` function runs in `npm run dev`, `npm run preview`, Vercel Preview, and Production (one dynamic function, like SEP-24, to stay under the Hobby limit). Nested paths such as `/api/cards/:id/freeze` still work locally; the UI uses single-segment routes (`/api/cards/freeze?` / body `cardId`) so Vercel can resolve them.
+### Map
 
-Optional env: `CARD_TREASURY_SECRET_KEY` (otherwise the server creates a Friendbot treasury), `CARD_DAILY_LIMIT_USD`. Leave `CARD_PROVIDER` unset (sandbox). Set `CARD_PROVIDER=rain` only when the production adapter is wired.
+Merchants can save a venue pin; customers can browse `/map`. Geocoding uses Nominatim (OpenStreetMap). Tiles: Carto dark.
 
-## Map
+### RWA
 
-Merchants save a name, category (hotel, restaurant, and so on), address, and coordinates. Customers see pins and can filter by type. Geocoding uses Nominatim (OpenStreetMap). Tiles: Carto dark.
+`/rwa` covers education, tokenization, marketplace, and dividends. Customer and merchant accounts do not see it in this MVP.
 
 ## Scripts
 

@@ -14,6 +14,8 @@ import RwaTokenizePage from '@/pages/RwaTokenizePage'
 import RwaMarketplacePage from '@/pages/RwaMarketplacePage'
 import RwaPortfolioPage from '@/pages/RwaPortfolioPage'
 import RwaStructuringPage from '@/pages/RwaStructuringPage'
+import EventPage from '@/pages/EventPage'
+import EventDisplayPage from '@/pages/EventDisplayPage'
 import { useAuth } from '@/lib/auth/AuthContext'
 
 export function AppRoutes() {
@@ -33,6 +35,7 @@ export function AppRoutes() {
           <Route path="/admin/unassigned-deposits" element={<UnassignedDepositsPage />} />
           <Route path="/admin/claim-lookup" element={<ClaimLookupPage />} />
           <Route element={<ConsumerRoute />}>
+            <Route path="/event" element={<EventPage />} />
             <Route path="/card" element={<CardPage />} />
             <Route path="/map" element={<MapPage />} />
             <Route path="/rwa" element={<RwaLearnPage />} />
@@ -43,6 +46,8 @@ export function AppRoutes() {
           </Route>
         </Route>
       </Route>
+
+      <Route path="/event/display/:merchantId" element={<EventDisplayPage />} />
 
       <Route
         path="*"

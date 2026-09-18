@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { AdminDashboard } from '@/components/admin/AdminDashboard'
 import { SinpeOpsDashboard } from '@/components/admin/SinpeOpsDashboard'
 import { CashierDashboard } from '@/components/cashier/CashierDashboard'
@@ -68,6 +69,23 @@ export default function HomePage() {
       />
 
       <AccountStrip balances={balances} />
+
+      <Link
+        to="/event"
+        className="block rounded-[24px] bg-app-card p-5"
+      >
+        <p className="text-xs font-medium uppercase tracking-wide text-app-accent">
+          Evento
+        </p>
+        <h2 className="mt-1 text-[17px] font-semibold">
+          {isCustomer ? 'Ordenar en barra' : 'Carta y pedidos de barra'}
+        </h2>
+        <p className="mt-1 text-sm text-app-muted">
+          {isCustomer
+            ? 'Pide, paga en la app y muestra el QR al retirar.'
+            : 'Añade productos, marca pedidos listos y abre la pantalla de TV.'}
+        </p>
+      </Link>
 
       <MySinpeCredits />
 
