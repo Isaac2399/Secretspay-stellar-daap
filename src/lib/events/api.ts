@@ -123,14 +123,14 @@ export async function fetchMerchantOrders() {
 }
 
 export async function markEventOrderReady(orderId: string) {
-  return request<{ order: EventOrder }>('/api/events/orders/ready', {
+  return request<{ order: EventOrder }>('/api/events/ready', {
     method: 'POST',
     body: JSON.stringify({ orderId }),
   })
 }
 
 export async function completeEventOrderByQr(qr: string) {
-  return request<{ order: EventOrder }>('/api/events/orders/complete', {
+  return request<{ order: EventOrder }>('/api/events/complete', {
     method: 'POST',
     body: JSON.stringify({ qr }),
   })

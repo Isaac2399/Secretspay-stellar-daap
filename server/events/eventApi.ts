@@ -107,7 +107,10 @@ export async function handleEventRoutes(
     return { status: 200, body: { orders: await listMerchantOrders(merchant.id) } }
   }
 
-  if (method === 'POST' && path === '/api/events/orders/ready') {
+  if (
+    method === 'POST' &&
+    (path === '/api/events/ready' || path === '/api/events/orders/ready')
+  ) {
     const merchant = requireMerchant(session)
     return {
       status: 200,
@@ -117,7 +120,10 @@ export async function handleEventRoutes(
     }
   }
 
-  if (method === 'POST' && path === '/api/events/orders/complete') {
+  if (
+    method === 'POST' &&
+    (path === '/api/events/complete' || path === '/api/events/orders/complete')
+  ) {
     const merchant = requireMerchant(session)
     const qr = String(input.body.qr ?? input.body.pickupQr ?? '')
     return {
