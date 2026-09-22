@@ -1,149 +1,67 @@
-# SecretsPay
+# PartyPay
 
-**SecretsPay** is a Web2.5 Stellar dApp (`Secretspay-stellar-daap`) for **Stellar Testnet**: **customer** and **merchant** wallets, QR payments, the **ROJOS** loyalty token, **SINPE recargas**, and **event bar** ordering.
+**PartyPay** is a **Web 2.5** app for large events. Guests top up, order food and drinks at the bar, pay in seconds, and see when the order is ready. Venues get paid without the usual bank or card fee on every sale.
 
-Repository: [github.com/Isaac2399/Secretspay-stellar-daap](https://github.com/Isaac2399/Secretspay-stellar-daap)
+It is Web 2.5 because it feels like a normal app (sign up, email login, menu, QR, order status) while balances and payments settle on **Stellar**. People get tokens and instant payouts without managing a crypto wallet at a concert.
 
-This is not a mainnet app and not a bank. Balances are test funds (Friendbot / Horizon Testnet).
+---
 
-```bash
-git clone https://github.com/Isaac2399/Secretspay-stellar-daap.git
-cd Secretspay-stellar-daap
-```
+## The problem
 
-## MVP (this phase)
+At large events, bars get overcrowded: long lines, waiting, and crowding. Businesses also pay **high fees on every bank or card transaction**.
 
-Customer and merchant accounts share a short bottom nav: **Inicio**, **Evento**, **Perfil**.
+---
 
-**Not in the MVP nav** (routes still exist in the codebase for later phases):
+## How it solves it
 
-- `/card` — virtual Visa sandbox
-- `/map` — merchant map
-- `/rwa` — RWA learn / tokenize / invest (admin can still open RWA from Perfil)
+The guest can **top up before the event**, **order food and drinks on site**, and **see when the order is ready**. They also get **discounts for using the app**. Sellers **save the commission percentage** that bank and card payments take on each sale.
 
-## What it does
+---
 
-On sign-up, the server creates a Stellar keypair, funds it on Testnet, and stores the secret **encrypted** (custodial). The browser never sees the private key.
+## Step by step for users
 
-| Role | In the MVP app |
-| --- | --- |
-| **Customer** | Balances (ROJOS, XLM, USDC), send, pay with QR, SINPE recargas, **order at the event bar**, activity |
-| **Merchant** | Same wallet features, plus **charge** (invoice QR) and **event bar** catalog, order queue, and TV display |
-| **Cashier** | Event cash desk |
-| **SINPE desk** | Match unassigned SINPE deposits |
-| **Admin** | Distributor / ops panel |
+Create a **customer** or **business** account, then log in with **email**.
 
-Routes:
+### Customer
 
-- `/login`, `/register` — guests
-- `/` — home (wallet dashboard)
-- `/event` — event bar (customer menu or merchant catalog/orders)
-- `/event/display/:merchantId` — public TV board for a venue (no app login)
-- `/profile` — session and public key
+1. Top up the account before the event with **SINPE** (Costa Rica mobile bank transfer), or on the day of the event.
+2. On the day of the event, top up by **SINPE** or by **cash**.
+3. See **events and bars**.
+4. **Order products and pay**.
+5. **Pay with a QR code**.
+6. **Send** utility tokens to other accounts.
+7. **Receive** tokens from other accounts.
 
-## Stack
+### Business
 
-- **Frontend:** Vite, React 19, TypeScript, Tailwind v4, React Router
-- **Stellar:** `@stellar/stellar-sdk`, Horizon Testnet
-- **API:** the same code in `server/` runs in the Vite plugin (`npm run dev`) and as Vercel functions (`api/`)
-- **Users:** `data/users.json` locally; **Vercel KV** in production (it does not share your local JSON)
+1. **Receive** tokens from other accounts.
+2. Top up with **SINPE** or **cash** on the day of the event.
+3. **Create charges with a QR code**, and optionally **gift tokens**.
+4. **Create an event / bar**.
+5. **Create products**.
+6. See orders and mark them **ready**.
+7. Mark the order **delivered** with a **QR code**.
 
-## Local setup
+### Event operations accounts
 
-```bash
-npm install
-cp .env.example .env.local
-npm run dev
-```
+- Super admin
+- SINPE
+- Claims
 
-Open `http://localhost:5173` and create an account (Friendbot plus the ROJOS trustline can take a few seconds).
+---
 
-On Windows, if PowerShell blocks `npm`:
+## How to run the app
 
-```powershell
-Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
-```
+1. Clone the repository.
+2. Install dependencies with `npm install`.
+3. Start the app with `npm run dev`.
+4. Open the local URL shown in the terminal and create an account.
 
-## Environment
+---
 
-Copy `.env.example`. The important ones:
+## Roadmap
 
-| Variable | Purpose |
-| --- | --- |
-| `VITE_STELLAR_NETWORK` | `TESTNET` (recommended) |
-| `VITE_HORIZON_URL` | `https://horizon-testnet.stellar.org` |
-| `VITE_LOYALTY_CODE` / `VITE_LOYALTY_ISSUER` | Loyalty asset (defaults to ROJOS on Testnet) |
-| `SESSION_SECRET` | Session cookie signing and secret-key encryption |
-| `SEP24_HOME_DOMAIN` | SEP-24 anchor. Default `testanchor.stellar.org`. MoneyGram sandbox (`extmgxanchor.moneygram.com`) requires allowlisting |
-| `KV_REST_API_*` | Vercel only, to persist users |
-
-Do not commit `.env.local` or secret keys (`S…`).
-
-## Layout
-
-```
-src/                 UI, auth, Stellar (balances, payments, SEP-24 client), event bar, cards
-server/              Auth, custodial payments, events, SINPE, card issuing sandbox, SEP-10/24, places, KV
-api/                 Vercel entry files that call server/vercelHandler.ts
-docs/flujos          Feature flowcharts (Mermaid + PNG + Word)
-data/users.json      Local users (not for production)
-data/cards.json      Local cards + settlement history (not for production)
-```
-
-HTTP routing lives in `server/dispatchApi.ts`. Locally it is mounted by `server/authPlugin.ts`. On Vercel, each file under `api/` re-exports the same handler.
-
-## Event bar
-
-Customers pick a venue, order from the catalog, pay in the app (ROJOS / Testnet), and show a pickup QR.
-
-Merchants maintain products, mark orders ready, and can open `/event/display/:merchantId` on a TV.
-
-API prefix: `/api/events/*` (`api/events/[action].ts` on Vercel).
-
-## Deploy (Vercel)
-
-- The framework is **Vite**, not Next.js.
-- **Production** usually tracks `main`; `dev` gets Preview deployments.
-- Create a **KV Store** and set `KV_REST_API_URL` and `KV_REST_API_TOKEN`.
-- Accounts in your local `users.json` **do not exist** in KV — register again on the deployed URL.
-- Session cookies are `Secure` when `VERCEL=1`.
-- Hobby allows **12 serverless functions**. Keep that count: `api/places/[action].ts` covers search/reverse so `api/events/[action].ts` can exist.
-
-## SINPE recargas
-
-Customers send a SINPE Móvil transfer; staff match SMS / unassigned deposits and credit ROJOS on Testnet. Keep staff passwords out of git; set `CASHIER_*` and `SINPE_OPS_*` on Vercel.
-
-## SEP-24 (USDC deposit)
-
-The **Add** button runs SEP-10 (server-side signing) and SEP-24 interactive deposit. In local and Vercel **dev**, keep `SEP24_HOME_DOMAIN=testanchor.stellar.org`: that SDF Testnet anchor simulates cash (MoneyGram-style) and card rails (limits are typically 1–10 USDC). MoneyGram Access (`extmgxanchor.moneygram.com`) needs public-key / domain allowlisting and will fail without it.
-
-## Later phases (in the repo, off the MVP nav)
-
-### Virtual Visa (sandbox)
-
-`/card` issues a virtual Visa tied to the signed-in user's custodial public key. The HTTP API is a local BaaS stand-in (Rain Cards–shaped) so production can swap the provider without changing the UI:
-
-- `POST /api/cards/issue`
-- `GET /api/cards/[id]` (also `GET /api/cards/me`)
-- `POST /api/cards/simulate-transaction`
-
-`simulate-transaction` checks USDC (or XLM in the sandbox datáfono), then debits the user's Testnet wallet to the platform treasury with `@stellar/stellar-sdk`. PAN / CVV stay encrypted on the server.
-
-Optional env: `CARD_TREASURY_SECRET_KEY`, `CARD_DAILY_LIMIT_USD`. Leave `CARD_PROVIDER` unset (sandbox).
-
-### Map
-
-Merchants can save a venue pin; customers can browse `/map`. Geocoding uses Nominatim (OpenStreetMap). Tiles: Carto dark.
-
-### RWA
-
-`/rwa` covers education, tokenization, marketplace, and dividends. Customer and merchant accounts do not see it in this MVP.
-
-## Scripts
-
-```bash
-npm run dev      # Vite + local API
-npm run build    # tsc + vite build
-npm run preview  # serve the production build locally
-npm run lint     # oxlint
-```
+1. Run it on **Testnet** at the **first 2 to 4 events**.
+2. Then connect an **anchor** with **MoneyGram** and **Visa / Mastercard** so people can add money more directly.
+3. Support **sports events** (athletics, cycling, and similar) and use the app and tokens there.
+4. Grow a network of **businesses that accept this payment** and **sponsor** those races: a win-win for participants and for the venues.
