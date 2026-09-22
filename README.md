@@ -10,42 +10,43 @@ It is Web 2.5 because it feels like a normal app (sign up, email login, menu, QR
 
 At large events, bars get overcrowded: long lines, waiting, and crowding. Businesses also pay **high fees on every bank or card transaction**.
 
-## How PartyPay solves it
+---
 
-Guests can **top up before the event**, **order food and drinks on site**, and **see when the order is ready**. They get **discounts for using the app**. Sellers **skip the percentage commission** that card and bank rails take on each sale.
+## How it solves it
+
+The guest can **top up before the event**, **order food and drinks on site**, and **see when the order is ready**. They also get **discounts for using the app**. Sellers **save the commission percentage** that bank and card payments take on each sale.
 
 ---
 
-## What you can do
+## Step by step for users
 
 Create a **customer** or **business** account, then log in with **email**.
 
 ### Customer
 
-- Top up the account with **SINPE** (Costa Rica mobile bank transfer), or on the day of the event
-  - by **SINPE**
-  - by **cash**
-- See **events and bars**
-- **Order products and pay**
-- **Pay with a QR code**
-- **Send** utility tokens to other accounts
-- **Receive** tokens from other accounts
+1. Top up the account before the event with **SINPE** (Costa Rica mobile bank transfer), or on the day of the event.
+2. On the day of the event, top up by **SINPE** or by **cash**.
+3. See **events and bars**.
+4. **Order products and pay**.
+5. **Pay with a QR code**.
+6. **Send** utility tokens to other accounts.
+7. **Receive** tokens from other accounts.
 
-### Business (bar / venue)
+### Business
 
-- Receive tokens from other accounts
-- Top up with **SINPE** or **cash** on the day of the event
-- **Create QR charges** and optionally **gift tokens**
-- **Create an event / bar**
-- **Create products**
-- See orders and mark them **ready**
-- Mark the order **delivered** with a **QR code**
+1. **Receive** tokens from other accounts.
+2. Top up with **SINPE** or **cash** on the day of the event.
+3. **Create charges with a QR code**, and optionally **gift tokens**.
+4. **Create an event / bar**.
+5. **Create products**.
+6. See orders and mark them **ready**.
+7. Mark the order **delivered** with a **QR code**.
 
-### Event operations
+### Event operations accounts
 
-- **Super admin** account
-- **SINPE** account
-- **Claims** account
+- Super admin
+- SINPE
+- Claims
 
 ---
 
