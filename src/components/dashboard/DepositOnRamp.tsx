@@ -1,8 +1,10 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { ErrorModal } from '@/components/feedback/ErrorModal'
-import { ArrowLeft, Banknote, Check, Copy, CreditCard, QrCode, Smartphone } from 'lucide-react'
+import { ArrowLeft, Banknote, Check, Copy, QrCode, Smartphone } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
-import { Sep24DepositPanel } from '@/components/sep24/Sep24DepositPanel'
+// MoneyGram (cash) y tarjeta quedan fuera de la vista cliente.
+// import { CreditCard } from 'lucide-react'
+// import { Sep24DepositPanel } from '@/components/sep24/Sep24DepositPanel'
 import { claimSinpe, fetchSinpeIntent } from '@/lib/sinpe/api'
 import { readableError } from '@/lib/auth/readableError'
 import { stellarConfig } from '@/lib/stellar/config'
@@ -18,30 +20,26 @@ type AddFundsSheetProps = {
   onRojosCredited?: () => void
 }
 
-type FundsView = 'pick' | 'cash' | 'card' | 'receive' | 'sinpe'
+type FundsView = 'pick' | 'cash' | 'card' | 'efectivo' | 'receive' | 'sinpe'
 
 export function AddFundsSheet({
   publicKey,
   copied,
-  hasUsdcTrustline,
   onCopy,
   onClose,
-  onDepositCompleted,
   onRojosCredited,
 }: AddFundsSheetProps) {
   const [view, setView] = useState<FundsView>('pick')
   const [claimOpen, setClaimOpen] = useState(false)
 
   const title =
-    view === 'cash'
-      ? 'MoneyGram'
-      : view === 'card'
-        ? 'Tarjeta'
-        : view === 'receive'
-          ? 'Recibir on-chain'
-          : view === 'sinpe'
-            ? 'SINPE Móvil'
-            : 'Agregar'
+    view === 'efectivo'
+      ? 'Efectivo'
+      : view === 'receive'
+        ? 'Recibir on-chain'
+        : view === 'sinpe'
+          ? 'SINPE Móvil'
+          : 'Agregar'
 
   return (
     <div
@@ -75,6 +73,25 @@ export function AddFundsSheet({
         {view === 'pick' ? (
           <div className="grid gap-2">
             <MethodCard
+              icon={<Smartphone className="h-5 w-5" />}
+              title="SINPE Móvil"
+              subtitle="Envía al número y pega el código"
+              onClick={() => setView('sinpe')}
+            />
+            <MethodCard
+              icon={<Banknote className="h-5 w-5" />}
+              title="Efectivo"
+              subtitle="Depósito en los stands de Stellar"
+              onClick={() => setView('efectivo')}
+            />
+            <MethodCard
+              icon={<QrCode className="h-5 w-5" />}
+              title="Recibir on-chain"
+              subtitle="Public key Stellar"
+              onClick={() => setView('receive')}
+            />
+            {/*
+            <MethodCard
               icon={<Banknote className="h-5 w-5" />}
               title="MoneyGram"
               subtitle="Efectivo en agente · SEP-24"
@@ -86,21 +103,11 @@ export function AddFundsSheet({
               subtitle="Visa / Mastercard · SEP-24"
               onClick={() => setView('card')}
             />
-            <MethodCard
-              icon={<Smartphone className="h-5 w-5" />}
-              title="SINPE Móvil"
-              subtitle="Nota sc…ts · copiá el número y el código"
-              onClick={() => setView('sinpe')}
-            />
-            <MethodCard
-              icon={<QrCode className="h-5 w-5" />}
-              title="Recibir on-chain"
-              subtitle="Public key Stellar"
-              onClick={() => setView('receive')}
-            />
+            */}
           </div>
         ) : null}
 
+        {/*
         {view === 'cash' ? (
           <Sep24DepositPanel
             rail="cash"
@@ -116,6 +123,9 @@ export function AddFundsSheet({
             onCompleted={onDepositCompleted}
           />
         ) : null}
+        */}
+
+        {view === 'efectivo' ? <CashAtStand publicKey={publicKey} /> : null}
 
         {view === 'sinpe' ? (
           <SinpeRecarga onClaim={() => setClaimOpen(true)} />
@@ -199,46 +209,40 @@ function SinpeRecarga({
   return (
     <div className="space-y-4">
       <p className="text-sm text-app-muted">
-        En SINPE Móvil enviá a nuestro número y en el comentario pegá solo este
-        código (empieza con sc y termina en ts). El SMS del banco llega completo;
-        si el código coincide con tu cuenta, se acreditan ROJOS:{' '}
-        <span className="text-white">₡1,000 = 1 ROJO</span>. Promo ₡9,000 → 10 ROJOS.
+        Envía el SINPE Móvil a nuestro número de teléfono y pega este código en el
+        comentario de la transacción.
       </p>
       {loading ? <p className="text-sm text-app-muted">Creando código…</p> : null}
       {error ? <ErrorModal message={error} onClose={() => setError(null)} /> : null}
-      <div className="rounded-2xl bg-app-chip px-3 py-4 text-center">
-        <p className="text-[11px] uppercase tracking-wide text-app-muted">Número SINPE</p>
-        <p className="mt-1 font-mono text-2xl font-semibold tracking-wide text-white">
-          {phoneDisplay ?? '……'}
-        </p>
-      </div>
-      <button
-        type="button"
-        onClick={() => void copyPhone()}
+      <CopyRow
+        label="Número SINPE"
+        value={phoneDisplay ?? '……'}
+        copied={copiedPhone}
         disabled={!phone}
-        className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-app-chip py-3 text-sm font-medium disabled:opacity-40"
-      >
-        {copiedPhone ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-        {copiedPhone ? 'Número copiado' : 'Copiar número'}
-      </button>
-      <p className="rounded-2xl bg-app-chip px-3 py-4 text-center font-mono text-2xl font-semibold tracking-[0.12em] text-white">
-        {code ?? 'sc••••ts'}
-      </p>
-      <button
-        type="button"
-        onClick={() => void copyCode()}
+        onCopy={() => void copyPhone()}
+        copyLabel="Copiar número"
+        copiedLabel="Número copiado"
+      />
+      <CopyRow
+        label="Código"
+        value={code ?? 'sc••••ts'}
+        copied={copiedCode}
         disabled={!code}
-        className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-app-chip py-3 text-sm font-medium disabled:opacity-40"
-      >
-        {copiedCode ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-        {copiedCode ? 'Código copiado' : 'Copiar código para la nota'}
-      </button>
+        onCopy={() => void copyCode()}
+        copyLabel="Copiar código"
+        copiedLabel="Código copiado"
+        mono
+      />
+      <p className="text-sm text-app-muted">
+        En caso de error o no pegar el código deberás enviarnos el número de
+        comprobante del SINPE Móvil.
+      </p>
       <button
         type="button"
         onClick={onClaim}
         className="w-full rounded-2xl bg-app-accent py-3 text-sm font-medium text-white"
       >
-        ¿No se acreditó tu recarga? Reclamar con comprobante
+        Ayuda
       </button>
     </div>
   )
@@ -299,6 +303,79 @@ function ClaimSinpeModal({
   )
 }
 
+function CashAtStand({ publicKey }: { publicKey: string }) {
+  const steps = [
+    'Dirígete a los stands de Stellar en el evento.',
+    'Deposita tu dinero.',
+    'Confirma el public key al que quieres recargar.',
+    'Listo, disfruta de tu fiesta.',
+  ]
+
+  return (
+    <ol className="space-y-3">
+      {steps.map((step, index) => (
+        <li key={step} className="flex gap-3 text-sm text-app-muted">
+          <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-app-chip text-xs font-semibold text-white">
+            {index + 1}
+          </span>
+          <span className="pt-0.5">{step}</span>
+        </li>
+      ))}
+      <li className="rounded-2xl bg-app-chip px-3 py-3">
+        <p className="text-[11px] uppercase tracking-wide text-app-muted">Tu public key</p>
+        <p className="mt-1 break-all font-mono text-xs text-white/80">{publicKey}</p>
+      </li>
+    </ol>
+  )
+}
+
+function CopyRow({
+  label,
+  value,
+  copied,
+  disabled,
+  onCopy,
+  copyLabel,
+  copiedLabel,
+  mono = false,
+}: {
+  label: string
+  value: string
+  copied: boolean
+  disabled?: boolean
+  onCopy: () => void
+  copyLabel: string
+  copiedLabel: string
+  mono?: boolean
+}) {
+  return (
+    <div className="flex items-center gap-2 rounded-2xl bg-app-chip px-3 py-3">
+      <div className="min-w-0 flex-1 text-left">
+        <p className="text-[11px] uppercase tracking-wide text-app-muted">{label}</p>
+        <p
+          className={`mt-0.5 truncate text-white ${mono ? 'font-mono text-base font-semibold tracking-[0.08em]' : 'font-mono text-lg font-semibold tracking-wide'}`}
+        >
+          {value}
+        </p>
+      </div>
+      <button
+        type="button"
+        onClick={onCopy}
+        disabled={disabled}
+        aria-label={copied ? copiedLabel : copyLabel}
+        title={copied ? copiedLabel : copyLabel}
+        className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-white/70 hover:bg-white/10 disabled:opacity-40"
+      >
+        {copied ? (
+          <Check className="h-3.5 w-3.5 text-green-400" />
+        ) : (
+          <Copy className="h-3.5 w-3.5" />
+        )}
+      </button>
+    </div>
+  )
+}
+
 function MethodCard({
   icon,
   title,
@@ -353,7 +430,7 @@ function ReceiveOnchain({
         onClick={onCopy}
         className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-app-accent py-3 text-sm font-medium text-white"
       >
-        {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+        {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
         {copied ? 'Public key copiada' : 'Copiar public key'}
       </button>
     </>
