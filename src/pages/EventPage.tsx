@@ -118,7 +118,11 @@ export default function EventPage() {
         </p>
       </div>
       {venues.map((venue) => {
-        const mine = orders.filter((order) => order.merchantId === venue.merchantId)
+        const mine = orders.filter(
+          (order) =>
+            order.merchantId === venue.merchantId &&
+            (order.status === 'preparing' || order.status === 'ready'),
+        )
         return (
           <article key={venue.merchantId} className="overflow-hidden rounded-[24px] bg-app-card">
             <button
