@@ -1,11 +1,12 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { ErrorModal } from '@/components/feedback/ErrorModal'
-import { ArrowLeft, Banknote, Check, Copy, QrCode, Smartphone } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, Banknote, Check, Copy, QrCode, Smartphone } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
 // MoneyGram (cash) y tarjeta quedan fuera de la vista cliente.
 // import { CreditCard } from 'lucide-react'
 // import { Sep24DepositPanel } from '@/components/sep24/Sep24DepositPanel'
 import { claimSinpe, fetchSinpeIntent } from '@/lib/sinpe/api'
+import { AuthApiError } from '@/lib/auth/api'
 import { readableError } from '@/lib/auth/readableError'
 import { stellarConfig } from '@/lib/stellar/config'
 import type { Sep24Transaction } from '@/lib/sep24/types'
@@ -248,6 +249,13 @@ function SinpeRecarga({
   )
 }
 
+type ClaimNotice = {
+  tone: 'success' | 'warning' | 'error'
+  title: string
+  message: string
+  credited: boolean
+}
+
 function ClaimSinpeModal({
   onClose,
   onSuccess,
@@ -256,9 +264,16 @@ function ClaimSinpeModal({
   onSuccess: () => void
 }) {
   const [referenceId, setReferenceId] = useState('')
-  const [error, setError] = useState<string | null>(null)
-  const [message, setMessage] = useState<string | null>(null)
+  const [notice, setNotice] = useState<ClaimNotice | null>(null)
   const [busy, setBusy] = useState(false)
+
+  function dismissNotice() {
+    const credited = notice?.credited
+    setNotice(null)
+    if (credited) {
+      onSuccess()
+    }
+  }
 
   return (
     <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/70 p-4 sm:items-center">
@@ -278,25 +293,130 @@ function ClaimSinpeModal({
           placeholder="12345678"
           className="w-full rounded-2xl bg-app-chip px-3 py-3 text-sm outline-none"
         />
-        {error ? <ErrorModal message={error} onClose={() => setError(null)} /> : null}
-        {message ? <p className="mt-2 text-sm text-green-400">{message}</p> : null}
         <button
           type="button"
           disabled={busy}
           className="mt-4 w-full rounded-2xl bg-app-accent py-3 text-sm font-medium disabled:opacity-40"
           onClick={() => {
-            setBusy(true)
-            setError(null)
-            void claimSinpe(referenceId)
-              .then((result) => {
-                setMessage(result.message)
-                onSuccess()
+            const reference = referenceId.trim()
+            if (!reference) {
+              setNotice({
+                tone: 'error',
+                title: 'Falta el número',
+                message: 'Ingresa el número de transacción del SINPE.',
+                credited: false,
               })
-              .catch((err) => setError(readableError(err)))
+              return
+            }
+            setBusy(true)
+            setNotice(null)
+            void claimSinpe(reference)
+              .then((result) => {
+                setNotice({
+                  tone: 'success',
+                  title: 'Acreditado a tu cuenta',
+                  message: result.message,
+                  credited: true,
+                })
+              })
+              .catch((err) => setNotice(claimNoticeFromError(err)))
               .finally(() => setBusy(false))
           }}
         >
           {busy ? 'Verificando…' : 'Reclamar'}
+        </button>
+      </div>
+      {notice ? <ClaimNoticeModal notice={notice} onClose={dismissNotice} /> : null}
+    </div>
+  )
+}
+
+function claimNoticeFromError(err: unknown): ClaimNotice {
+  const code = err instanceof AuthApiError ? err.code : undefined
+  const status = err instanceof AuthApiError ? err.status : 0
+  const message = readableError(err)
+  if (code === 'already_credited') {
+    return { tone: 'warning', title: 'Ya está en tu cuenta', message, credited: false }
+  }
+  if (code === 'already_used' || status === 409) {
+    return { tone: 'warning', title: 'Código ya usado', message, credited: false }
+  }
+  if (code === 'code_mismatch') {
+    return { tone: 'error', title: 'No coincide con tu cuenta', message, credited: false }
+  }
+  if (code === 'not_found' || status === 404) {
+    return { tone: 'error', title: 'No coincide', message, credited: false }
+  }
+  if (code === 'amount_unknown') {
+    return { tone: 'error', title: 'Monto no reconocido', message, credited: false }
+  }
+  if (code === 'missing_reference' || status === 400) {
+    return { tone: 'error', title: 'Número inválido', message, credited: false }
+  }
+  return { tone: 'error', title: 'No se pudo acreditar', message, credited: false }
+}
+
+function ClaimNoticeModal({
+  notice,
+  onClose,
+}: {
+  notice: ClaimNotice
+  onClose: () => void
+}) {
+  const tone =
+    notice.tone === 'success'
+      ? {
+          panel: 'border-green-500/40 bg-[#102016] shadow-[0_0_40px_rgba(34,197,94,0.28)]',
+          badge: 'bg-green-500/15 ring-green-500/50',
+          icon: 'text-green-400',
+          button: 'bg-green-500',
+        }
+      : notice.tone === 'warning'
+        ? {
+            panel: 'border-amber-500/40 bg-[#1c160e] shadow-[0_0_40px_rgba(245,158,11,0.28)]',
+            badge: 'bg-amber-500/15 ring-amber-500/50',
+            icon: 'text-amber-400',
+            button: 'bg-amber-500',
+          }
+        : {
+            panel: 'border-red-500/40 bg-[#1a1010] shadow-[0_0_40px_rgba(239,68,68,0.35)]',
+            badge: 'bg-red-500/15 ring-red-500/50',
+            icon: 'text-red-400',
+            button: 'bg-red-500',
+          }
+
+  return (
+    <div
+      className="fixed inset-0 z-[80] flex items-center justify-center bg-black/80 p-5 backdrop-blur-sm"
+      role="alertdialog"
+      aria-modal="true"
+      aria-labelledby="sinpe-claim-title"
+      aria-describedby="sinpe-claim-message"
+      onClick={onClose}
+    >
+      <div
+        className={`w-full max-w-sm rounded-[28px] border p-6 ${tone.panel}`}
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className={`mx-auto grid h-16 w-16 place-items-center rounded-full ring-2 ${tone.badge}`}>
+          {notice.tone === 'success' ? (
+            <Check className={`h-8 w-8 ${tone.icon}`} strokeWidth={2.2} />
+          ) : (
+            <AlertTriangle className={`h-8 w-8 ${tone.icon}`} strokeWidth={2.2} />
+          )}
+        </div>
+        <h2 id="sinpe-claim-title" className="mt-4 text-center text-xl font-semibold tracking-tight">
+          {notice.title}
+        </h2>
+        <p id="sinpe-claim-message" className="mt-3 text-center text-[15px] leading-relaxed text-white/85">
+          {notice.message}
+        </p>
+        <button
+          type="button"
+          className={`mt-6 w-full rounded-2xl py-3 text-sm font-semibold text-white ${tone.button}`}
+          onClick={onClose}
+        >
+          Entendido
         </button>
       </div>
     </div>

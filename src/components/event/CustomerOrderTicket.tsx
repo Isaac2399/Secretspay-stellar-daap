@@ -9,7 +9,33 @@ const STATUS_LABEL: Record<EventOrder['status'], string> = {
   cancelled: 'Cancelado',
 }
 
-export function CustomerOrderTicket({ order }: { order: EventOrder }) {
+export function CustomerOrderTicket({
+  order,
+  compact = false,
+}: {
+  order: EventOrder
+  compact?: boolean
+}) {
+  if (compact) {
+    return (
+      <article className="rounded-2xl bg-app-card px-4 py-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-sm font-medium">
+              #{order.orderNumber} · {STATUS_LABEL[order.status]}
+            </p>
+            <p className="mt-0.5 truncate text-xs text-app-muted">
+              {order.items.map((item) => `${item.qty}× ${item.name}`).join(', ')}
+            </p>
+          </div>
+          <p className="shrink-0 text-sm tabular-nums">
+            {formatAmount(order.total)} {order.asset}
+          </p>
+        </div>
+      </article>
+    )
+  }
+
   return (
     <article className="space-y-4 rounded-[24px] bg-app-card p-5">
       <div>

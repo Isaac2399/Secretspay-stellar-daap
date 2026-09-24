@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ErrorModal } from '@/components/feedback/ErrorModal'
-import { ArrowDownLeft, ArrowUpRight, Inbox } from 'lucide-react'
+import { ArrowDownLeft, ArrowUpRight, Inbox, Receipt } from 'lucide-react'
 import { readableError } from '@/lib/auth/readableError'
+import { fetchMyEventOrders } from '@/lib/events/api'
 import { fetchMySinpe, retryMySinpe, type UnassignedDeposit } from '@/lib/sinpe/api'
 import { formatAmount } from '@/lib/stellar/useAccountBalances'
 import type { AccountActivity } from '@/lib/stellar/getPayments'
+import type { EventOrder } from '@/types/event'
 import { shortenPublicKey } from '@/lib/userDisplay'
 
 const INITIAL_VISIBLE = 3
@@ -38,6 +40,7 @@ type ActivityListProps = {
   loading: boolean
   error: string | null
   includeSinpe?: boolean
+  includeOrders?: boolean
 }
 
 export function ActivityList({
@@ -46,11 +49,13 @@ export function ActivityList({
   loading,
   error,
   includeSinpe = false,
+  includeOrders = false,
 }: ActivityListProps) {
   const [visible, setVisible] = useState(INITIAL_VISIBLE)
   const [filter, setFilter] = useState<ActivityFilter>('all')
   const [sinpeCredits, setSinpeCredits] = useState<SinpeCredit[]>([])
   const [sinpeDeposits, setSinpeDeposits] = useState<UnassignedDeposit[]>([])
+  const [barOrders, setBarOrders] = useState<EventOrder[]>([])
   const [retrying, setRetrying] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
 
@@ -83,13 +88,33 @@ export function ActivityList({
     }
   }, [includeSinpe, items])
 
-  const merged = useMemo(
-    () =>
-      includeSinpe
-        ? mergeSinpeActivity(items, sinpeCredits, sinpeDeposits)
-        : items,
-    [includeSinpe, items, sinpeCredits, sinpeDeposits],
-  )
+  useEffect(() => {
+    if (!includeOrders) {
+      return
+    }
+    let cancelled = false
+    void fetchMyEventOrders()
+      .then((result) => {
+        if (!cancelled) {
+          setBarOrders(result.orders)
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setBarOrders([])
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [includeOrders, items])
+
+  const merged = useMemo(() => {
+    const withSinpe = includeSinpe
+      ? mergeSinpeActivity(items, sinpeCredits, sinpeDeposits)
+      : items
+    return includeOrders ? mergeBarOrders(withSinpe, barOrders) : withSinpe
+  }, [includeSinpe, includeOrders, items, sinpeCredits, sinpeDeposits, barOrders])
 
   const filtered = useMemo(
     () => merged.filter((item) => matchesFilter(item, filter)),
@@ -312,6 +337,69 @@ function isoFromTimestamp(timestamp: number | undefined): string {
   return new Date(ms).toISOString()
 }
 
+const ORDER_STATUS: Record<EventOrder['status'], string> = {
+  preparing: 'En preparación',
+  ready: 'Listo para retirar',
+  completed: 'Entregado',
+  cancelled: 'Cancelado',
+}
+
+function mergeBarOrders(horizon: AccountActivity[], orders: EventOrder[]): AccountActivity[] {
+  const bar = orders.map(orderToActivity)
+  const used = new Set<string>()
+  const rest = horizon.filter((item) => {
+    const match = bar.find((row) => !used.has(row.id) && sameBarPayment(item, row))
+    if (!match) {
+      return true
+    }
+    used.add(match.id)
+    return false
+  })
+  return [...bar, ...rest].sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+  )
+}
+
+function orderToActivity(order: EventOrder): AccountActivity {
+  const items = order.items.map((item) => `${item.qty}× ${item.name}`).join(', ')
+  return {
+    id: `bar:${order.id}`,
+    hash: order.stellarHash ?? '',
+    kind: 'sent',
+    amount: order.total,
+    asset: order.asset,
+    counterparty: '',
+    memo: [`#${order.orderNumber}`, order.merchantName, items].filter(Boolean).join(' · '),
+    createdAt: order.createdAt,
+    status: order.status === 'cancelled' ? 'failed' : order.status === 'completed' ? 'success' : 'pending',
+    channel: 'bar',
+    statusNote: ORDER_STATUS[order.status],
+  }
+}
+
+function sameBarPayment(horizon: AccountActivity, order: AccountActivity): boolean {
+  if (order.hash && horizon.hash === order.hash) {
+    return true
+  }
+  if (horizon.kind !== 'sent' || horizon.asset !== order.asset) {
+    return false
+  }
+  const memo = horizon.memo.trim()
+  const orderNumber = memo.startsWith('BAR ') ? memo.slice(4).trim() : ''
+  if (orderNumber && order.memo.startsWith(`#${orderNumber} ·`)) {
+    return true
+  }
+  const sameAmount =
+    Number(horizon.amount) === Number(order.amount) && Number(horizon.amount) > 0
+  const horizonTime = new Date(horizon.createdAt).getTime()
+  const orderTime = new Date(order.createdAt).getTime()
+  const closeInTime =
+    Number.isFinite(horizonTime) &&
+    Number.isFinite(orderTime) &&
+    Math.abs(horizonTime - orderTime) < 30 * 60_000
+  return sameAmount && closeInTime
+}
+
 function sameSinpeCredit(horizon: AccountActivity, sinpe: AccountActivity): boolean {
   if (sinpe.hash && horizon.hash === sinpe.hash) {
     return true
@@ -333,7 +421,9 @@ function sameSinpeCredit(horizon: AccountActivity, sinpe: AccountActivity): bool
 function ActivityRow({ item }: { item: AccountActivity }) {
   const outgoing = item.kind === 'sent'
   const title =
-    item.channel === 'sinpe'
+    item.channel === 'bar'
+      ? 'Pedido en barra'
+      : item.channel === 'sinpe'
       ? 'Recarga SINPE'
       : item.kind === 'funded'
         ? 'Cuenta activada'
@@ -350,7 +440,8 @@ function ActivityRow({ item }: { item: AccountActivity }) {
         ? 'Ancla SEP-24'
         : 'Horizon'
   const statusLabel =
-    item.status === 'failed' ? 'Fallido' : item.status === 'pending' ? 'Pendiente' : 'Confirmado'
+    item.statusNote ??
+    (item.status === 'failed' ? 'Fallido' : item.status === 'pending' ? 'Pendiente' : 'Confirmado')
 
   return (
     <li className="flex items-center gap-3 px-4 py-3.5">
@@ -359,7 +450,9 @@ function ActivityRow({ item }: { item: AccountActivity }) {
           outgoing ? 'bg-white/10 text-white/80' : 'bg-app-accent/15 text-app-accent'
         }`}
       >
-        {outgoing ? (
+        {item.channel === 'bar' ? (
+          <Receipt className="h-4 w-4" />
+        ) : outgoing ? (
           <ArrowUpRight className="h-4 w-4" />
         ) : (
           <ArrowDownLeft className="h-4 w-4" />

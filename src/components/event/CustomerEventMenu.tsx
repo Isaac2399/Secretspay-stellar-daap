@@ -47,12 +47,16 @@ export function CustomerEventMenu({
           await reload()
           return
         }
-        const catalog = await fetchEventCatalog(merchantId)
+        const [catalog, mine] = await Promise.all([
+          fetchEventCatalog(merchantId),
+          fetchMyEventOrders(),
+        ])
         if (cancelled) {
           return
         }
         setVenue(catalog.venue)
         setProducts(catalog.products)
+        setOrders(mine.orders.filter((order) => order.merchantId === merchantId))
         setCart((prev) => {
           const next = { ...prev }
           for (const [id, qty] of Object.entries(next)) {
@@ -113,7 +117,12 @@ export function CustomerEventMenu({
     }
   }
 
-  const activeOrders = orders.filter((order) => order.status !== 'completed')
+  const activeOrders = orders.filter(
+    (order) => order.status === 'preparing' || order.status === 'ready',
+  )
+  const pastOrders = orders.filter(
+    (order) => order.status === 'completed' || order.status === 'cancelled',
+  )
 
   return (
     <div className="space-y-5">
@@ -201,15 +210,25 @@ export function CustomerEventMenu({
         </button>
       ) : null}
 
-      {placed || activeOrders.length > 0 ? (
+      {placed || orders.length > 0 ? (
         <section className="space-y-3">
           <h2 className="text-[17px] font-semibold">Tus pedidos</h2>
-          {placed ? <CustomerOrderTicket order={placed} /> : null}
+          {placed && placed.status !== 'completed' && placed.status !== 'cancelled' ? (
+            <CustomerOrderTicket order={placed} />
+          ) : null}
           {activeOrders
             .filter((order) => order.id !== placed?.id)
             .map((order) => (
               <CustomerOrderTicket key={order.id} order={order} />
             ))}
+          {pastOrders.length > 0 ? (
+            <div className="space-y-2 pt-1">
+              <h3 className="text-sm font-medium text-app-muted">Pedidos anteriores</h3>
+              {pastOrders.map((order) => (
+                <CustomerOrderTicket key={order.id} order={order} compact />
+              ))}
+            </div>
+          ) : null}
         </section>
       ) : null}
 

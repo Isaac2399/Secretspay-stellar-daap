@@ -92,6 +92,7 @@ export default function HomePage() {
         loading={activity.loading}
         error={activity.error}
         includeSinpe
+        includeOrders={isCustomer}
       />
 
       {sendOpen ? (

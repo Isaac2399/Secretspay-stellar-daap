@@ -318,18 +318,60 @@ export async function claimSinpeDeposit(input: {
   requireReference(input.referenceId)
   const { deposit, transaction } = await findByReference(input.referenceId)
   if (transaction?.status === 'COMPLETED' || isResolved(deposit)) {
-    throw new AuthError('Este comprobante ya fue acreditado', 409)
+    const sameAccount =
+      transaction?.userId === input.user.id ||
+      deposit?.assignedUserId === input.user.id ||
+      transaction?.publicKey === input.user.publicKey ||
+      deposit?.assignedPublicKey === input.user.publicKey
+    throw new AuthError(
+      sameAccount
+        ? 'Este comprobante ya fue aceptado y los ROJOS ya están en tu cuenta.'
+        : 'Este número de transacción ya fue usado y no se puede acreditar de nuevo.',
+      409,
+      sameAccount ? 'already_credited' : 'already_used',
+    )
   }
   if (!deposit || deposit.status !== 'PENDING_MANUAL_MATCH') {
     throw new AuthError(
-      'Comprobante no encontrado. Si acabas de hacer la transferencia, espera unos minutos o contacta a soporte',
+      'Ese número no coincide con ningún comprobante que hayamos recibido. Revisa el número o espera unos minutos si acabas de transferir.',
       404,
+      'not_found',
+    )
+  }
+  if (belongsToAnotherAccount(deposit, input.user)) {
+    throw new AuthError(
+      'El código de esa transacción no coincide con tu cuenta.',
+      403,
+      'code_mismatch',
     )
   }
   const ready = withParsedAmounts(deposit)
+  if (!(ready.calculatedRojos > 0)) {
+    throw new AuthError(
+      'Recibimos ese comprobante, pero no pudimos leer el monto. Pide en la mesa SINPE que lo acrediten.',
+      422,
+      'amount_unknown',
+    )
+  }
   const user = await requireAssignableUser(input.user.id)
-  const credit = await mintRojosToUser(user, ready.calculatedRojos, ready.referenceId)
+  let credit: { hash: string }
+  try {
+    credit = await mintRojosToUser(user, ready.calculatedRojos, ready.referenceId)
+  } catch (error) {
+    const lastError = error instanceof Error ? error.message : 'No se pudo acreditar'
+    await upsertUnassignedDeposit({
+      ...ready,
+      lastError,
+      updatedAt: new Date().toISOString(),
+    })
+    throw new AuthError(
+      'No se pudo acreditar el comprobante a tu cuenta. Intenta de nuevo o avisa en la mesa SINPE.',
+      502,
+      'credit_failed',
+    )
+  }
   const now = new Date().toISOString()
+  const message = `Se aceptó el comprobante y se acreditaron ${formatRojosDisplay(ready.calculatedRojos)} ROJOS a tu cuenta.`
   const resolved = await upsertUnassignedDeposit({
     ...ready,
     status: 'RESOLVED_BY_USER_CLAIM',
@@ -354,12 +396,13 @@ export async function claimSinpeDeposit(input: {
     userId: user.id,
     publicKey: user.publicKey,
     stellarHash: credit.hash,
-    notification: successMessage(ready.calculatedRojos),
+    notification: message,
     createdAt: transaction?.createdAt ?? now,
     updatedAt: now,
   })
   return {
-    message: `¡Comprobante verificado! Se acreditaron ${formatRojosDisplay(ready.calculatedRojos)} ROJOS a tu billetera`,
+    outcome: 'credited' as const,
+    message,
     deposit: resolved,
     rojos: ready.calculatedRojos,
     stellarHash: credit.hash,
@@ -514,8 +557,20 @@ function resolveSender(sender: string, message: string): string {
 
 function requireReference(referenceId: string) {
   if (!referenceId.trim()) {
-    throw new AuthError('Indica el número de comprobante', 400)
+    throw new AuthError('Indica el número de comprobante', 400, 'missing_reference')
   }
+}
+
+function belongsToAnotherAccount(
+  deposit: UnassignedDeposit,
+  user: PublicUser,
+): boolean {
+  if (deposit.assignedUserId && deposit.assignedUserId !== user.id) {
+    return true
+  }
+  return Boolean(
+    deposit.assignedPublicKey && deposit.assignedPublicKey !== user.publicKey,
+  )
 }
 
 function isResolved(deposit?: UnassignedDeposit) {
