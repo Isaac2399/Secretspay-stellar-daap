@@ -4,7 +4,6 @@ import { AdminDashboard } from '@/components/admin/AdminDashboard'
 import { SinpeOpsDashboard } from '@/components/admin/SinpeOpsDashboard'
 import { CashierDashboard } from '@/components/cashier/CashierDashboard'
 import { AccountStrip } from '@/components/dashboard/AccountStrip'
-import { MySinpeCredits } from '@/components/dashboard/MySinpeCredits'
 import { ActivityList } from '@/components/dashboard/ActivityList'
 import { DashboardHero } from '@/components/dashboard/DashboardHero'
 import { CreateInvoiceQR } from '@/components/merchant/CreateInvoiceQR'
@@ -68,7 +67,7 @@ export default function HomePage() {
         }}
       />
 
-      <AccountStrip balances={balances} />
+      {isCustomer ? null : <AccountStrip balances={balances} />}
 
       <Link
         to="/event"
@@ -87,13 +86,12 @@ export default function HomePage() {
         </p>
       </Link>
 
-      <MySinpeCredits />
-
       <ActivityList
         publicKey={user.publicKey}
         items={activity.items}
         loading={activity.loading}
         error={activity.error}
+        includeSinpe
       />
 
       {sendOpen ? (

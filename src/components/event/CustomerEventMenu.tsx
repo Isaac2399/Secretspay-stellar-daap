@@ -26,6 +26,7 @@ export function CustomerEventMenu({
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [placed, setPlaced] = useState<EventOrder | null>(null)
+  const [confirmed, setConfirmed] = useState(false)
 
   async function reload() {
     const [catalog, mine] = await Promise.all([
@@ -102,6 +103,7 @@ export function CustomerEventMenu({
         })),
       })
       setPlaced(result.order)
+      setConfirmed(true)
       setCart({})
       await reload()
     } catch (err) {
@@ -212,6 +214,41 @@ export function CustomerEventMenu({
       ) : null}
 
       <ErrorModal message={error} onClose={() => setError(null)} />
+      {confirmed ? (
+        <OrderConfirmedNotice onClose={() => setConfirmed(false)} />
+      ) : null}
+    </div>
+  )
+}
+
+function OrderConfirmedNotice({ onClose }: { onClose: () => void }) {
+  return (
+    <div
+      className="fixed inset-0 z-[80] flex items-center justify-center bg-black/80 p-5 backdrop-blur-sm"
+      role="alertdialog"
+      aria-modal="true"
+      aria-labelledby="order-confirmed-title"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-sm rounded-[28px] border border-app-accent/40 bg-app-card p-6 shadow-[0_0_40px_rgba(255,255,255,0.08)]"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <h2
+          id="order-confirmed-title"
+          className="text-center text-[15px] font-medium leading-relaxed"
+        >
+          Pedido confirmado, ve a la barra y muestra el código QR para retirar el
+          producto
+        </h2>
+        <button
+          type="button"
+          className="mt-6 w-full rounded-2xl bg-app-accent py-3 text-sm font-semibold text-white"
+          onClick={onClose}
+        >
+          Entendido
+        </button>
+      </div>
     </div>
   )
 }

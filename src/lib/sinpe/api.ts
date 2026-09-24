@@ -131,11 +131,16 @@ export async function fetchMySinpe() {
   return request<{
     deposits: UnassignedDeposit[]
     transactions: Array<{
+      id?: string
       referenceId: string
       status: string
       calculatedRojos: number
       crcAmount: number
       stellarHash?: string
+      createdAt?: string
+      timestamp?: number
+      error?: string
+      comment?: string
     }>
   }>('/api/payments/sinpe-mine')
 }

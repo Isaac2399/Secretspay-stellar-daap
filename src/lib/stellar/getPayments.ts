@@ -11,7 +11,10 @@ export type AccountActivity = {
   counterparty: string
   memo: string
   createdAt: string
-  status: 'success' | 'failed'
+  status: 'success' | 'failed' | 'pending'
+  channel?: 'sinpe'
+  crcAmount?: string
+  detailError?: string
 }
 
 type HorizonEffectRecord = {

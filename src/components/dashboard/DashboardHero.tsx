@@ -4,7 +4,6 @@ import {
   ArrowDownLeft,
   ArrowUpRight,
   Check,
-  ChevronDown,
   Copy,
   ScanLine,
 } from 'lucide-react'
@@ -76,12 +75,6 @@ export function DashboardHero({
     setCopied(true)
   }
 
-  function cycleAsset() {
-    const order: AssetKey[] = ['loyalty', 'xlm', 'usdc']
-    const index = order.indexOf(asset)
-    setAsset(order[(index + 1) % order.length] ?? 'loyalty')
-  }
-
   return (
     <section className="space-y-6">
       <div className="flex items-center justify-between gap-3">
@@ -109,23 +102,26 @@ export function DashboardHero({
       </div>
 
       <div>
-        <button
-          type="button"
-          onClick={cycleAsset}
-          className="flex items-baseline gap-2 text-left"
-        >
+        <p className="flex items-baseline gap-2">
           <span className="text-5xl font-semibold tracking-tight tabular-nums">
             {formatAmount(selected.value)}
           </span>
-          <span className="inline-flex items-center gap-1 text-lg font-medium text-white/55">
-            {selected.code}
-            <ChevronDown className="h-4 w-4" />
-          </span>
-        </button>
-        <p className="mt-2 text-sm text-app-muted">
-          ~ {others.map((item) => `${formatAmount(item.value)} ${item.code}`).join(' · ')}
+          <span className="text-lg font-medium text-white/55">{selected.code}</span>
         </p>
-        <p className="mt-1 text-xs text-app-muted">Testnet · no es saldo fiat</p>
+        <p className="mt-3 text-xs text-app-muted">Toca un token para verlo en grande</p>
+        <div className="mt-2 flex flex-wrap gap-2">
+          {others.map((item) => (
+            <button
+              key={item.key}
+              type="button"
+              onClick={() => setAsset(item.key)}
+              className="rounded-full bg-app-chip px-3 py-1.5 text-sm text-white/80"
+            >
+              <span className="tabular-nums">{formatAmount(item.value)}</span> {item.code}
+            </button>
+          ))}
+        </div>
+        <p className="mt-2 text-xs text-app-muted">Testnet · no es saldo fiat</p>
         {error ? <ErrorModal message={error} /> : null}
 
         <button
