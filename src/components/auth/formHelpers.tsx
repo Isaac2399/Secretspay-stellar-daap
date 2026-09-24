@@ -1,4 +1,6 @@
 import { useState, type FormEvent, type ReactNode } from 'react'
+import { Eye, EyeOff } from 'lucide-react'
+import { fieldClass } from '@/components/auth/AuthLayout'
 
 export function RoleButton({
   active,
@@ -44,6 +46,50 @@ export function AuthSubmitButton({
     >
       {submitting ? busyLabel : idleLabel}
     </button>
+  )
+}
+
+export function PasswordField({
+  label,
+  name,
+  autoComplete,
+  value,
+  onChange,
+}: {
+  label: string
+  name: string
+  autoComplete: 'new-password' | 'current-password'
+  value: string
+  onChange: (value: string) => void
+}) {
+  const [visible, setVisible] = useState(false)
+
+  return (
+    <div className="grid gap-1.5 text-sm font-medium text-white/80">
+      <label htmlFor={name}>{label}</label>
+      <div className="relative">
+        <input
+          id={name}
+          className={`${fieldClass} pr-11`}
+          type={visible ? 'text' : 'password'}
+          name={name}
+          autoComplete={autoComplete}
+          minLength={8}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          required
+        />
+        <button
+          type="button"
+          className="absolute inset-y-0 right-0 flex w-11 items-center justify-center text-white/55"
+          aria-label={visible ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+          aria-pressed={visible}
+          onClick={() => setVisible((current) => !current)}
+        >
+          {visible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+        </button>
+      </div>
+    </div>
   )
 }
 

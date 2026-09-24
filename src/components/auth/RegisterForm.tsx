@@ -6,6 +6,7 @@ import { GoogleSignInButton } from '@/components/auth/GoogleSignInButton'
 import {
   AuthDivider,
   AuthSubmitButton,
+  PasswordField,
   RoleButton,
   useAuthForm,
 } from '@/components/auth/formHelpers'
@@ -24,6 +25,7 @@ type RegisterFormProps = {
 export function RegisterForm({ onSubmit, onGoogle, formatError }: RegisterFormProps) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
   const [role, setRole] = useState<UserRole>('customer')
   const { error, submitting, runSubmit, runAction } = useAuthForm()
 
@@ -34,7 +36,12 @@ export function RegisterForm({ onSubmit, onGoogle, formatError }: RegisterFormPr
         onSubmit={(event) =>
           void runSubmit(
             event,
-            () => onSubmit({ email, password, role }),
+            async () => {
+              if (password !== confirmPassword) {
+                throw new Error('Las contraseñas no coinciden')
+              }
+              await onSubmit({ email, password, role })
+            },
             formatError,
           )
         }
@@ -51,18 +58,21 @@ export function RegisterForm({ onSubmit, onGoogle, formatError }: RegisterFormPr
           />
         </AuthField>
 
-        <AuthField label="Contraseña">
-          <input
-            className={fieldClass}
-            type="password"
-            name="password"
-            autoComplete="new-password"
-            minLength={8}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-          />
-        </AuthField>
+        <PasswordField
+          label="Contraseña"
+          name="password"
+          autoComplete="new-password"
+          value={password}
+          onChange={setPassword}
+        />
+
+        <PasswordField
+          label="Confirmar contraseña"
+          name="confirmPassword"
+          autoComplete="new-password"
+          value={confirmPassword}
+          onChange={setConfirmPassword}
+        />
 
         <fieldset className="space-y-2">
           <legend className="text-sm font-medium text-white/80">Rol</legend>
