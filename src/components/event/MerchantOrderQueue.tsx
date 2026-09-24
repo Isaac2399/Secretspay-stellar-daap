@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { ErrorModal } from '@/components/feedback/ErrorModal'
 import { readableError } from '@/lib/auth/readableError'
 import {
   completeEventOrderByQr,
@@ -126,7 +127,7 @@ export function MerchantOrderQueue() {
       ) : null}
 
       {message ? <p className="text-sm text-app-accent">{message}</p> : null}
-      {error ? <p className="text-sm text-red-400">{error}</p> : null}
+      {error ? <ErrorModal message={error} onClose={() => setError(null)} /> : null}
     </div>
   )
 }

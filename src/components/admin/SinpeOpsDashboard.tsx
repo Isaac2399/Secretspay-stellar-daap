@@ -1,5 +1,6 @@
 import { Smartphone } from 'lucide-react'
 import { ClaimLookupPanel } from '@/components/admin/ClaimLookupPanel'
+import { StaffSendPanel } from '@/components/admin/StaffSendPanel'
 import { UnassignedDepositsPanel } from '@/components/admin/UnassignedDepositsPanel'
 
 export function SinpeOpsDashboard() {
@@ -19,6 +20,7 @@ export function SinpeOpsDashboard() {
         <Smartphone className="h-4 w-4 text-app-accent" />
         Misma herramienta de asignación que usa super admin, sin el resto del panel.
       </p>
+      <StaffSendPanel />
       <UnassignedDepositsPanel />
       <ClaimLookupPanel />
     </div>

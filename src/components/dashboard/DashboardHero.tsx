@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { ErrorModal } from '@/components/feedback/ErrorModal'
 import {
   ArrowDownLeft,
   ArrowUpRight,
@@ -125,7 +126,7 @@ export function DashboardHero({
           ~ {others.map((item) => `${formatAmount(item.value)} ${item.code}`).join(' · ')}
         </p>
         <p className="mt-1 text-xs text-app-muted">Testnet · no es saldo fiat</p>
-        {error ? <p className="mt-2 text-sm text-red-400">{error}</p> : null}
+        {error ? <ErrorModal message={error} /> : null}
 
         <button
           type="button"

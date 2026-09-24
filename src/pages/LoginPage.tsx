@@ -5,14 +5,18 @@ import { useAuth } from '@/lib/auth/AuthContext'
 import { readableError } from '@/lib/auth/readableError'
 
 export default function LoginPage() {
-  const { login } = useAuth()
+  const { login, loginWithGoogle } = useAuth()
 
   return (
     <AuthLayout
       title="Iniciar sesión"
-      description="Entra con el email y la contraseña de tu cuenta."
+      description="Entra con email y contraseña, o con Google si ya tienes cuenta."
     >
-      <LoginForm onSubmit={login} formatError={readableError} />
+      <LoginForm
+        onSubmit={login}
+        onGoogle={loginWithGoogle}
+        formatError={readableError}
+      />
       <p className="mt-6 text-center text-sm text-app-muted">
         ¿No tienes cuenta?{' '}
         <Link to="/register" className="font-medium text-app-accent">

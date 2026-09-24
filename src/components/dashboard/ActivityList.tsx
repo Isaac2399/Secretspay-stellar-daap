@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { ErrorModal } from '@/components/feedback/ErrorModal'
 import { ArrowDownLeft, ArrowUpRight, Inbox } from 'lucide-react'
 import { formatAmount } from '@/lib/stellar/useAccountBalances'
 import type { AccountActivity } from '@/lib/stellar/getPayments'
@@ -40,8 +41,11 @@ export function ActivityList({
         ) : null}
 
         {error && items.length === 0 ? (
-          <p className="px-4 py-8 text-center text-sm text-red-400">{error}</p>
+          <p className="px-4 py-8 text-center text-sm text-app-muted">
+            No se pudo cargar la actividad.
+          </p>
         ) : null}
+        {error ? <ErrorModal message={error} /> : null}
 
         {!loading && !error && items.length === 0 ? (
           <div className="grid place-items-center gap-2 px-4 py-10 text-center">

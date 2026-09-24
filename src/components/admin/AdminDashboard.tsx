@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
+import { ErrorModal } from '@/components/feedback/ErrorModal'
 import { Link } from 'react-router-dom'
 import { Building2, Landmark, Shield, Smartphone, Users } from 'lucide-react'
 import { ActivityList } from '@/components/dashboard/ActivityList'
 import { AdminFinancePanel } from '@/components/admin/AdminFinancePanel'
 import { ClaimLookupPanel } from '@/components/admin/ClaimLookupPanel'
+import { StaffSendPanel } from '@/components/admin/StaffSendPanel'
 import { UnassignedDepositsPanel } from '@/components/admin/UnassignedDepositsPanel'
 import { StructuringDashboard } from '@/components/rwa/StructuringDashboard'
 import { fetchAdminOverview } from '@/lib/admin/api'
@@ -16,8 +18,8 @@ import type { AdminMerchantRow, TokenTotals } from '@/types/admin'
 
 export function AdminDashboard() {
   const [tab, setTab] = useState<
-    'finance' | 'merchants' | 'customers' | 'rwa' | 'sinpe'
-  >('finance')
+    'send' | 'finance' | 'merchants' | 'customers' | 'rwa' | 'sinpe'
+  >('send')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -101,6 +103,14 @@ export function AdminDashboard() {
 
       <div className="flex gap-2 overflow-x-auto pb-1">
         <TabButton
+          active={tab === 'send'}
+          label="Enviar"
+          onClick={() => {
+            setTab('send')
+            setSelectedId(null)
+          }}
+        />
+        <TabButton
           active={tab === 'finance'}
           label="Finanzas"
           onClick={() => {
@@ -145,7 +155,9 @@ export function AdminDashboard() {
       {loading ? (
         <p className="text-sm text-app-muted">Cargando panel…</p>
       ) : null}
-      {error ? <p className="text-sm text-red-400">{error}</p> : null}
+      {error ? <ErrorModal message={error} onClose={() => setError(null)} /> : null}
+
+      {tab === 'send' ? <StaffSendPanel /> : null}
 
       {tab === 'finance' && overview ? (
         <AdminFinancePanel finance={overview.finance} />

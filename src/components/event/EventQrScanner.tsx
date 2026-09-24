@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react'
+import { ErrorModal } from '@/components/feedback/ErrorModal'
 import { Camera, CameraOff } from 'lucide-react'
 import { Html5Qrcode } from 'html5-qrcode'
 import { fieldClass } from '@/components/auth/AuthLayout'
@@ -148,7 +149,7 @@ export function EventQrScanner({
       >
         Usar código
       </button>
-      {scanError ? <p className="text-sm text-red-400">{scanError}</p> : null}
+      {scanError ? <ErrorModal message={scanError} /> : null}
     </div>
   )
 }

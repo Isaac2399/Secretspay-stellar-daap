@@ -7,12 +7,19 @@ import {
   StrKey,
   TransactionBuilder,
 } from '@stellar/stellar-sdk'
-import { secretKeyForUser, findUserByPublicKey, findUserById, isSuperAdminRecord } from './auth.js'
+import {
+  secretKeyForUser,
+  findUserByPublicKey,
+  findUserById,
+  isSuperAdminRecord,
+  superAdminPublicKey,
+} from './auth.js'
 import { AuthError } from './errors.js'
 import {
   horizonUrl,
   loyaltyAssetFromEnv,
   networkPassphrase,
+  usdcAssetFromEnv,
 } from './provisionAccount.js'
 
 export async function creditLoyaltyFromTreasury(input: {
@@ -46,6 +53,99 @@ export async function creditLoyaltyFromTreasury(input: {
     amount: input.amount,
     memo: input.memo ?? 'SINPE',
   })
+}
+
+export type StaffSendRole = 'admin' | 'sinpe_ops'
+
+export function staffSendSource(role: StaffSendRole): {
+  publicKey: string
+  label: string
+} {
+  if (role === 'sinpe_ops') {
+    const secret = treasurySecret()
+    return {
+      publicKey: Keypair.fromSecret(secret).publicKey(),
+      label: 'Mesa SINPE',
+    }
+  }
+  const secret = superAdminSigningSecret()
+  return {
+    publicKey: Keypair.fromSecret(secret).publicKey(),
+    label: 'Super admin',
+  }
+}
+
+export async function submitStaffTransfer(input: {
+  role: StaffSendRole
+  destination: string
+  amount: string
+  asset: string
+  memo?: string
+}): Promise<{ hash: string; status: string; asset: string; source: string }> {
+  if (!StrKey.isValidEd25519PublicKey(input.destination)) {
+    throw new AuthError('La cuenta destino no es válida', 400)
+  }
+  if (!/^\d+(\.\d{1,7})?$/.test(input.amount) || Number(input.amount) <= 0) {
+    throw new AuthError('El monto no es válido', 400)
+  }
+  const asset = resolveAsset(input.asset)
+  const sourceSecret =
+    input.role === 'sinpe_ops' ? treasurySecret() : superAdminSigningSecret()
+  const source = Keypair.fromSecret(sourceSecret)
+  if (source.publicKey() === input.destination) {
+    throw new AuthError('No puedes enviarte a la misma cuenta', 400)
+  }
+
+  const server = new Horizon.Server(horizonUrl())
+  const payment = await submitHorizonPayment({
+    server,
+    passphrase: networkPassphrase(),
+    sponsor: sponsorKeypair(),
+    baseFee: String(await server.fetchBaseFee()),
+    sourceSecret,
+    destination: input.destination,
+    asset,
+    amount: input.amount,
+    memo: input.memo,
+  })
+  return {
+    ...payment,
+    asset: asset.isNative() ? 'XLM' : asset.getCode(),
+    source: source.publicKey(),
+  }
+}
+
+function superAdminSigningSecret(): string {
+  const expected = superAdminPublicKey()
+  const names = [
+    'SUPER_ADMIN_SECRET_KEY',
+    'ROJOS_DISTRIBUTOR_SECRET_KEY',
+    'SINPE_TREASURY_SECRET_KEY',
+    'SPONSOR_SECRET_KEY',
+  ]
+  for (const name of names) {
+    const secret = readSecret(name)
+    if (secret && Keypair.fromSecret(secret).publicKey() === expected) {
+      return secret
+    }
+  }
+  throw new AuthError(
+    'La cuenta super admin no tiene secret key. Configura SUPER_ADMIN_SECRET_KEY con la misma public key del distribuidor.',
+    503,
+  )
+}
+
+function readSecret(name: string): string | null {
+  const secret = (process.env[name] ?? '')
+    .trim()
+    .replace(/^['"]+|['"]+$/g, '')
+  if (!secret || /ENTER_YOUR_/i.test(secret)) {
+    return null
+  }
+  if (!StrKey.isValidEd25519SecretSeed(secret)) {
+    return null
+  }
+  return secret
 }
 
 function treasurySecret(): string {
@@ -244,11 +344,8 @@ function resolveAsset(code: string): Asset {
   if (normalized === 'XLM' || normalized === 'NATIVE') {
     return Asset.native()
   }
-  if (normalized === 'USDC') {
-    const issuer =
-      process.env.VITE_USDC_ISSUER ??
-      'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5'
-    return new Asset('USDC', issuer)
+  if (normalized === 'USDC' || normalized === 'USD') {
+    return usdcAssetFromEnv()
   }
 
   const loyalty = loyaltyAssetFromEnv()

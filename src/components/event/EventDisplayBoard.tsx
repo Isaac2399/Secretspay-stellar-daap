@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { ErrorModal } from '@/components/feedback/ErrorModal'
 import { fetchEventBoard } from '@/lib/events/api'
 import type { EventBoardOrder, EventVenue } from '@/types/event'
 
@@ -46,7 +47,7 @@ export function EventDisplayBoard({ merchantId }: { merchantId: string }) {
         <p className="text-lg text-app-muted">{venue?.pickupLabel ?? 'Barra'}</p>
       </header>
 
-      {error ? <p className="text-red-400">{error}</p> : null}
+      {error ? <ErrorModal message={error} onClose={() => setError(null)} /> : null}
 
       <div className="grid gap-8 lg:grid-cols-2">
         <BoardColumn title="Preparando" orders={preparing} tone="muted" />

@@ -213,8 +213,9 @@ const COOKIE_NAME = 'stellar_session'
 export type StoredUser = {
   id: string
   email: string
-  passwordHash: string
-  salt: string
+  passwordHash?: string
+  salt?: string
+  googleId?: string
   role: UserRole
   publicKey: string
   secretKeyEnc?: string
@@ -355,15 +356,93 @@ export async function createUser(input: {
   }
 
   const salt = randomBytes(16).toString('hex')
-  const adminSignup = Boolean(superAdminEmail() && email === superAdminEmail())
+  return persistNewUser({
+    email,
+    role: input.role,
+    salt,
+    passwordHash: hashPassword(input.password, salt),
+  })
+}
+
+export async function authenticateWithGoogle(input: {
+  googleId: string
+  email: string
+  mode: 'login' | 'register'
+  role?: UserRole
+}): Promise<PublicUser> {
+  const googleId = input.googleId.trim()
+  const email = normalizeEmail(input.email)
+  if (!googleId) {
+    throw new AuthError('La cuenta de Google no es válida', 401)
+  }
+  if (!isEmail(email)) {
+    throw new AuthError('El email de Google no es válido', 400)
+  }
+
+  const store = await loadStore()
+  const existing =
+    store.users.find((user) => user.googleId === googleId) ??
+    store.users.find((user) => user.email === email)
+
+  if (existing) {
+    if (isEventStaffRole(existing.role) || isSuperAdminRecord(existing)) {
+      throw new AuthError('Esta cuenta no puede entrar con Google', 403)
+    }
+    if (existing.googleId && existing.googleId !== googleId) {
+      throw new AuthError('Ya existe una cuenta con ese email', 409)
+    }
+    existing.googleId = googleId
+    if (existing.email !== email) {
+      existing.email = email
+    }
+    await saveStore(store)
+    if (!isSuperAdminRecord(existing)) {
+      await ensureUserLoyaltyTrustline(existing.id)
+    }
+    const withCode = (await ensureUserSinpeCode(existing.id)) ?? existing
+    return toPublicUser(withCode)
+  }
+
+  if (input.mode === 'login') {
+    throw new AuthError(
+      'No hay una cuenta con ese Google. Regístrate y elige Cliente o Empresa.',
+      401,
+    )
+  }
+
+  const role = input.role
+  if (role !== 'customer' && role !== 'merchant') {
+    throw new AuthError('Elige si eres cliente o empresa antes de continuar con Google', 400)
+  }
+
+  return persistNewUser({
+    email,
+    role,
+    googleId,
+  })
+}
+
+async function persistNewUser(input: {
+  email: string
+  role: UserRole
+  salt?: string
+  passwordHash?: string
+  googleId?: string
+}): Promise<PublicUser> {
+  const adminSignup = Boolean(
+    superAdminEmail() &&
+      input.email === superAdminEmail() &&
+      input.passwordHash,
+  )
 
   let user: StoredUser
   if (adminSignup) {
     user = {
       id: randomBytes(12).toString('hex'),
-      email,
-      salt,
-      passwordHash: hashPassword(input.password, salt),
+      email: input.email,
+      salt: input.salt,
+      passwordHash: input.passwordHash,
+      googleId: input.googleId,
       role: 'admin',
       publicKey: superAdminPublicKey(),
       createdAt: new Date().toISOString(),
@@ -379,9 +458,10 @@ export async function createUser(input: {
     }
     user = {
       id: randomBytes(12).toString('hex'),
-      email,
-      salt,
-      passwordHash: hashPassword(input.password, salt),
+      email: input.email,
+      salt: input.salt,
+      passwordHash: input.passwordHash,
+      googleId: input.googleId,
       role: input.role,
       publicKey: keys.publicKey,
       secretKeyEnc: encryptSecret(keys.secretKey),
@@ -390,6 +470,9 @@ export async function createUser(input: {
   }
 
   const store = await loadStore()
+  if (store.users.some((entry) => entry.email === user.email)) {
+    throw new AuthError('Ya existe una cuenta con ese email', 409)
+  }
   if (!adminSignup) {
     user.sinpeCode = generateSinpeCode(user.publicKey)
   }
@@ -403,7 +486,16 @@ export async function authenticate(
   password: string,
 ): Promise<PublicUser> {
   const user = await findUserByEmail(email)
-  if (!user || !verifyPassword(password, user.salt, user.passwordHash)) {
+  if (!user) {
+    throw new AuthError(
+      'Email o contraseña incorrectos. Las cuentas de tu PC no están en Vercel: usa Registro en este mismo enlace.',
+      401,
+    )
+  }
+  if (!user.passwordHash || !user.salt) {
+    throw new AuthError('Esta cuenta entra con Google. Usa el botón de Google.', 401)
+  }
+  if (!verifyPassword(password, user.salt, user.passwordHash)) {
     throw new AuthError(
       'Email o contraseña incorrectos. Las cuentas de tu PC no están en Vercel: usa Registro en este mismo enlace.',
       401,
@@ -599,7 +691,14 @@ function hashPassword(password: string, salt: string): string {
   return scryptSync(password, salt, 64).toString('hex')
 }
 
-function verifyPassword(password: string, salt: string, hash: string): boolean {
+function verifyPassword(
+  password: string,
+  salt: string | undefined,
+  hash: string | undefined,
+): boolean {
+  if (!salt || !hash) {
+    return false
+  }
   const next = hashPassword(password, salt)
   return safeEqual(next, hash)
 }

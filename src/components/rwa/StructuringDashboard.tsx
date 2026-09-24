@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { ErrorModal } from '@/components/feedback/ErrorModal'
 import { fieldClass } from '@/components/auth/AuthLayout'
 import { useRwa } from '@/lib/rwa/RwaContext'
 import { readableError } from '@/lib/auth/readableError'
@@ -85,7 +86,7 @@ export function StructuringDashboard() {
       </div>
 
       {loading ? <p className="text-sm text-app-muted">Cargando expedientes…</p> : null}
-      {error ? <p className="text-sm text-red-400">{error}</p> : null}
+      {error ? <ErrorModal message={error} /> : null}
 
       <ul className="space-y-2">
         {filtered.length === 0 ? (
@@ -230,7 +231,7 @@ export function StructuringDashboard() {
           >
             Rechazar
           </button>
-          {actionError ? <p className="text-sm text-red-400">{actionError}</p> : null}
+          {actionError ? <ErrorModal message={actionError} onClose={() => setActionError(null)} /> : null}
         </div>
       ) : null}
     </section>

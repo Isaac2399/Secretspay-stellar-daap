@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { ErrorModal } from '@/components/feedback/ErrorModal'
 import { MapPin, Navigation, Search, SlidersHorizontal } from 'lucide-react'
 import { DarkLeafletMap } from '@/components/map/DarkLeafletMap'
 import { fetchPublicPlaces } from '@/lib/places/api'
@@ -238,7 +239,7 @@ export function CustomerPlacesMap() {
         </p>
       ) : null}
 
-      {error ? <p className="text-sm text-red-400">{error}</p> : null}
+      {error ? <ErrorModal message={error} onClose={() => setError(null)} /> : null}
 
       {hasAnyPlaces && filtered.length === 0 ? (
         <p className="rounded-[24px] bg-app-card px-4 py-5 text-center text-sm text-app-muted">

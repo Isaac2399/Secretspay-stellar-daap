@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { ErrorModal } from '@/components/feedback/ErrorModal'
 import { useSearchParams } from 'react-router-dom'
 import { CustomerEventMenu } from '@/components/event/CustomerEventMenu'
 import { MerchantEventCatalog } from '@/components/event/MerchantEventCatalog'
@@ -120,7 +121,7 @@ export default function EventPage() {
       {venues.length === 0 ? (
         <p className="text-sm text-app-muted">Todavía no hay cartas publicadas.</p>
       ) : null}
-      {error ? <p className="text-sm text-red-400">{error}</p> : null}
+      {error ? <ErrorModal message={error} onClose={() => setError(null)} /> : null}
     </div>
   )
 }

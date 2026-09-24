@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import { ErrorModal } from '@/components/feedback/ErrorModal'
 import { QRCodeSVG } from 'qrcode.react'
 import {
   paymentAssetOptions,
@@ -127,7 +128,7 @@ export function CreateInvoiceQR({
         </button>
       </form>
 
-      {error ? <p className="text-sm text-red-400">{error}</p> : null}
+      {error ? <ErrorModal message={error} onClose={() => setError(null)} /> : null}
 
       {payloadText ? (
         <div className="grid justify-items-center gap-3">

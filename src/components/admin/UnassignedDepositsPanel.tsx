@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { ErrorModal } from '@/components/feedback/ErrorModal'
 import {
   assignDeposit,
   fetchUnassignedDeposits,
@@ -85,7 +86,7 @@ export function UnassignedDepositsPanel() {
         </button>
       </form>
       {loading ? <p className="text-sm text-app-muted">Cargando…</p> : null}
-      {error ? <p className="text-sm text-red-400">{error}</p> : null}
+      {error ? <ErrorModal message={error} onClose={() => setError(null)} /> : null}
       {deposits.length === 0 && !loading ? (
         <p className="rounded-[24px] bg-app-card px-4 py-6 text-center text-sm text-app-muted">
           No hay depósitos pendientes.
@@ -242,7 +243,7 @@ function AssignModal({
             </li>
           ))}
         </ul>
-        {error ? <p className="mt-2 text-sm text-red-400">{error}</p> : null}
+        {error ? <ErrorModal message={error} onClose={() => setError(null)} /> : null}
         <button
           type="button"
           disabled={!selected || busy || !(Number(crc.replace(/,/g, '.')) > 0)}

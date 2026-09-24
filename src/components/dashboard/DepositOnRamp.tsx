@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
+import { ErrorModal } from '@/components/feedback/ErrorModal'
 import { ArrowLeft, Banknote, Check, Copy, CreditCard, QrCode, Smartphone } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
 import { Sep24DepositPanel } from '@/components/sep24/Sep24DepositPanel'
@@ -204,7 +205,7 @@ function SinpeRecarga({
         <span className="text-white">₡1,000 = 1 ROJO</span>. Promo ₡9,000 → 10 ROJOS.
       </p>
       {loading ? <p className="text-sm text-app-muted">Creando código…</p> : null}
-      {error ? <p className="text-sm text-red-400">{error}</p> : null}
+      {error ? <ErrorModal message={error} onClose={() => setError(null)} /> : null}
       <div className="rounded-2xl bg-app-chip px-3 py-4 text-center">
         <p className="text-[11px] uppercase tracking-wide text-app-muted">Número SINPE</p>
         <p className="mt-1 font-mono text-2xl font-semibold tracking-wide text-white">
@@ -273,7 +274,7 @@ function ClaimSinpeModal({
           placeholder="12345678"
           className="w-full rounded-2xl bg-app-chip px-3 py-3 text-sm outline-none"
         />
-        {error ? <p className="mt-2 text-sm text-red-400">{error}</p> : null}
+        {error ? <ErrorModal message={error} onClose={() => setError(null)} /> : null}
         {message ? <p className="mt-2 text-sm text-green-400">{message}</p> : null}
         <button
           type="button"

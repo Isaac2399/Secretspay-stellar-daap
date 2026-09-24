@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { ErrorModal } from '@/components/feedback/ErrorModal'
 import { CreditCard, LoaderCircle } from 'lucide-react'
 import { CardControls } from '@/components/card/CardControls'
 import { CardDepositModal } from '@/components/card/CardDepositModal'
@@ -162,7 +163,7 @@ export default function CardPage() {
         </p>
       </div>
 
-      {error ? <p className="text-sm text-red-400">{error}</p> : null}
+      {error ? <ErrorModal message={error} onClose={() => setError(null)} /> : null}
 
       {loading ? (
         <p className="flex items-center gap-2 text-sm text-app-muted">

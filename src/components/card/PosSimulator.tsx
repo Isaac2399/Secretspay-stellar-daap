@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import { ErrorModal } from '@/components/feedback/ErrorModal'
 import { SmartphoneNfc } from 'lucide-react'
 import { fieldClass } from '@/components/auth/AuthLayout'
 import { AuthSubmitButton } from '@/components/auth/formHelpers'
@@ -97,7 +98,7 @@ export function PosSimulator({ cardId, onSettled }: PosSimulatorProps) {
               </select>
             </label>
           </div>
-          {error ? <p className="text-sm text-red-400">{error}</p> : null}
+          {error ? <ErrorModal message={error} onClose={() => setError(null)} /> : null}
           {last ? <AuthorizationResult authorization={last} /> : null}
           <AuthSubmitButton
             submitting={submitting}

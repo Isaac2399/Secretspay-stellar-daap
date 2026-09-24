@@ -1,4 +1,5 @@
 import { fieldClass } from '@/components/auth/AuthLayout'
+import { ErrorModal } from '@/components/feedback/ErrorModal'
 
 export type CardCheckoutValues = {
   pan: string
@@ -82,7 +83,7 @@ export function CardCheckoutFields({
       <p className="text-xs text-white/50">
         En Testnet usa {formatPan(TEST_PAN)}. El PAN no se envía al servidor.
       </p>
-      {error ? <p className="text-sm text-red-400">{error}</p> : null}
+      {error ? <ErrorModal message={error} /> : null}
     </div>
   )
 }

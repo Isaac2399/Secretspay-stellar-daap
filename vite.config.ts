@@ -28,6 +28,7 @@ export default defineConfig(({ mode }) => {
     'SEP24_CLIENT_SIGNING_SECRET',
     'SUPER_ADMIN_EMAIL',
     'SUPER_ADMIN_PUBLIC_KEY',
+    'SUPER_ADMIN_SECRET_KEY',
     'SUPER_ADMIN_SEED',
     'CASHIER_EMAIL',
     'CASHIER_PASSWORD',

@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import { ErrorModal } from '@/components/feedback/ErrorModal'
 import { X } from 'lucide-react'
 import { InvestmentInsights } from '@/components/rwa/InvestmentInsights'
 import { useRwa } from '@/lib/rwa/RwaContext'
@@ -99,7 +100,7 @@ export function AssetDetailModal({
 
         <form className="mt-5 space-y-3" onSubmit={(event) => void onInvest(event)}>
           <h3 className="text-sm font-semibold">Confirmar compra con USDC</h3>
-          {error ? <p className="text-sm text-red-400">{error}</p> : null}
+          {error ? <ErrorModal message={error} onClose={() => setError(null)} /> : null}
           {hash ? (
             <p className="break-all text-xs text-app-accent">
               Inversión enviada · {hash}

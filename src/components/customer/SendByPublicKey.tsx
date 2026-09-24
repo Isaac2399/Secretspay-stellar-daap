@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import { ErrorModal } from '@/components/feedback/ErrorModal'
 import { StrKey } from '@stellar/stellar-sdk'
 import { Send } from 'lucide-react'
 import { fieldClass } from '@/components/auth/AuthLayout'
@@ -120,7 +121,7 @@ export function SendByPublicKey({
         {submitting ? 'Enviando…' : 'Enviar'}
       </button>
 
-      {error ? <p className="text-sm text-red-400">{error}</p> : null}
+      {error ? <ErrorModal message={error} onClose={() => setError(null)} /> : null}
       {hash ? (
         <p className="text-sm text-green-400 break-all">
           Enviado. Hash: {hash}

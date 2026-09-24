@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import { ErrorModal } from '@/components/feedback/ErrorModal'
 import { useNavigate } from 'react-router-dom'
 import { fieldClass } from '@/components/auth/AuthLayout'
 import { AuthSubmitButton } from '@/components/auth/formHelpers'
@@ -422,7 +423,7 @@ export function TokenizationWizard() {
         </div>
       ) : null}
 
-      {error ? <p className="text-sm text-red-400">{error}</p> : null}
+      {error ? <ErrorModal message={error} onClose={() => setError(null)} /> : null}
 
       <div className="flex gap-2">
         {step > 0 ? (

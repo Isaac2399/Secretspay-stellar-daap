@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
+import { ErrorModal } from '@/components/feedback/ErrorModal'
 import { Banknote, CheckCircle2, CreditCard, ExternalLink, LoaderCircle } from 'lucide-react'
 import {
   CardCheckoutFields,
@@ -216,7 +217,7 @@ export function Sep24DepositPanel({
         </div>
       ) : null}
 
-      {deposit.error ? <p className="text-sm text-red-400">{deposit.error}</p> : null}
+      {deposit.error ? <ErrorModal message={deposit.error} /> : null}
 
       {deposit.phase === 'error' && deposit.errorCode === 'expired_session' ? (
         <button

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { ErrorModal } from '@/components/feedback/ErrorModal'
 import { lookupSinpeClaim, type SinpeLookup } from '@/lib/sinpe/api'
 import { readableError } from '@/lib/auth/readableError'
 
@@ -45,7 +46,7 @@ export function ClaimLookupPanel() {
         </button>
       </form>
       {loading ? <p className="text-sm text-app-muted">Buscando…</p> : null}
-      {error ? <p className="text-sm text-red-400">{error}</p> : null}
+      {error ? <ErrorModal message={error} onClose={() => setError(null)} /> : null}
       {result?.transaction ? (
         <div className="rounded-[24px] bg-app-card p-4 text-sm">
           <p className="font-semibold">Transacción {result.transaction.status}</p>

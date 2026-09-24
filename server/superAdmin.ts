@@ -114,6 +114,18 @@ export async function requireSuperAdmin(session: PublicUser | null): Promise<Pub
   return session
 }
 
+export async function requireStaffTransfer(
+  session: PublicUser | null,
+): Promise<PublicUser> {
+  if (!session) {
+    throw new AuthError('No hay sesión', 401)
+  }
+  if (session.role !== 'admin' && session.role !== 'sinpe_ops') {
+    throw new AuthError('Solo super admin o mesa SINPE puede enviar estos activos', 403)
+  }
+  return session
+}
+
 export async function requireSinpeOps(session: PublicUser | null): Promise<PublicUser> {
   if (!session) {
     throw new AuthError('No hay sesión', 401)

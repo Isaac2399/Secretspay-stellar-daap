@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { ErrorModal } from '@/components/feedback/ErrorModal'
 import { MapPin, Search } from 'lucide-react'
 import { fieldClass } from '@/components/auth/AuthLayout'
 import {
@@ -323,7 +324,7 @@ export function MerchantPlaceEditor({
           </div>
         </div>
 
-        {error ? <p className="text-sm text-red-400">{error}</p> : null}
+        {error ? <ErrorModal message={error} onClose={() => setError(null)} /> : null}
         {status ? <p className="text-sm text-green-400">{status}</p> : null}
 
         <button

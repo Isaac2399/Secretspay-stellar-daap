@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react'
+import { ErrorModal } from '@/components/feedback/ErrorModal'
 import { Camera, CameraOff } from 'lucide-react'
 import { Html5Qrcode } from 'html5-qrcode'
 import {
@@ -283,9 +284,7 @@ export function ScanAndPay() {
         </div>
       ) : null}
 
-      {!payload && scanError ? (
-        <p className="text-sm text-red-400">{scanError}</p>
-      ) : null}
+      {!payload && scanError ? <ErrorModal message={scanError} /> : null}
 
       {status ? (
         <p className="break-all text-sm text-white/70">{status}</p>

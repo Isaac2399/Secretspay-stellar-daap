@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { ErrorModal } from '@/components/feedback/ErrorModal'
 import { Banknote } from 'lucide-react'
 import { UnassignedDepositsPanel } from '@/components/admin/UnassignedDepositsPanel'
 import {
@@ -149,7 +150,7 @@ export function CashierDashboard() {
             ) : null}
           </p>
         ) : null}
-        {error ? <p className="text-sm text-red-400">{error}</p> : null}
+        {error ? <ErrorModal message={error} onClose={() => setError(null)} /> : null}
         {message ? <p className="text-sm text-green-400">{message}</p> : null}
         <button
           type="button"

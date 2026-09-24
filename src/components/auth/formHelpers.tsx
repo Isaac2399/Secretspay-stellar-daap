@@ -47,16 +47,24 @@ export function AuthSubmitButton({
   )
 }
 
+export function AuthDivider({ label }: { label: string }) {
+  return (
+    <div className="flex items-center gap-3 py-1">
+      <span className="h-px flex-1 bg-app-line" />
+      <span className="text-xs uppercase tracking-wide text-app-muted">{label}</span>
+      <span className="h-px flex-1 bg-app-line" />
+    </div>
+  )
+}
+
 export function useAuthForm() {
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
-  async function runSubmit(
-    event: FormEvent<HTMLFormElement>,
+  async function runAction(
     action: () => Promise<void>,
     onError: (err: unknown) => string,
   ) {
-    event.preventDefault()
     setSubmitting(true)
     setError(null)
     try {
@@ -68,5 +76,14 @@ export function useAuthForm() {
     }
   }
 
-  return { error, submitting, runSubmit }
+  async function runSubmit(
+    event: FormEvent<HTMLFormElement>,
+    action: () => Promise<void>,
+    onError: (err: unknown) => string,
+  ) {
+    event.preventDefault()
+    await runAction(action, onError)
+  }
+
+  return { error, submitting, runSubmit, runAction }
 }

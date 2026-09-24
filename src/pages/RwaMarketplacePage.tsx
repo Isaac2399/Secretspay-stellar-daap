@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { ErrorModal } from '@/components/feedback/ErrorModal'
 import { AssetCard } from '@/components/rwa/AssetCard'
 import { AssetDetailModal } from '@/components/rwa/AssetDetailModal'
 import { BarList } from '@/components/charts/Charts'
@@ -24,7 +25,7 @@ export default function RwaMarketplacePage() {
         </p>
       </div>
       {loading ? <p className="text-sm text-app-muted">Cargando listados…</p> : null}
-      {error ? <p className="text-sm text-red-400">{error}</p> : null}
+      {error ? <ErrorModal message={error} /> : null}
 
       {ranked.length > 0 ? (
         <div className="rounded-[24px] bg-app-card p-4">

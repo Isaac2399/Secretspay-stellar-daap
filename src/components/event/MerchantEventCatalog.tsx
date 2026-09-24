@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { ErrorModal } from '@/components/feedback/ErrorModal'
 import { fieldClass } from '@/components/auth/AuthLayout'
 import { readableError } from '@/lib/auth/readableError'
 import {
@@ -335,7 +336,7 @@ export function MerchantEventCatalog({ merchantId }: { merchantId: string }) {
       </section>
 
       {message ? <p className="text-sm text-app-accent">{message}</p> : null}
-      {error ? <p className="text-sm text-red-400">{error}</p> : null}
+      {error ? <ErrorModal message={error} onClose={() => setError(null)} /> : null}
     </div>
   )
 }

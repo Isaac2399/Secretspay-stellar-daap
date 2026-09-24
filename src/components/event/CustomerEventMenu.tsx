@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Minus, Plus } from 'lucide-react'
 import { readableError } from '@/lib/auth/readableError'
+import { ErrorModal } from '@/components/feedback/ErrorModal'
 import {
   fetchEventCatalog,
   fetchMyEventOrders,
@@ -127,14 +128,6 @@ export function CustomerEventMenu({
         </p>
       </div>
 
-      {placed ? <CustomerOrderTicket order={placed} /> : null}
-
-      {activeOrders
-        .filter((order) => order.id !== placed?.id)
-        .map((order) => (
-          <CustomerOrderTicket key={order.id} order={order} />
-        ))}
-
       <section className="space-y-3">
         <h2 className="text-[17px] font-semibold">Productos</h2>
         {products.length === 0 ? (
@@ -206,7 +199,19 @@ export function CustomerEventMenu({
         </button>
       ) : null}
 
-      {error ? <p className="text-sm text-red-400">{error}</p> : null}
+      {placed || activeOrders.length > 0 ? (
+        <section className="space-y-3">
+          <h2 className="text-[17px] font-semibold">Tus pedidos</h2>
+          {placed ? <CustomerOrderTicket order={placed} /> : null}
+          {activeOrders
+            .filter((order) => order.id !== placed?.id)
+            .map((order) => (
+              <CustomerOrderTicket key={order.id} order={order} />
+            ))}
+        </section>
+      ) : null}
+
+      <ErrorModal message={error} onClose={() => setError(null)} />
     </div>
   )
 }

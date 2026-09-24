@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { ErrorModal } from '@/components/feedback/ErrorModal'
 import { useNavigate } from 'react-router-dom'
 import { AreaChart, DonutChart } from '@/components/charts/Charts'
 import { useRwa } from '@/lib/rwa/RwaContext'
@@ -162,7 +163,7 @@ export function InvestorPortfolio({
       >
         {busy ? 'Registrando cobro…' : 'Cobrar dividendos del periodo'}
       </button>
-      {error ? <p className="text-sm text-red-400">{error}</p> : null}
+      {error ? <ErrorModal message={error} onClose={() => setError(null)} /> : null}
 
       {dividendOps.length > 0 ? (
         <div className="rounded-[20px] bg-app-card p-4">

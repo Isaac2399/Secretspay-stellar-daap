@@ -30,6 +30,28 @@ export async function loginUser(input: {
   })
 }
 
+export async function fetchGoogleAuthConfig(): Promise<{
+  enabled: boolean
+  clientId: string | null
+}> {
+  const response = await fetch('/api/auth/google-config', { credentials: 'include' })
+  if (!response.ok) {
+    return { enabled: false, clientId: null }
+  }
+  return (await response.json()) as { enabled: boolean; clientId: string | null }
+}
+
+export async function googleAuthUser(input: {
+  accessToken: string
+  mode: 'login' | 'register'
+  role?: AppUser['role']
+}): Promise<AppUser> {
+  return request('/api/auth/google', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })
+}
+
 export async function logoutUser(): Promise<void> {
   await request('/api/auth/logout', { method: 'POST' })
 }

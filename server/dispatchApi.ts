@@ -1,8 +1,14 @@
 import { loadLocalEnv } from './loadLocalEnv.js'
-import { submitCustodialPayment } from './submitPayment.js'
+import {
+  staffSendSource,
+  submitCustodialPayment,
+  submitStaffTransfer,
+  type StaffSendRole,
+} from './submitPayment.js'
 import {
   AuthError,
   authenticate,
+  authenticateWithGoogle,
   clearSessionCookie,
   createSessionCookie,
   createUser,
@@ -15,7 +21,12 @@ import {
   ensureDevSuperAdmin,
   ensureDevEventStaff,
 } from './auth.js'
-import { getAdminOverview, requireSuperAdmin } from './superAdmin.js'
+import { googleClientId, verifyGoogleAccessToken } from './googleAuth.js'
+import {
+  getAdminOverview,
+  requireStaffTransfer,
+  requireSuperAdmin,
+} from './superAdmin.js'
 import {
   handleSep24Deposit,
   handleSep24Info,
@@ -131,6 +142,26 @@ async function route(input: {
     return { status: 200, body: result }
   }
 
+  if (method === 'GET' && path === '/api/admin/send-source') {
+    const session = await userFromCookieHeader(input.cookie)
+    const staff = await requireStaffTransfer(session)
+    const source = staffSendSource(staff.role as StaffSendRole)
+    return { status: 200, body: source }
+  }
+
+  if (method === 'POST' && path === '/api/admin/send') {
+    const session = await userFromCookieHeader(input.cookie)
+    const staff = await requireStaffTransfer(session)
+    const result = await submitStaffTransfer({
+      role: staff.role as StaffSendRole,
+      destination: String(input.body.destination ?? ''),
+      amount: String(input.body.amount ?? ''),
+      asset: String(input.body.asset ?? ''),
+      memo: String(input.body.memo ?? ''),
+    })
+    return { status: 200, body: result }
+  }
+
   if (
     method === 'GET' &&
     (path === '/api/admin/overview' || path === '/api/admin')
@@ -155,6 +186,29 @@ async function route(input: {
       String(input.body.password ?? ''),
     )
     return { status: 200, body: user, setCookie: createSessionCookie(user.id) }
+  }
+
+  if (method === 'GET' && path === '/api/auth/google-config') {
+    const clientId = googleClientId()
+    return {
+      status: 200,
+      body: { enabled: Boolean(clientId), clientId: clientId || null },
+    }
+  }
+
+  if (method === 'POST' && path === '/api/auth/google') {
+    const profile = await verifyGoogleAccessToken(String(input.body.accessToken ?? ''))
+    const mode = input.body.mode === 'register' ? 'register' : 'login'
+    const user = await authenticateWithGoogle({
+      ...profile,
+      mode,
+      role: input.body.role as UserRole | undefined,
+    })
+    return {
+      status: mode === 'register' ? 201 : 200,
+      body: user,
+      setCookie: createSessionCookie(user.id),
+    }
   }
 
   if (method === 'POST' && path === '/api/auth/logout') {
