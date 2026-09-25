@@ -117,12 +117,11 @@ export function CustomerEventMenu({
     }
   }
 
-  const activeOrders = orders.filter(
+  const pendingOrders = orders.filter(
     (order) => order.status === 'preparing' || order.status === 'ready',
   )
-  const pastOrders = orders.filter(
-    (order) => order.status === 'completed' || order.status === 'cancelled',
-  )
+  const paidOrders = orders.filter((order) => order.status === 'completed')
+  const cancelledOrders = orders.filter((order) => order.status === 'cancelled')
 
   return (
     <div className="space-y-5">
@@ -210,25 +209,40 @@ export function CustomerEventMenu({
         </button>
       ) : null}
 
-      {placed || orders.length > 0 ? (
+      {pendingOrders.length > 0 || placed?.status === 'preparing' || placed?.status === 'ready' ? (
         <section className="space-y-3">
-          <h2 className="text-[17px] font-semibold">Tus pedidos</h2>
-          {placed && placed.status !== 'completed' && placed.status !== 'cancelled' ? (
+          <h2 className="text-[17px] font-semibold">Pendientes</h2>
+          {placed && (placed.status === 'preparing' || placed.status === 'ready') ? (
             <CustomerOrderTicket order={placed} />
           ) : null}
-          {activeOrders
+          {pendingOrders
             .filter((order) => order.id !== placed?.id)
             .map((order) => (
               <CustomerOrderTicket key={order.id} order={order} />
             ))}
-          {pastOrders.length > 0 ? (
-            <div className="space-y-2 pt-1">
-              <h3 className="text-sm font-medium text-app-muted">Pedidos anteriores</h3>
-              {pastOrders.map((order) => (
-                <CustomerOrderTicket key={order.id} order={order} compact />
-              ))}
-            </div>
+        </section>
+      ) : null}
+
+      {paidOrders.length > 0 || placed?.status === 'completed' ? (
+        <section className="space-y-3">
+          <h2 className="text-[17px] font-semibold">Pagados</h2>
+          {placed?.status === 'completed' ? (
+            <CustomerOrderTicket order={placed} compact />
           ) : null}
+          {paidOrders
+            .filter((order) => order.id !== placed?.id)
+            .map((order) => (
+              <CustomerOrderTicket key={order.id} order={order} compact />
+            ))}
+        </section>
+      ) : null}
+
+      {cancelledOrders.length > 0 ? (
+        <section className="space-y-3">
+          <h2 className="text-sm font-medium text-app-muted">Cancelados</h2>
+          {cancelledOrders.map((order) => (
+            <CustomerOrderTicket key={order.id} order={order} compact />
+          ))}
         </section>
       ) : null}
 
