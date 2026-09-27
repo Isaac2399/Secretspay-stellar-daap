@@ -2,9 +2,7 @@ import { useState } from 'react'
 import { ErrorModal } from '@/components/feedback/ErrorModal'
 import { Store, User } from 'lucide-react'
 import { AuthField, fieldClass } from '@/components/auth/AuthLayout'
-import { GoogleSignInButton } from '@/components/auth/GoogleSignInButton'
 import {
-  AuthDivider,
   AuthSubmitButton,
   PasswordField,
   RoleButton,
@@ -18,16 +16,15 @@ type RegisterFormProps = {
     password: string
     role: UserRole
   }) => Promise<void>
-  onGoogle: (input: { accessToken: string; role: UserRole }) => Promise<void>
   formatError: (err: unknown) => string
 }
 
-export function RegisterForm({ onSubmit, onGoogle, formatError }: RegisterFormProps) {
+export function RegisterForm({ onSubmit, formatError }: RegisterFormProps) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [role, setRole] = useState<UserRole>('customer')
-  const { error, submitting, runSubmit, runAction } = useAuthForm()
+  const { error, submitting, runSubmit } = useAuthForm()
 
   return (
     <div className="space-y-4 rounded-[28px] bg-app-card p-5">
@@ -98,20 +95,6 @@ export function RegisterForm({ onSubmit, onGoogle, formatError }: RegisterFormPr
           busyLabel="Creando cuenta en Stellar…"
         />
       </form>
-
-      <AuthDivider label="o" />
-
-      <p className="text-center text-xs text-app-muted">
-        Con Google se usa el rol seleccionado arriba (Cliente o Empresa).
-      </p>
-
-      <GoogleSignInButton
-        label="Registrarse con Google"
-        disabled={submitting}
-        onToken={(accessToken) =>
-          runAction(() => onGoogle({ accessToken, role }), formatError)
-        }
-      />
 
       {error ? <ErrorModal message={error} /> : null}
     </div>

@@ -10,7 +10,6 @@ import {
 import type { AppUser } from '@/types/user'
 import {
   fetchSession,
-  googleAuthUser,
   loginUser,
   logoutUser,
   registerUser,
@@ -24,11 +23,6 @@ type AuthContextValue = {
   register: (input: {
     email: string
     password: string
-    role: AppUser['role']
-  }) => Promise<void>
-  loginWithGoogle: (accessToken: string) => Promise<void>
-  registerWithGoogle: (input: {
-    accessToken: string
     role: AppUser['role']
   }) => Promise<void>
   logout: () => Promise<void>
@@ -64,23 +58,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [],
   )
 
-  const loginWithGoogle = useCallback(async (accessToken: string) => {
-    setUser(await googleAuthUser({ accessToken, mode: 'login' }))
-  }, [])
-
-  const registerWithGoogle = useCallback(
-    async (input: { accessToken: string; role: AppUser['role'] }) => {
-      setUser(
-        await googleAuthUser({
-          accessToken: input.accessToken,
-          mode: 'register',
-          role: input.role,
-        }),
-      )
-    },
-    [],
-  )
-
   const logout = useCallback(async () => {
     await logoutUser()
     setUser(null)
@@ -96,22 +73,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       loading,
       login,
       register,
-      loginWithGoogle,
-      registerWithGoogle,
       logout,
       syncPublicKey,
       setUser,
     }),
-    [
-      user,
-      loading,
-      login,
-      register,
-      loginWithGoogle,
-      registerWithGoogle,
-      logout,
-      syncPublicKey,
-    ],
+    [user, loading, login, register, logout, syncPublicKey],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
