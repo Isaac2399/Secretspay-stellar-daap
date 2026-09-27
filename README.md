@@ -95,10 +95,16 @@ Copy `.env.example` to `.env` if you need Stellar, Google sign-in, or SINPE sett
 
 ## Roadmap
 
-1. **Phase 1 — Pilot validation.** Deploy on the Stellar **Testnet** for the first 2 to 4 events to battle-test the system with our existing client's audience.
-2. **Phase 2 — Fiat integration.** Integrate an anchor supporting **MoneyGram** and **Visa / Mastercard** so users can move from fiat to tokens directly.
-3. **Phase 3 — Athletic expansion.** Adapt the platform for sports events (athletics, cycling, and similar), integrating tokens and the app into race-day logistics and concessions.
-4. **Phase 4 — Ecosystem growth.** Build a broader network of local businesses that accept PartyPay tokens and sponsor events, creating a circular economy for participants and venues.
+1. **Late 2026 — Halloween, then year-end.** The last months of 2026 are the first live runs with our existing client, in two steps.
+
+   - **Halloween.** A first pilot with **10 to 50 users**. They top up with **SINPE Móvil** or **cash**, order from the phone, and the venue settles on Stellar.
+   - **Year-end.** The next event grows to **50 to 100 people**. Same client, same funding (SINPE Móvil or cash), and a larger room before the year turns.
+
+2. **2027 — More events, more users.** The audience grows from that year-end group with the next dates on the calendar. Parties such as **Valentine's Day** (Día de los Enamorados) bring back people who already used PartyPay and add new attendees on every date. Each event is another wave of on-chain payments.
+
+3. **Costa Rica — legal path to international anchors.** **SINPE Móvil** is the funding rail for guests in Costa Rica. Completing the legal and regulatory work in Costa Rica lets us connect with anchors such as **Visa** and **MoneyGram**. Those anchors move fiat into tokens by card or cash pickup as well as by local phone transfer, so PartyPay can be used internationally.
+
+4. **Producers, venues, and companies.** With those rails in place, PartyPay can work with other businesses and event producers, in Costa Rica and abroad, and with companies that need instant settlement, lower fees on every transaction, and the rest of what Stellar provides.
 
 ---
 
