@@ -221,6 +221,8 @@ export type StoredUser = {
   secretKeyEnc?: string
   createdAt: string
   sinpeCode?: string
+  /** ISO time when the one-time signup gift of 3 ROJOS was credited. */
+  welcomeRegaliaAt?: string
   place?: {
     name: string
     address: string
@@ -456,6 +458,7 @@ async function persistNewUser(input: {
         error instanceof Error ? error.message : 'No se pudo crear la cuenta Stellar'
       throw new AuthError(message, 502)
     }
+    const welcomeRegaliaAt = await grantSignupRegalia(keys.publicKey)
     user = {
       id: randomBytes(12).toString('hex'),
       email: input.email,
@@ -466,6 +469,7 @@ async function persistNewUser(input: {
       publicKey: keys.publicKey,
       secretKeyEnc: encryptSecret(keys.secretKey),
       createdAt: new Date().toISOString(),
+      welcomeRegaliaAt,
     }
   }
 
@@ -479,6 +483,24 @@ async function persistNewUser(input: {
   store.users.push(user)
   await saveStore(store)
   return toPublicUser(user)
+}
+
+/** One-time 3 ROJOS gift. Existing accounts never pass through here. */
+async function grantSignupRegalia(publicKey: string): Promise<string | undefined> {
+  const { grantWelcomeRegalia } = await import('./welcomeRegalia.js')
+  try {
+    const granted = await grantWelcomeRegalia(publicKey)
+    return granted ? new Date().toISOString() : undefined
+  } catch (error) {
+    if (error instanceof AuthError) {
+      throw new AuthError(
+        `No se pudo acreditar la regalía de 3 ROJOS: ${error.message}`,
+        error.status,
+      )
+    }
+    const message = error instanceof Error ? error.message : 'error de red'
+    throw new AuthError(`No se pudo acreditar la regalía de 3 ROJOS: ${message}`, 502)
+  }
 }
 
 export async function authenticate(
