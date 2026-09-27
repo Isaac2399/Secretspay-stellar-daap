@@ -265,6 +265,9 @@ function mergeSinpeActivity(
   ]
   const used = new Set<string>()
   const tagged = horizon.map((item) => {
+    if (isRegalia(item)) {
+      return item
+    }
     const match = sinpe.find(
       (row) => !used.has(row.id) && sameSinpeCredit(item, row),
     )
@@ -420,18 +423,20 @@ function sameSinpeCredit(horizon: AccountActivity, sinpe: AccountActivity): bool
 
 function ActivityRow({ item }: { item: AccountActivity }) {
   const outgoing = item.kind === 'sent'
-  const title =
-    item.channel === 'bar'
+  const regalia = isRegalia(item)
+  const title = regalia
+    ? 'Regalía'
+    : item.channel === 'bar'
       ? 'Pedido en barra'
       : item.channel === 'sinpe'
-      ? 'Recarga SINPE'
-      : item.kind === 'funded'
-        ? 'Cuenta activada'
-        : outgoing
-          ? 'Enviado'
-          : item.asset === 'USDC'
-            ? 'Depósito USDC'
-            : 'Recibido'
+        ? 'Recarga SINPE'
+        : item.kind === 'funded'
+          ? 'Cuenta activada'
+          : outgoing
+            ? 'Enviado'
+            : item.asset === 'USDC'
+              ? 'Depósito USDC'
+              : 'Recibido'
   const detail = item.memo.trim()
     ? item.memo
     : item.counterparty
@@ -478,6 +483,10 @@ function ActivityRow({ item }: { item: AccountActivity }) {
       </p>
     </li>
   )
+}
+
+function isRegalia(item: AccountActivity): boolean {
+  return item.memo.trim().toLowerCase() === 'regalia'
 }
 
 function formatWhen(iso: string): string {

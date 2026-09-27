@@ -63,11 +63,28 @@ export async function getRecentPayments(
   publicKey: string,
   signal?: AbortSignal,
 ): Promise<AccountActivity[]> {
-  const fromEffects = await fetchEffects(publicKey, signal)
-  if (fromEffects.length > 0) {
-    return fromEffects
+  const [effectsResult, paymentsResult] = await Promise.allSettled([
+    fetchEffects(publicKey, signal),
+    fetchPayments(publicKey, signal),
+  ])
+  if (signal?.aborted) {
+    throw effectsResult.status === 'rejected' ? effectsResult.reason : new Error('aborted')
   }
-  return fetchPayments(publicKey, signal)
+  if (effectsResult.status === 'rejected') {
+    if (paymentsResult.status === 'fulfilled') {
+      return paymentsResult.value
+    }
+    throw effectsResult.reason
+  }
+  const fromEffects = effectsResult.value
+  if (fromEffects.length === 0) {
+    if (paymentsResult.status === 'rejected') {
+      throw paymentsResult.reason
+    }
+    return paymentsResult.value
+  }
+  const fromPayments = paymentsResult.status === 'fulfilled' ? paymentsResult.value : []
+  return applyOnChainMemos(fromEffects, fromPayments)
 }
 
 async function fetchEffects(
@@ -103,6 +120,7 @@ async function fetchPayments(
   )
   url.searchParams.set('order', 'desc')
   url.searchParams.set('limit', '80')
+  url.searchParams.set('join', 'transactions')
 
   const response = await fetch(url, { signal })
   if (response.status === 404) {
@@ -202,6 +220,38 @@ function paymentToActivity(
         ? 'failed'
         : 'success',
   }
+}
+
+/** Horizon effect ids are `{paddedOperationId}-{index}`; payment ids are the operation id. */
+function operationKey(id: string): string {
+  const head = id.split('-')[0] ?? id
+  return head.replace(/^0+/, '') || '0'
+}
+
+function applyOnChainMemos(
+  effects: AccountActivity[],
+  payments: AccountActivity[],
+): AccountActivity[] {
+  const memoByOp = new Map<string, string>()
+  for (const payment of payments) {
+    const memo = payment.memo.trim()
+    if (memo) {
+      memoByOp.set(operationKey(payment.id), memo)
+    }
+  }
+  if (memoByOp.size === 0) {
+    return effects
+  }
+  return effects.map((item) => {
+    if (item.kind === 'funded' || item.memo === 'Cuenta activada') {
+      return item
+    }
+    const memo = memoByOp.get(operationKey(item.id))
+    if (!memo) {
+      return item
+    }
+    return { ...item, memo }
+  })
 }
 
 function assetLabel(assetType?: string, assetCode?: string): string {
