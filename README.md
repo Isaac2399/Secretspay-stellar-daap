@@ -12,6 +12,12 @@ Users get all the benefits of decentralized finance — instant settlement and s
 
 ---
 
+## PITCH
+
+[Download the product presentation (PowerPoint)](docs/PartyPay-Product-Presentation.pptx)
+
+---
+
 ## The Origin & The Problem
 
 We identified a critical operational bottleneck firsthand while working with an **existing client who hosts bi-monthly events for 2,000 to 5,000 attendees**. We already provide this client with robust Web2 solutions for ticketing, access control, and entrance payments. However, once attendees are inside the venue, the on-site transaction experience breaks down.
