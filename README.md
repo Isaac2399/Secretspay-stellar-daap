@@ -10,6 +10,8 @@ Users get all the benefits of decentralized finance — instant settlement and s
 | **For venues** | Instant settlement on Stellar, without card fees on every sale |
 | **From day one** | A live audience of 2,000–5,000 attendees, every two months |
 
+**Production:** [https://partypay-stellar-daap.vercel.app/](https://partypay-stellar-daap.vercel.app/)
+
 ---
 
 ## PITCH
@@ -103,3 +105,16 @@ Copy `.env.example` to `.env` if you need Stellar, Google sign-in, or SINPE sett
 2. **Phase 2 — Fiat integration.** Integrate an anchor supporting **MoneyGram** and **Visa / Mastercard** so users can move from fiat to tokens directly.
 3. **Phase 3 — Athletic expansion.** Adapt the platform for sports events (athletics, cycling, and similar), integrating tokens and the app into race-day logistics and concessions.
 4. **Phase 4 — Ecosystem growth.** Build a broader network of local businesses that accept PartyPay tokens and sponsor events, creating a circular economy for participants and venues.
+
+---
+
+## On-chain evidence
+
+People outside the team have already used PartyPay on the Stellar **Testnet**. Every **ROJOS** balance is issued from this main account:
+
+[GC5IQE74UCRCKXJII3G3AYNJHB75JGVD2TQKMDNNR2QZVLKEDVU5E4NJ](https://stellar.expert/explorer/testnet/account/GC5IQE74UCRCKXJII3G3AYNJHB75JGVD2TQKMDNNR2QZVLKEDVU5E4NJ)
+
+These Stellar Expert transactions show payments from external users who already used the app:
+
+- [aa2b694a01b689f5a7843554f0c6beecbae184674edc2ca63895f77dd8d23386](https://stellar.expert/explorer/testnet/tx/aa2b694a01b689f5a7843554f0c6beecbae184674edc2ca63895f77dd8d23386)
+- [9441001deadaaa6ee7efa2787c87b7c54c6454f9005d7c3fc02c84027a604821](https://stellar.expert/explorer/testnet/tx/9441001deadaaa6ee7efa2787c87b7c54c6454f9005d7c3fc02c84027a604821)
