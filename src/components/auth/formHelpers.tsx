@@ -93,16 +93,6 @@ export function PasswordField({
   )
 }
 
-export function AuthDivider({ label }: { label: string }) {
-  return (
-    <div className="flex items-center gap-3 py-1">
-      <span className="h-px flex-1 bg-app-line" />
-      <span className="text-xs uppercase tracking-wide text-app-muted">{label}</span>
-      <span className="h-px flex-1 bg-app-line" />
-    </div>
-  )
-}
-
 export function useAuthForm() {
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
