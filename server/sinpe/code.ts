@@ -9,7 +9,7 @@ const LEGACY_BODY = '[A-HJ-NP-Z2-9]{5}'
 
 export function sinpeReceivePhone(): string {
   const digits = (process.env.SINPE_RECEIVE_PHONE ?? '').replace(/\D/g, '')
-  return digits || '88880000'
+  return digits || '62951541'
 }
 
 export function formatSinpePhone(phone: string): string {
