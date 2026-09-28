@@ -506,7 +506,7 @@ export default function PartyPayLandingPage() {
       </header>
 
       <main id="top">
-        <section className="relative mx-auto max-w-6xl px-5 pb-20 pt-16 sm:pt-24">
+        <section className="relative mx-auto grid max-w-6xl items-center gap-10 px-5 pb-20 pt-16 sm:pt-24 lg:grid-cols-[1.05fr_0.95fr]">
           <div className="pp-rise max-w-3xl">
             <p className="pp-kicker">{text.kicker}</p>
             <h1 className="pp-display mt-4 text-5xl font-extrabold leading-[0.95] text-white sm:text-7xl">
@@ -521,6 +521,16 @@ export default function PartyPayLandingPage() {
               <AccountActions text={text} user={Boolean(user)} loading={loading} />
             </div>
           </div>
+          <figure className="pp-rise overflow-hidden rounded-[28px] border border-white/10 bg-black shadow-2xl shadow-black/40">
+            <video
+              className="aspect-video w-full bg-black"
+              src="/secrets-venue.mp4"
+              controls
+              playsInline
+              preload="metadata"
+              aria-label={lang === 'en' ? 'Secrets venue video' : 'Video del venue Secrets'}
+            />
+          </figure>
         </section>
 
         <section className="border-y border-white/10 bg-black/30">
