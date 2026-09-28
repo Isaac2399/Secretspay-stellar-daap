@@ -16,6 +16,7 @@ import RwaPortfolioPage from '@/pages/RwaPortfolioPage'
 import RwaStructuringPage from '@/pages/RwaStructuringPage'
 import EventPage from '@/pages/EventPage'
 import EventDisplayPage from '@/pages/EventDisplayPage'
+import PartyPayLandingPage from '@/pages/PartyPayLandingPage'
 import { useAuth } from '@/lib/auth/AuthContext'
 
 export function AppRoutes() {
@@ -23,6 +24,8 @@ export function AppRoutes() {
 
   return (
     <Routes>
+      <Route path="/partypay" element={<PartyPayLandingPage />} />
+
       <Route element={<GuestRoute />}>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
