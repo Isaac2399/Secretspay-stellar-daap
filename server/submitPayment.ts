@@ -22,20 +22,17 @@ import {
   usdcAssetFromEnv,
 } from './provisionAccount.js'
 
-export async function creditLoyaltyFromTreasury(input: {
+export async function creditFromTreasury(input: {
   destination: string
   amount: string
+  asset: Asset
   memo?: string
 }): Promise<{ hash: string; status: string }> {
   if (!StrKey.isValidEd25519PublicKey(input.destination)) {
     throw new AuthError('La cuenta destino no es válida', 400)
   }
   if (!/^\d+(\.\d{1,7})?$/.test(input.amount) || Number(input.amount) <= 0) {
-    throw new AuthError('El monto de ROJOS no es válido', 400)
-  }
-  const loyalty = loyaltyAssetFromEnv()
-  if (!loyalty) {
-    throw new AuthError('El token de lealtad no está configurado', 503)
+    throw new AuthError('El monto no es válido', 400)
   }
   const sourceSecret = treasurySecret()
   const server = new Horizon.Server(horizonUrl())
@@ -49,8 +46,25 @@ export async function creditLoyaltyFromTreasury(input: {
     baseFee,
     sourceSecret,
     destination: input.destination,
-    asset: loyalty,
+    asset: input.asset,
     amount: input.amount,
+    memo: input.memo,
+  })
+}
+
+export async function creditLoyaltyFromTreasury(input: {
+  destination: string
+  amount: string
+  memo?: string
+}): Promise<{ hash: string; status: string }> {
+  if (!/^\d+(\.\d{1,7})?$/.test(input.amount) || Number(input.amount) <= 0) {
+    throw new AuthError('El monto de ROJOS no es válido', 400)
+  }
+  const loyalty = loyaltyAssetFromEnv()
+  return creditFromTreasury({
+    destination: input.destination,
+    amount: input.amount,
+    asset: loyalty,
     memo: input.memo ?? 'SINPE',
   })
 }

@@ -1,0 +1,28 @@
+[package]
+name = "partypay-escrow"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Fideicomiso y liquidación de eventos PartyPay sobre Soroban"
+rust-version = "1.91"
+
+[lib]
+crate-type = ["lib", "cdylib"]
+
+# 29.0.1 es la última versión estable publicada en crates.io.
+# 30.0.0-rc.1 existe como pre-release de protocolo; no se usa aquí.
+[dependencies]
+soroban-sdk = "29.0.1"
+
+[dev-dependencies]
+soroban-sdk = { version = "29.0.1", features = ["testutils"] }
+
+[profile.release]
+opt-level = "z"
+overflow-checks = true
+debug = 0
+strip = "symbols"
+debug-assertions = false
+panic = "abort"
+codegen-units = 1
+lto = true

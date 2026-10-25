@@ -40,6 +40,7 @@ import { handleInvoiceRoutes } from './invoicing/invoiceApi.js'
 import { handleSinpeRoutes } from './sinpe/sinpeApi.js'
 import { handleCashRoutes } from './cash/cashApi.js'
 import { handleEventRoutes } from './events/eventApi.js'
+import { claimGuestDemoUser, guestDemoStatus } from './guestDemo.js'
 
 loadLocalEnv()
 
@@ -178,6 +179,15 @@ async function route(input: {
       role: input.body.role as UserRole,
     })
     return { status: 201, body: user, setCookie: createSessionCookie(user.id) }
+  }
+
+  if (method === 'GET' && path === '/api/auth/guest-demo') {
+    return { status: 200, body: await guestDemoStatus() }
+  }
+
+  if (method === 'POST' && path === '/api/auth/guest-demo') {
+    const user = await claimGuestDemoUser()
+    return { status: 200, body: user, setCookie: createSessionCookie(user.id) }
   }
 
   if (method === 'POST' && path === '/api/auth/login') {

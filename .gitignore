@@ -33,3 +33,13 @@ data/
 
 # Word lock files
 ~$*.docx
+
+# Rust / Soroban
+target/
+
+# Cursor local state (MCP config, indexes). Chats are stored outside this repo.
+.cursor/
+
+# One-off application decks. Not part of the app.
+docs/build_stronghold_deck.py
+docs/stronghold-edp-application.pdf

@@ -25,6 +25,8 @@ export type AppUser = {
   publicKey: string
   sinpeCode?: string
   role: UserRole
+  /** Sesión temporal de jueces. No sustituye una cuenta real. */
+  isGuestDemo?: boolean
   place?: BusinessPlace
 }
 

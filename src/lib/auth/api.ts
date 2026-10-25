@@ -54,6 +54,25 @@ export async function updateStoredPublicKey(publicKey: string): Promise<AppUser>
   })
 }
 
+export async function fetchGuestDemoStatus(): Promise<{
+  ready: boolean
+  available: boolean
+}> {
+  const response = await fetch('/api/auth/guest-demo', { credentials: 'include' })
+  if (!response.ok) {
+    throw new AuthApiError('No se pudo preparar la demo', response.status)
+  }
+  const body = (await response.json()) as { ready?: boolean; available?: boolean }
+  return { ready: body.ready === true, available: body.available !== false }
+}
+
+export async function startGuestDemo(): Promise<AppUser> {
+  return request('/api/auth/guest-demo', {
+    method: 'POST',
+    body: JSON.stringify({}),
+  })
+}
+
 async function request(path: string, init: RequestInit): Promise<AppUser> {
   const response = await fetch(path, {
     ...init,

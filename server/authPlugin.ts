@@ -3,6 +3,7 @@ import { decodeHttpBody } from './httpBody.js'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { Plugin } from 'vite'
 import { ensureDevSuperAdmin, ensureDevEventStaff } from './auth.js'
+import { scheduleGuestDemoWarm } from './guestDemo.js'
 import { dispatchApi } from './dispatchApi.js'
 
 loadLocalEnv()
@@ -14,11 +15,13 @@ export function authApiPlugin(): Plugin {
     configureServer(server) {
       void ensureDevSuperAdmin()
       void ensureDevEventStaff()
+      scheduleGuestDemoWarm()
       server.middlewares.use(handleApi)
     },
     configurePreviewServer(server) {
       void ensureDevSuperAdmin()
       void ensureDevEventStaff()
+      scheduleGuestDemoWarm()
       server.middlewares.use(handleApi)
     },
   }

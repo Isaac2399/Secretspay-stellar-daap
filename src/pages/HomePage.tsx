@@ -15,7 +15,7 @@ import { useAccountBalances } from '@/lib/stellar/useAccountBalances'
 import { useRecentActivity } from '@/lib/stellar/useRecentActivity'
 
 export default function HomePage() {
-  const { user } = useAuth()
+  const { user, isGuestDemo } = useAuth()
   const { balances, error, reload } = useAccountBalances(user?.publicKey ?? '')
   const activity = useRecentActivity(user?.publicKey ?? '')
   const [sendOpen, setSendOpen] = useState(false)
@@ -77,12 +77,18 @@ export default function HomePage() {
           Evento
         </p>
         <h2 className="mt-1 text-[17px] font-semibold">
-          {isCustomer ? 'Ordenar en barra' : 'Carta y pedidos de barra'}
+          {isGuestDemo
+            ? 'Probar compra en barra'
+            : isCustomer
+              ? 'Ordenar en barra'
+              : 'Carta y pedidos de barra'}
         </h2>
         <p className="mt-1 text-sm text-app-muted">
-          {isCustomer
-            ? 'Pide, paga en la app y muestra el QR al retirar.'
-            : 'Añade productos, marca pedidos listos y abre la pantalla de TV.'}
+          {isGuestDemo
+            ? 'El saldo de prueba ya está en la cuenta. Elige un producto y paga en Testnet.'
+            : isCustomer
+              ? 'Pide, paga en la app y muestra el QR al retirar.'
+              : 'Añade productos, marca pedidos listos y abre la pantalla de TV.'}
         </p>
       </Link>
 

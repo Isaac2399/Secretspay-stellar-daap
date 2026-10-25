@@ -223,6 +223,10 @@ export type StoredUser = {
   sinpeCode?: string
   /** ISO time when the one-time signup gift of 3 ROJOS was credited. */
   welcomeRegaliaAt?: string
+  /** Ephemeral Testnet customer used by the judge / guest demo. */
+  guestDemo?: boolean
+  guestDemoClaimedAt?: string
+  guestDemoFundedAt?: string
   place?: {
     name: string
     address: string
@@ -245,6 +249,7 @@ export type PublicUser = {
   role: UserRole
   publicKey: string
   sinpeCode?: string
+  isGuestDemo?: boolean
   place?: StoredUser['place']
 }
 
@@ -265,6 +270,7 @@ export function toPublicUser(user: StoredUser): PublicUser {
     role: admin ? 'admin' : user.role,
     publicKey: admin ? superAdminPublicKey() : user.publicKey,
     sinpeCode: admin ? undefined : user.sinpeCode,
+    isGuestDemo: user.guestDemo ? true : undefined,
     place: admin ? undefined : user.place,
   }
 }
@@ -324,7 +330,8 @@ export async function searchAssignableUsers(query: string): Promise<PublicUser[]
   const store = await loadStore()
   const q = query.trim().toLowerCase()
   const users = store.users.filter(
-    (user) => isAssignableAccount(user) && !isSuperAdminRecord(user),
+    (user) =>
+      isAssignableAccount(user) && !isSuperAdminRecord(user) && !user.guestDemo,
   )
   const matched = q
     ? users.filter(
@@ -678,6 +685,32 @@ async function promoteSuperAdminIfNeeded(user: StoredUser): Promise<StoredUser> 
   entry.publicKey = adminKey
   await saveStore(store)
   return entry
+}
+
+/** Custodial Testnet customer reserved for the judge demo. The secret never leaves the server. */
+export async function insertGuestDemoUser(input: {
+  email: string
+  publicKey: string
+  secretKey: string
+}): Promise<StoredUser> {
+  const email = normalizeEmail(input.email)
+  const store = await loadStore()
+  if (store.users.some((user) => user.email === email || user.publicKey === input.publicKey)) {
+    throw new AuthError('Esa cuenta demo ya existe', 409)
+  }
+  const user: StoredUser = {
+    id: randomBytes(12).toString('hex'),
+    email,
+    role: 'customer',
+    publicKey: input.publicKey,
+    secretKeyEnc: encryptSecret(input.secretKey),
+    sinpeCode: generateSinpeCode(input.publicKey),
+    createdAt: new Date().toISOString(),
+    guestDemo: true,
+  }
+  store.users.push(user)
+  await saveStore(store)
+  return user
 }
 
 function encryptSecret(secret: string): string {
