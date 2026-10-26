@@ -289,6 +289,10 @@ async function adminClient(): Promise<EscrowClient> {
 }
 
 function adminKeypair(): Keypair {
+  const contractAdmin = (process.env.ROJOS_DISTRIBUTOR_SECRET_KEY ?? '').trim()
+  if (contractAdmin && StrKey.isValidEd25519SecretSeed(contractAdmin)) {
+    return Keypair.fromSecret(contractAdmin)
+  }
   const issuer = loyaltyAssetFromEnv().getIssuer()
   for (const name of SECRET_CANDIDATES) {
     const secret = (process.env[name] ?? '').trim()
