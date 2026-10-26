@@ -8,15 +8,8 @@ Users get all the benefits of decentralized finance — instant settlement and s
 | --- | --- |
 | **For guests** | Top up, order from the phone, and pick up when the order is ready |
 | **For venues** | Instant settlement on Stellar, without card fees on every sale |
-| **From day one** | A live audience of 2,000–5,000 attendees, every two months |
 
 **Production:** [https://partypay-stellar-daap.vercel.app/](https://partypay-stellar-daap.vercel.app/)
-
----
-
-## PITCH
-
-[Download the product presentation (PowerPoint)](docs/PartyPay-Product-Presentation.pptx)
 
 ---
 
@@ -40,14 +33,6 @@ PartyPay streamlines the on-site economy by allowing attendees to easily top up 
 - **Frictionless ordering.** Guests top up their accounts, order food and drinks directly from their phones, and receive notifications when their order is ready for pickup.
 - **Zero card fees.** By settling payments on the Stellar network, vendors bypass traditional banking commissions, saving money on every transaction.
 - **Incentives.** App users unlock exclusive discounts, driving digital adoption and reducing the burden of handling physical cash on-site.
-
----
-
-## Guaranteed Traction: Beyond the Hackathon
-
-We are building this out of a concrete, validated market need. **Whether we win this hackathon or not, we are deploying this solution for our client.**
-
-This means that from **day zero**, PartyPay will launch with a guaranteed, recurring user base. Between **2,000 and 5,000 bi-monthly active users** will be seamlessly onboarding, funding their accounts, and executing real-world payments on the **Stellar** network.
 
 ---
 
@@ -82,6 +67,29 @@ To keep the event running, the platform includes specialized backend accounts:
 
 ---
 
+## Escrow contract
+
+Orders, stock, and settlement go through the Soroban contract `partypay-escrow` on Stellar **testnet**. The production app uses that same testnet.
+
+| | |
+| --- | --- |
+| **Contract** | [CC633M77TFTEUWK4X4R35DVUB2WXAP5WFN7ZBR2KI5BCFEMTBBX7A2S4](https://stellar.expert/explorer/testnet/contract/CC633M77TFTEUWK4X4R35DVUB2WXAP5WFN7ZBR2KI5BCFEMTBBX7A2S4) |
+| **ROJOS issuer** | [GBSLP3N4R65KVUYBAKQL5XAU67ZFGTNO3WBXJXWGDCH5FM3TFBNKXPPW](https://stellar.expert/explorer/testnet/account/GBSLP3N4R65KVUYBAKQL5XAU67ZFGTNO3WBXJXWGDCH5FM3TFBNKXPPW) |
+| **Contract admin** | [GC5YBV7IBI4ESSNHCZBTDCWHVOGSB2IJAHGH4Q4DVJGK6MTQSHI6WPDK](https://stellar.expert/explorer/testnet/account/GC5YBV7IBI4ESSNHCZBTDCWHVOGSB2IJAHGH4Q4DVJGK6MTQSHI6WPDK) |
+
+The admin and the ROJOS issuer are different accounts. `checkout` takes the customer's payment, debits stock, and splits the gross in one call. The platform fee is 250 bps (2.5%), set in `initialize`. The issuer account receives nothing from that split unless it is also the fee treasury.
+
+Vercel Production needs `ESCROW_CONTRACT_ID` and `ROJOS_DISTRIBUTOR_SECRET_KEY` (the contract admin). `LOYALTY_ISSUER` stays the ROJOS issuer above. After a new deploy, publish the event again so the menu is registered on the new contract.
+
+```bash
+cd contracts/partypay-escrow
+stellar contract build
+cd ../..
+node scripts/deploy-escrow.mjs
+```
+
+---
+
 ## How to Run the App Locally
 
 Requirements: [Node.js](https://nodejs.org/) and npm.
@@ -111,18 +119,3 @@ Copy `.env.example` to `.env` if you need Stellar, Google sign-in, or SINPE sett
 3. **Costa Rica — legal path to international anchors.** **SINPE Móvil** is the funding rail for guests in Costa Rica. Completing the legal and regulatory work in Costa Rica lets us connect with anchors such as **Visa** and **MoneyGram**. Those anchors move fiat into tokens by card or cash pickup as well as by local phone transfer, so PartyPay can be used internationally.
 
 4. **Producers, venues, and companies.** With those rails in place, PartyPay can work with other businesses and event producers, in Costa Rica and abroad, and with companies that need instant settlement, lower fees on every transaction, and the rest of what Stellar provides.
-
----
-
-## On-chain evidence
-
-People outside the team have already used PartyPay on the Stellar **Testnet**. Every **ROJOS** balance is issued from this main account:
-
-[GC5IQE74UCRCKXJII3G3AYNJHB75JGVD2TQKMDNNR2QZVLKEDVU5E4NJ](https://stellar.expert/explorer/testnet/account/GC5IQE74UCRCKXJII3G3AYNJHB75JGVD2TQKMDNNR2QZVLKEDVU5E4NJ)
-
-These Stellar Expert transactions show payments from external users who already used the app:
-
-- [aa2b694a01b689f5a7843554f0c6beecbae184674edc2ca63895f77dd8d23386](https://stellar.expert/explorer/testnet/tx/aa2b694a01b689f5a7843554f0c6beecbae184674edc2ca63895f77dd8d23386)
-- [9441001deadaaa6ee7efa2787c87b7c54c6454f9005d7c3fc02c84027a604821](https://stellar.expert/explorer/testnet/tx/9441001deadaaa6ee7efa2787c87b7c54c6454f9005d7c3fc02c84027a604821)
-[- https://stellar.expert/explorer/testnet/account/GC266V7GBSJHKJR3T3543E5W6XR7YQSAXTYUZJFHQOUE2UXEZA5IKJRR
-]([url](https://stellar.expert/explorer/testnet/account/GC266V7GBSJHKJR3T3543E5W6XR7YQSAXTYUZJFHQOUE2UXEZA5IKJRR))
