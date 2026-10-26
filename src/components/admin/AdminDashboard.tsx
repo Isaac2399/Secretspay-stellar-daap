@@ -6,6 +6,7 @@ import { ActivityList } from '@/components/dashboard/ActivityList'
 import { AdminFinancePanel } from '@/components/admin/AdminFinancePanel'
 import { ClaimLookupPanel } from '@/components/admin/ClaimLookupPanel'
 import { StaffSendPanel } from '@/components/admin/StaffSendPanel'
+import { AdminEventsPanel } from '@/components/admin/AdminEventsPanel'
 import { UnassignedDepositsPanel } from '@/components/admin/UnassignedDepositsPanel'
 import { StructuringDashboard } from '@/components/rwa/StructuringDashboard'
 import { fetchAdminOverview } from '@/lib/admin/api'
@@ -18,7 +19,7 @@ import type { AdminMerchantRow, TokenTotals } from '@/types/admin'
 
 export function AdminDashboard() {
   const [tab, setTab] = useState<
-    'send' | 'finance' | 'merchants' | 'customers' | 'rwa' | 'sinpe'
+    'send' | 'finance' | 'events' | 'merchants' | 'customers' | 'rwa' | 'sinpe'
   >('send')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -111,6 +112,14 @@ export function AdminDashboard() {
           }}
         />
         <TabButton
+          active={tab === 'events'}
+          label="Eventos"
+          onClick={() => {
+            setTab('events')
+            setSelectedId(null)
+          }}
+        />
+        <TabButton
           active={tab === 'finance'}
           label="Finanzas"
           onClick={() => {
@@ -158,6 +167,8 @@ export function AdminDashboard() {
       {error ? <ErrorModal message={error} onClose={() => setError(null)} /> : null}
 
       {tab === 'send' ? <StaffSendPanel /> : null}
+
+      {tab === 'events' ? <AdminEventsPanel /> : null}
 
       {tab === 'finance' && overview ? (
         <AdminFinancePanel finance={overview.finance} />

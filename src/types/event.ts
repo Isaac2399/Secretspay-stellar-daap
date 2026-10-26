@@ -15,6 +15,8 @@ export type EventProduct = {
   active: boolean
   pickupLabel: string
   promo?: EventProductPromo
+  /** Transacción en la que el producto quedó escrito en el contrato. */
+  chainHash?: string
   createdAt: string
   updatedAt: string
 }
@@ -42,6 +44,10 @@ export type EventOrder = {
   asset: string
   status: EventOrderStatus
   stellarHash?: string
+  fee?: string
+  net?: string
+  feeAccount?: string
+  feeBps?: number
   createdAt: string
   readyAt?: string
   completedAt?: string
@@ -51,6 +57,33 @@ export type EventSettings = {
   merchantId: string
   title: string
   pickupLabel: string
+  feeBps: number
+  feeAccount: string
+  /** Transacción en la que esta comisión quedó escrita en el contrato. */
+  chainHash?: string
+}
+
+export type EventFeeReceipt = {
+  orderNumber: string
+  asset: string
+  fee: string
+  net: string
+  hash?: string
+  createdAt: string
+}
+
+export type EventAdminRow = {
+  merchantId: string
+  email: string
+  merchantPublicKey: string
+  title: string
+  pickupLabel: string
+  feeBps: number
+  feePercent: string
+  feeAccount: string
+  orderCount: number
+  feesCollected: Record<string, string>
+  recentFees: EventFeeReceipt[]
 }
 
 export type EventVenue = {

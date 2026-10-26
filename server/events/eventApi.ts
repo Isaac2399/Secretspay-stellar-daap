@@ -10,9 +10,11 @@ import {
   listMerchantOrders,
   listMerchantProducts,
   listMyOrders,
+  listEventsForAdmin,
   listVenues,
   markOrderReady,
   placeOrder,
+  saveEventForMerchant,
   saveMerchantSettings,
   updateProduct,
 } from './service.js'
@@ -81,6 +83,23 @@ export async function handleEventRoutes(
     return { status: 200, body: { ok: true } }
   }
 
+  if (method === 'GET' && path === '/api/events/admin') {
+    requirePlatformAdmin(session)
+    return { status: 200, body: { events: await listEventsForAdmin() } }
+  }
+
+  if (method === 'PUT' && path === '/api/events/admin') {
+    requirePlatformAdmin(session)
+    const merchantId = String(input.body.merchantId ?? '').trim()
+    if (!merchantId) {
+      throw new AuthError('Elige la empresa del evento', 400)
+    }
+    return {
+      status: 200,
+      body: { settings: await saveEventForMerchant(merchantId, input.body) },
+    }
+  }
+
   if (method === 'GET' && path === '/api/events/settings') {
     const merchant = requireMerchant(session)
     return { status: 200, body: { settings: await getMerchantSettings(merchant) } }
@@ -138,6 +157,13 @@ export async function handleEventRoutes(
 function requireMerchant(session: PublicUser): PublicUser {
   if (session.role !== 'merchant') {
     throw new AuthError('Solo la empresa puede administrar la barra', 403)
+  }
+  return session
+}
+
+function requirePlatformAdmin(session: PublicUser): PublicUser {
+  if (session.role !== 'admin') {
+    throw new AuthError('Solo el super admin puede revisar todos los eventos', 403)
   }
   return session
 }

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Networks } from '@stellar/stellar-sdk'
 import { ErrorModal } from '@/components/feedback/ErrorModal'
 import { fieldClass } from '@/components/auth/AuthLayout'
 import { readableError } from '@/lib/auth/readableError'
@@ -25,6 +26,13 @@ type ProductDraft = {
   discountPct: string
   buyQty: string
   getQty: string
+}
+
+const explorer =
+  stellarConfig.networkPassphrase === Networks.PUBLIC ? 'public' : 'testnet'
+
+function expertTx(hash: string): string {
+  return `https://stellar.expert/explorer/${explorer}/tx/${hash}`
 }
 
 function emptyDraft(pickupLabel: string): ProductDraft {
@@ -73,6 +81,8 @@ export function MerchantEventCatalog({ merchantId }: { merchantId: string }) {
   const [products, setProducts] = useState<EventProduct[]>([])
   const [title, setTitle] = useState('')
   const [pickupLabel, setPickupLabel] = useState('Barra')
+  const [feePercent, setFeePercent] = useState('0')
+  const [feeAccount, setFeeAccount] = useState('')
   const [createDraft, setCreateDraft] = useState(() => emptyDraft('Barra'))
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editDraft, setEditDraft] = useState<ProductDraft | null>(null)
@@ -88,6 +98,8 @@ export function MerchantEventCatalog({ merchantId }: { merchantId: string }) {
     setSettings(settingsResult.settings)
     setTitle(settingsResult.settings.title)
     setPickupLabel(settingsResult.settings.pickupLabel)
+    setFeePercent(feePercentFromBps(settingsResult.settings.feeBps))
+    setFeeAccount(settingsResult.settings.feeAccount ?? '')
     setProducts(productsResult.products)
   }
 
@@ -117,7 +129,12 @@ export function MerchantEventCatalog({ merchantId }: { merchantId: string }) {
     setBusy(true)
     setError(null)
     try {
-      const result = await saveEventSettings({ title, pickupLabel })
+      const result = await saveEventSettings({
+        title,
+        pickupLabel,
+        feePercent,
+        feeAccount,
+      })
       setSettings(result.settings)
       setCreateDraft((prev) => ({ ...prev, pickupLabel }))
       setMessage('Evento actualizado')
@@ -201,6 +218,41 @@ export function MerchantEventCatalog({ merchantId }: { merchantId: string }) {
             placeholder="Barra A"
           />
         </label>
+        <label className="grid gap-1 text-sm">
+          Comisión por compra (%)
+          <input
+            className={fieldClass}
+            inputMode="decimal"
+            value={feePercent}
+            onChange={(e) => setFeePercent(e.target.value)}
+            placeholder="2.5"
+          />
+        </label>
+        <label className="grid gap-1 text-sm">
+          Cuenta que recibe la comisión
+          <input
+            className={fieldClass}
+            value={feeAccount}
+            onChange={(e) => setFeeAccount(e.target.value)}
+            placeholder="G…"
+            spellCheck={false}
+          />
+        </label>
+        <p className="text-xs text-app-muted">
+          Al guardar, la comisión queda en el contrato. Cada compra entra a ese
+          contrato y se reparte ahí: este porcentaje a la cuenta de abajo y el
+          resto a la empresa. La cuenta tiene que tener trustline del token.
+        </p>
+        {settings?.chainHash ? (
+          <a
+            className="text-xs text-app-accent underline"
+            href={expertTx(settings.chainHash)}
+            target="_blank"
+            rel="noreferrer"
+          >
+            Ver el evento en Stellar Expert
+          </a>
+        ) : null}
         <button
           type="button"
           className="w-full rounded-2xl bg-app-accent py-2.5 text-sm font-medium disabled:opacity-60"
@@ -281,6 +333,16 @@ export function MerchantEventCatalog({ merchantId }: { merchantId: string }) {
                       <p className={`mt-1 text-sm ${stockCountClass(product.stock)}`}>
                         {formatStockLabel(product.stock)}
                       </p>
+                      {product.chainHash ? (
+                        <a
+                          className="mt-1 inline-block text-xs text-app-accent underline"
+                          href={expertTx(product.chainHash)}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          Ver en Stellar Expert
+                        </a>
+                      ) : null}
                     </div>
                     <span
                       className={`text-xs ${product.active ? 'text-app-accent' : 'text-app-muted'}`}
@@ -437,4 +499,9 @@ function ProductFields({
       </div>
     </div>
   )
+}
+
+function feePercentFromBps(feeBps: number | undefined): string {
+  const percent = (feeBps ?? 0) / 100
+  return Number.isInteger(percent) ? String(percent) : String(percent)
 }

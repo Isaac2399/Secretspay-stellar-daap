@@ -1,8 +1,17 @@
 import { randomBytes, randomUUID } from 'node:crypto'
-import { findUserById } from '../auth.js'
+import { StrKey } from '@stellar/stellar-sdk'
+import { findUserById, secretKeyForUser } from '../auth.js'
+import {
+  catalogProductExists,
+  checkoutSale,
+  publishEventFee,
+  registerCatalogProduct,
+  setCatalogStock,
+  updateCatalogOffer,
+  withMerchantLock,
+} from '../escrowContract.js'
 import { AuthError } from '../errors.js'
 import { loyaltyAssetFromEnv } from '../provisionAccount.js'
-import { submitCustodialPayment } from '../submitPayment.js'
 import { loadStore } from '../userStore.js'
 import { parsePickupQr, serializePickupQr } from './qr.js'
 import { loadEventStore, saveEventStore } from './store.js'
@@ -12,6 +21,8 @@ import type {
   EventOrderItem,
   EventProduct,
   EventProductPromo,
+  EventAdminRow,
+  EventFeeReceipt,
   EventSettings,
   EventVenue,
 } from './types.js'
@@ -37,6 +48,10 @@ export function publicOrder(order: EventOrder, includeSecret: boolean) {
     asset: order.asset,
     status: order.status,
     stellarHash: order.stellarHash,
+    fee: order.fee ?? '0',
+    net: order.net ?? order.total,
+    feeAccount: order.feeAccount ?? '',
+    feeBps: order.feeBps ?? 0,
     createdAt: order.createdAt,
     readyAt: order.readyAt,
     completedAt: order.completedAt,
@@ -113,11 +128,15 @@ export async function listMerchantProducts(merchantId: string) {
 export async function getMerchantSettings(merchant: PublicUserLike): Promise<EventSettings> {
   const store = await loadEventStore()
   return (
-    store.settings[merchant.id] ?? {
-      merchantId: merchant.id,
-      title: venueTitle(undefined, merchant),
-      pickupLabel: 'Barra',
-    }
+    normalizeSettings(
+      store.settings[merchant.id] ?? {
+        merchantId: merchant.id,
+        title: venueTitle(undefined, merchant),
+        pickupLabel: 'Barra',
+        feeBps: 0,
+        feeAccount: '',
+      },
+    )
   )
 }
 
@@ -130,12 +149,27 @@ export async function saveMerchantSettings(
   if (!title) {
     throw new AuthError('Indica el nombre del evento o barra', 400)
   }
+  const feeBps = parseFeeBps(input.feePercent ?? input.feeBps)
+  const feeAccount = parseFeeAccount(input.feeAccount, feeBps)
   const settings: EventSettings = {
     merchantId: merchant.id,
     title: title.slice(0, 80),
     pickupLabel: pickupLabel.slice(0, 40),
+    feeBps,
+    feeAccount,
   }
+  const treasury = feeBps > 0 ? feeAccount : merchant.publicKey
+  const hash = await publishEventFee({
+    merchant: merchant.publicKey,
+    feeBps,
+    treasury,
+  })
   const store = await loadEventStore()
+  if (hash) {
+    settings.chainHash = hash
+  } else if (store.settings[merchant.id]?.chainHash) {
+    settings.chainHash = store.settings[merchant.id].chainHash
+  }
   store.settings[merchant.id] = settings
   await saveEventStore(store)
   return settings
@@ -159,6 +193,14 @@ export async function createProduct(
     createdAt: now,
     updatedAt: now,
   }
+  product.chainHash = await registerCatalogProduct({
+    merchant: merchant.publicKey,
+    productId: product.id,
+    price: product.price,
+    stock: product.stock,
+    active: product.active,
+    promo: product.promo,
+  })
   const store = await loadEventStore()
   store.products.unshift(product)
   await saveEventStore(store)
@@ -200,6 +242,11 @@ export async function updateProduct(
     product.promo = parsePromo(input.promo)
   }
   product.updatedAt = new Date().toISOString()
+  const merchant = await findUserById(merchantId)
+  if (!merchant?.publicKey) {
+    throw new AuthError('La barra no tiene cuenta en Stellar', 404)
+  }
+  product.chainHash = await syncCatalogProduct(merchant.publicKey, product)
   await saveEventStore(store)
   return product
 }
@@ -211,6 +258,18 @@ export async function deleteProduct(merchantId: string, productId: string): Prom
   )
   if (index === -1) {
     throw new AuthError('Producto no encontrado', 404)
+  }
+  const product = store.products[index]
+  const merchant = await findUserById(merchantId)
+  if (merchant?.publicKey && (await catalogProductExists(merchant.publicKey, product.id))) {
+    product.chainHash = await updateCatalogOffer({
+      merchant: merchant.publicKey,
+      productId: product.id,
+      price: product.price,
+      stock: product.stock,
+      active: false,
+      promo: product.promo,
+    })
   }
   store.products.splice(index, 1)
   await saveEventStore(store)
@@ -235,19 +294,61 @@ export async function placeOrder(
   }
 
   const reserved = await reserveStock(merchantId, rawItems)
+  const stored = (await loadEventStore()).settings[merchantId]
+  const settings = stored ? normalizeSettings(stored) : undefined
+  const split = splitPurchase(reserved.total, settings)
+  if (split.feeAccount && split.feeAccount === customer.publicKey) {
+    await restoreStock(reserved.stockDelta)
+    throw new AuthError('La cuenta de comisión no puede ser la del cliente', 400)
+  }
   try {
-    const paid = await submitCustodialPayment({
-      userId: customer.id,
-      destination: merchant.publicKey,
-      amount: reserved.total,
-      asset: reserved.asset,
-      memo: `BAR ${reserved.orderNumber}`.slice(0, 28),
+    const paid = await withMerchantLock(merchant.publicKey, async () => {
+      const treasury = split.feeBps > 0 && split.feeAccount ? split.feeAccount : merchant.publicKey
+      await publishEventFee({
+        merchant: merchant.publicKey,
+        feeBps: split.feeBps,
+        treasury,
+      })
+      const fresh = await loadEventStore()
+      for (const line of reserved.stockDelta) {
+        const product = fresh.products.find((row) => row.id === line.productId)
+        if (!product) {
+          throw new AuthError('Un producto ya no está disponible', 400)
+        }
+        if (await catalogProductExists(merchant.publicKey, product.id)) {
+          continue
+        }
+        product.chainHash = await registerCatalogProduct({
+          merchant: merchant.publicKey,
+          productId: product.id,
+          price: product.price,
+          stock: product.stock + line.qty,
+          active: true,
+          promo: product.promo,
+        })
+        await saveEventStore(fresh)
+      }
+      return checkoutSale({
+        customerSecret: await secretKeyForUser(customer.id),
+        merchant: merchant.publicKey,
+        asset: reserved.asset,
+        lines: reserved.stockDelta.map((line) => ({
+          productId: line.productId,
+          qty: line.qty,
+        })),
+      })
     })
+    const total = stroopsToAmount(paid.gross)
+    const settled = splitPurchase(total === '0' ? '0' : total, settings)
     const order = await commitOrder({
-      reserved,
+      reserved: { ...reserved, total },
       merchant,
       customer,
       stellarHash: paid.hash,
+      fee: settled.fee,
+      net: settled.net,
+      feeAccount: settled.feeAccount,
+      feeBps: settled.feeBps,
     })
     return { order: publicOrder(order, true), hash: paid.hash }
   } catch (error) {
@@ -322,6 +423,22 @@ type ReservedCart = {
   asset: string
   pickupLabel: string
   stockDelta: Array<{ productId: string; qty: number }>
+}
+
+async function syncCatalogProduct(merchant: string, product: EventProduct): Promise<string> {
+  const args = {
+    merchant,
+    productId: product.id,
+    price: product.price,
+    stock: product.stock,
+    active: product.active,
+    promo: product.promo,
+  }
+  if (!(await catalogProductExists(merchant, product.id))) {
+    return registerCatalogProduct(args)
+  }
+  await updateCatalogOffer(args)
+  return setCatalogStock(merchant, product.id, product.stock)
 }
 
 async function reserveStock(
@@ -413,6 +530,10 @@ async function commitOrder(input: {
   merchant: { id: string; email: string; place?: { name?: string } }
   customer: PublicUserLike
   stellarHash: string
+  fee: string
+  net: string
+  feeAccount: string
+  feeBps: number
 }): Promise<EventOrder> {
   const settings = (await loadEventStore()).settings[input.merchant.id]
   const order: EventOrder = {
@@ -429,6 +550,10 @@ async function commitOrder(input: {
     asset: input.reserved.asset,
     status: 'preparing',
     stellarHash: input.stellarHash,
+    fee: input.fee,
+    net: input.net,
+    feeAccount: input.feeAccount,
+    feeBps: input.feeBps,
     createdAt: new Date().toISOString(),
   }
   const store = await loadEventStore()
@@ -531,6 +656,152 @@ function parsePromo(value: unknown): EventProductPromo | undefined {
     promo.getQty = getQty
   }
   return promo
+}
+
+export async function listEventsForAdmin(): Promise<EventAdminRow[]> {
+  const [store, users] = await Promise.all([loadEventStore(), loadStore()])
+  return users.users
+    .filter((user) => user.role === 'merchant')
+    .map((user) => {
+      const settings = normalizeSettings(
+        store.settings[user.id] ?? {
+          merchantId: user.id,
+          title: venueTitle(undefined, user),
+          pickupLabel: 'Barra',
+          feeBps: 0,
+          feeAccount: '',
+        },
+      )
+      const orders = store.orders.filter((order) => order.merchantId === user.id)
+      const feesCollected: Record<string, string> = {}
+      const recentFees: EventFeeReceipt[] = []
+      for (const order of orders) {
+        const fee = order.fee ?? '0'
+        if (decimalToStroops(fee) <= 0n) {
+          continue
+        }
+        feesCollected[order.asset] = stroopsToAmount(
+          decimalToStroops(feesCollected[order.asset] ?? '0') + decimalToStroops(fee),
+        )
+        if (recentFees.length < 8) {
+          recentFees.push({
+            orderNumber: order.orderNumber,
+            asset: order.asset,
+            fee,
+            net: order.net ?? order.total,
+            hash: order.stellarHash,
+            createdAt: order.createdAt,
+          })
+        }
+      }
+      return {
+        merchantId: user.id,
+        email: user.email,
+        merchantPublicKey: user.publicKey,
+        title: settings.title,
+        pickupLabel: settings.pickupLabel,
+        feeBps: settings.feeBps,
+        feePercent: feePercentLabel(settings.feeBps),
+        feeAccount: settings.feeAccount,
+        orderCount: orders.length,
+        feesCollected,
+        recentFees,
+      }
+    })
+    .sort((a, b) => a.title.localeCompare(b.title))
+}
+
+export async function saveEventForMerchant(
+  merchantId: string,
+  input: Record<string, unknown>,
+): Promise<EventSettings> {
+  const merchant = await findUserById(merchantId)
+  if (!merchant || merchant.role !== 'merchant') {
+    throw new AuthError('Elige una empresa registrada', 404)
+  }
+  return saveMerchantSettings(merchant, input)
+}
+
+export function splitPurchase(
+  total: string,
+  settings: EventSettings | undefined,
+): { fee: string; net: string; feeAccount: string; feeBps: number } {
+  const normalized = settings ? normalizeSettings(settings) : undefined
+  const feeBps = normalized?.feeBps ?? 0
+  const feeAccount = normalized?.feeAccount ?? ''
+  if (feeBps <= 0 || !feeAccount) {
+    return { fee: '0', net: total, feeAccount: '', feeBps: 0 }
+  }
+  const gross = decimalToStroops(total)
+  const fee = (gross * BigInt(feeBps)) / 10_000n
+  const net = gross - fee
+  return {
+    fee: stroopsToAmount(fee),
+    net: stroopsToAmount(net),
+    feeAccount,
+    feeBps,
+  }
+}
+
+function normalizeSettings(settings: EventSettings): EventSettings {
+  return {
+    ...settings,
+    feeBps: settings.feeBps ?? 0,
+    feeAccount: settings.feeAccount ?? '',
+  }
+}
+
+function parseFeeBps(value: unknown): number {
+  if (value == null || value === '') {
+    return 0
+  }
+  const percent = Number(String(value).trim().replace(',', '.'))
+  if (!Number.isFinite(percent) || percent < 0 || percent > 100) {
+    throw new AuthError('La comisión debe estar entre 0 y 100', 400)
+  }
+  return Math.round(percent * 100)
+}
+
+function parseFeeAccount(value: unknown, feeBps: number): string {
+  const account = String(value ?? '').trim()
+  if (!account) {
+    if (feeBps > 0) {
+      throw new AuthError('Indica la cuenta que recibe la comisión', 400)
+    }
+    return ''
+  }
+  if (!StrKey.isValidEd25519PublicKey(account)) {
+    throw new AuthError('La cuenta de comisión no es una public key de Stellar', 400)
+  }
+  return account
+}
+
+function feePercentLabel(feeBps: number): string {
+  const percent = feeBps / 100
+  return Number.isInteger(percent) ? String(percent) : String(percent)
+}
+
+function decimalToStroops(amount: string): bigint {
+  const trimmed = amount.trim()
+  if (!trimmed) {
+    return 0n
+  }
+  if (!/^\d+(\.\d+)?$/.test(trimmed)) {
+    throw new AuthError('El monto no es válido', 400)
+  }
+  const [whole, frac = ''] = trimmed.split('.')
+  const frac7 = `${frac}0000000`.slice(0, 7)
+  return BigInt(whole) * 10_000_000n + BigInt(frac7)
+}
+
+function stroopsToAmount(stroops: bigint): string {
+  if (stroops < 0n) {
+    throw new AuthError('El monto no es válido', 400)
+  }
+  const scale = 10_000_000n
+  const whole = stroops / scale
+  const frac = (stroops % scale).toString().padStart(7, '0').replace(/0+$/, '')
+  return frac ? `${whole.toString()}.${frac}` : whole.toString()
 }
 
 function formatAmount(value: number): string {

@@ -190,6 +190,8 @@ export async function submitCustodialPayment(input: {
   asset: string
   memo?: string
   reward?: string
+  /** Segunda operación en la misma transacción. La comisión de la compra. */
+  fee?: { destination: string; amount: string }
 }): Promise<{ hash: string; status: string; rewardHash?: string }> {
   if (!StrKey.isValidEd25519PublicKey(input.destination)) {
     throw new AuthError('La cuenta destino no es válida', 400)
@@ -206,6 +208,10 @@ export async function submitCustodialPayment(input: {
   const source = Keypair.fromSecret(await secretKeyForUser(input.userId))
   if (source.publicKey() === input.destination) {
     throw new AuthError('No puedes pagarte a ti mismo', 400)
+  }
+  const fee = parseFeeLeg(input.fee)
+  if (fee && source.publicKey() === fee.destination) {
+    throw new AuthError('La cuenta de comisión no puede ser la del cliente', 400)
   }
 
   const asset = resolveAsset(input.asset)
@@ -248,6 +254,7 @@ export async function submitCustodialPayment(input: {
     asset,
     amount: input.amount,
     memo: input.memo,
+    fee,
   })
 
   if (!reward || !merchantSecret || !loyalty) {
@@ -286,6 +293,7 @@ async function submitHorizonPayment(input: {
   asset: Asset
   amount: string
   memo?: string
+  fee?: { destination: string; amount: string }
 }): Promise<{ hash: string; status: string }> {
   const source = Keypair.fromSecret(input.sourceSecret)
   const account = await input.server.loadAccount(source.publicKey())
@@ -299,6 +307,15 @@ async function submitHorizonPayment(input: {
       amount: input.amount,
     }),
   )
+  if (input.fee) {
+    builder.addOperation(
+      Operation.payment({
+        destination: input.fee.destination,
+        asset: input.asset,
+        amount: input.fee.amount,
+      }),
+    )
+  }
 
   if (input.memo) {
     builder.addMemo(Memo.text(input.memo.slice(0, 28)))
@@ -325,6 +342,23 @@ async function submitHorizonPayment(input: {
   } catch (error) {
     throw new AuthError(horizonPaymentMessage(error), 400)
   }
+}
+
+function parseFeeLeg(
+  raw: { destination: string; amount: string } | undefined,
+): { destination: string; amount: string } | undefined {
+  if (!raw) {
+    return undefined
+  }
+  const destination = raw.destination.trim()
+  const amount = raw.amount.trim()
+  if (!StrKey.isValidEd25519PublicKey(destination)) {
+    throw new AuthError('La cuenta de comisión no es válida', 400)
+  }
+  if (!/^\d+(\.\d{1,7})?$/.test(amount) || Number(amount) <= 0) {
+    throw new AuthError('La comisión no es válida', 400)
+  }
+  return { destination, amount }
 }
 
 function parseReward(raw: string | undefined): string | undefined {

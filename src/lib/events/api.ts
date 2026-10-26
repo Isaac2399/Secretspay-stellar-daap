@@ -2,6 +2,7 @@ import { AuthApiError } from '@/lib/auth/api'
 import type {
   EventBoardOrder,
   EventOrder,
+  EventAdminRow,
   EventProduct,
   EventProductPromo,
   EventSettings,
@@ -97,8 +98,30 @@ export async function fetchEventSettings() {
   return request<{ settings: EventSettings }>('/api/events/settings')
 }
 
-export async function saveEventSettings(input: { title: string; pickupLabel: string }) {
+export async function saveEventSettings(input: {
+  title: string
+  pickupLabel: string
+  feePercent: string
+  feeAccount: string
+}) {
   return request<{ settings: EventSettings }>('/api/events/settings', {
+    method: 'PUT',
+    body: JSON.stringify(input),
+  })
+}
+
+export async function fetchAdminEvents() {
+  return request<{ events: EventAdminRow[] }>('/api/events/admin')
+}
+
+export async function saveAdminEvent(input: {
+  merchantId: string
+  title: string
+  pickupLabel: string
+  feePercent: string
+  feeAccount: string
+}) {
+  return request<{ settings: EventSettings }>('/api/events/admin', {
     method: 'PUT',
     body: JSON.stringify(input),
   })
