@@ -11,6 +11,10 @@ Users get all the benefits of decentralized finance — instant settlement and s
 
 **Production:** [https://partypay-stellar-daap.vercel.app/](https://partypay-stellar-daap.vercel.app/)
 
+**Pitch:** [https://x.com/knegro99/status/2114735523440775243](https://x.com/knegro99/status/2114735523440775243)
+
+**Demo:** [https://x.com/knegro99/status/2114737719913935311](https://x.com/knegro99/status/2114737719913935311)
+
 ---
 
 ## The Origin & The Problem
