@@ -5,7 +5,12 @@ import { QRCodeSVG } from 'qrcode.react'
 // MoneyGram (cash) y tarjeta quedan fuera de la vista cliente.
 // import { CreditCard } from 'lucide-react'
 // import { Sep24DepositPanel } from '@/components/sep24/Sep24DepositPanel'
-import { claimSinpe, fetchSinpeIntent } from '@/lib/sinpe/api'
+import {
+  activateSinpeIntent,
+  claimSinpe,
+  fetchSinpeIntent,
+  type SinpeIntent,
+} from '@/lib/sinpe/api'
 import { AuthApiError } from '@/lib/auth/api'
 import { readableError } from '@/lib/auth/readableError'
 import { stellarConfig } from '@/lib/stellar/config'
@@ -76,7 +81,7 @@ export function AddFundsSheet({
             <MethodCard
               icon={<Smartphone className="h-5 w-5" />}
               title="SINPE Móvil"
-              subtitle="Envía al número y pega el código"
+              subtitle="Código válido 5 min al copiarlo"
               onClick={() => setView('sinpe')}
             />
             <MethodCard
@@ -156,23 +161,35 @@ function SinpeRecarga({
 }) {
   const [copiedCode, setCopiedCode] = useState(false)
   const [copiedPhone, setCopiedPhone] = useState(false)
-  const [code, setCode] = useState<string | null>(null)
-  const [phoneDisplay, setPhoneDisplay] = useState<string | null>(null)
-  const [phone, setPhone] = useState<string | null>(null)
+  const [intent, setIntent] = useState<SinpeIntent | null>(null)
+  const [expiresAtMs, setExpiresAtMs] = useState<number | null>(null)
+  const [remainingMs, setRemainingMs] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [activating, setActivating] = useState(false)
+
+  function applyIntent(next: SinpeIntent) {
+    setIntent(next)
+    if (next.status === 'active' && next.expiresAt) {
+      const serverNow = Date.parse(next.serverNow)
+      const skew = Number.isFinite(serverNow) ? serverNow - Date.now() : 0
+      const expires = Date.parse(next.expiresAt) - skew
+      setExpiresAtMs(Number.isFinite(expires) ? expires : null)
+      setRemainingMs(Math.max(0, next.remainingMs))
+    } else {
+      setExpiresAtMs(null)
+      setRemainingMs(0)
+    }
+  }
 
   useEffect(() => {
     let cancelled = false
     void fetchSinpeIntent()
-      .then((intent) => {
-        if (cancelled) {
-          return
+      .then((next) => {
+        if (!cancelled) {
+          applyIntent(next)
+          setError(null)
         }
-        setCode(intent.code)
-        setPhone(intent.phone)
-        setPhoneDisplay(intent.phoneDisplay)
-        setError(null)
       })
       .catch((err) => {
         if (!cancelled) {
@@ -189,20 +206,49 @@ function SinpeRecarga({
     }
   }, [])
 
-  async function copyCode() {
-    if (!code) {
+  useEffect(() => {
+    if (expiresAtMs == null) {
       return
     }
-    await navigator.clipboard.writeText(code)
-    setCopiedCode(true)
-    window.setTimeout(() => setCopiedCode(false), 1600)
+    const tick = () => {
+      setRemainingMs(Math.max(0, expiresAtMs - Date.now()))
+    }
+    tick()
+    const id = window.setInterval(tick, 250)
+    return () => window.clearInterval(id)
+  }, [expiresAtMs])
+
+  const codeActive = Boolean(intent?.code && remainingMs > 0)
+  const codeExpired = !codeActive && expiresAtMs != null && remainingMs <= 0
+
+  async function copyOrActivateCode() {
+    setActivating(true)
+    setError(null)
+    try {
+      let next = intent
+      if (!codeActive || !intent?.code) {
+        next = await activateSinpeIntent()
+        applyIntent(next)
+      }
+      const code = next?.code ?? ''
+      if (!code) {
+        throw new Error('No se pudo obtener el código SINPE')
+      }
+      await navigator.clipboard.writeText(code)
+      setCopiedCode(true)
+      window.setTimeout(() => setCopiedCode(false), 1600)
+    } catch (err) {
+      setError(readableError(err))
+    } finally {
+      setActivating(false)
+    }
   }
 
   async function copyPhone() {
-    if (!phone) {
+    if (!intent?.phone) {
       return
     }
-    await navigator.clipboard.writeText(phone)
+    await navigator.clipboard.writeText(intent.phone)
     setCopiedPhone(true)
     window.setTimeout(() => setCopiedPhone(false), 1600)
   }
@@ -210,43 +256,102 @@ function SinpeRecarga({
   return (
     <div className="space-y-4">
       <p className="text-sm text-app-muted">
-        Envía el SINPE Móvil a nuestro número de teléfono y pega este código en el
-        comentario de la transacción.
+        Enviá el SINPE Móvil a nuestro número y pegá el código en el comentario.
+        El código dura 5 minutos desde que lo copiás; después hay que generar uno
+        nuevo.
       </p>
-      {loading ? <p className="text-sm text-app-muted">Creando código…</p> : null}
+      {loading ? <p className="text-sm text-app-muted">Preparando SINPE…</p> : null}
       {error ? <ErrorModal message={error} onClose={() => setError(null)} /> : null}
       <CopyRow
         label="Número SINPE"
-        value={phoneDisplay ?? '……'}
+        value={intent?.phoneDisplay ?? '……'}
         copied={copiedPhone}
-        disabled={!phone}
+        disabled={!intent?.phone}
         onCopy={() => void copyPhone()}
         copyLabel="Copiar número"
         copiedLabel="Número copiado"
       />
       <CopyRow
         label="Código"
-        value={code ?? 'sc••••ts'}
+        value={codeActive ? (intent?.code ?? 'sc••••ts') : 'sc••••ts'}
         copied={copiedCode}
-        disabled={!code}
-        onCopy={() => void copyCode()}
-        copyLabel="Copiar código"
+        disabled={activating || loading || !intent}
+        onCopy={() => void copyOrActivateCode()}
+        copyLabel={codeActive ? 'Copiar código' : 'Copiar y activar (5 min)'}
         copiedLabel="Código copiado"
         mono
       />
-      <p className="text-sm text-app-muted">
-        En caso de error o no pegar el código deberás enviarnos el número de
-        comprobante del SINPE Móvil.
-      </p>
+      {codeActive ? (
+        <SinpeCountdown remainingMs={remainingMs} ttlMs={intent?.ttlMs ?? 5 * 60 * 1000} />
+      ) : null}
+      {!codeActive && !loading ? (
+        <p className="rounded-2xl bg-app-chip px-3 py-3 text-sm text-app-muted">
+          {codeExpired
+            ? 'El código anterior ya venció. Tocá copiar para obtener uno nuevo válido por 5 minutos.'
+            : 'Tocá el ícono de copiar para obtener tu código. El contador de 5 minutos empieza en ese momento.'}
+        </p>
+      ) : null}
+      <div className="space-y-2 text-sm text-app-muted">
+        <p>
+          Si el tiempo se acabó antes de enviar, copiá un código nuevo y usalo en
+          la nota del SINPE.
+        </p>
+        <p>
+          Si ya enviaste con un código vencido o sin código, usá Ayuda con el
+          número de comprobante: la mesa puede acreditarlo o el sistema lo
+          empareja si reconoce tu código anterior.
+        </p>
+      </div>
       <button
         type="button"
         onClick={onClaim}
         className="w-full rounded-2xl bg-app-accent py-3 text-sm font-medium text-white"
       >
-        Ayuda
+        Ayuda · reclamar con comprobante
       </button>
     </div>
   )
+}
+
+function SinpeCountdown({
+  remainingMs,
+  ttlMs,
+}: {
+  remainingMs: number
+  ttlMs: number
+}) {
+  const total = Math.max(ttlMs, 1)
+  const ratio = Math.min(1, Math.max(0, remainingMs / total))
+  const urgent = remainingMs <= 60_000
+  const label = formatCountdown(remainingMs)
+  return (
+    <div className="space-y-2 rounded-2xl bg-app-chip px-3 py-3">
+      <div className="flex items-center justify-between gap-3 text-sm">
+        <span className="text-app-muted">Tiempo para usar este código</span>
+        <span
+          className={`font-mono text-base font-semibold tabular-nums ${urgent ? 'text-amber-300' : 'text-white'}`}
+        >
+          {label}
+        </span>
+      </div>
+      <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
+        <div
+          className={`h-full rounded-full transition-[width] duration-200 ${urgent ? 'bg-amber-400' : 'bg-app-accent'}`}
+          style={{ width: `${ratio * 100}%` }}
+        />
+      </div>
+      <p className="text-xs text-app-muted">
+        Pegalo en el comentario del SINPE Móvil antes de que llegue a 00:00.
+      </p>
+    </div>
+  )
+}
+
+function formatCountdown(ms: number): string {
+  const totalSec = Math.max(0, Math.ceil(ms / 1000))
+  const minutes = Math.floor(totalSec / 60)
+  const seconds = totalSec % 60
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
 }
 
 type ClaimNotice = {
@@ -285,7 +390,8 @@ function ClaimSinpeModal({
           </button>
         </div>
         <p className="mb-3 text-sm text-app-muted">
-          Ingresa el número de comprobante SINPE (ej. 12345678).
+          Si enviaste sin código, con un código vencido o el SMS no se acreditó,
+          ingresá el número de comprobante SINPE (ej. 12345678).
         </p>
         <input
           value={referenceId}
@@ -312,6 +418,15 @@ function ClaimSinpeModal({
             setNotice(null)
             void claimSinpe(reference)
               .then((result) => {
+                if (result.outcome === 'queued') {
+                  setNotice({
+                    tone: 'warning',
+                    title: 'Reclamo registrado',
+                    message: result.message,
+                    credited: false,
+                  })
+                  return
+                }
                 setNotice({
                   tone: 'success',
                   title: 'Acreditado a tu cuenta',

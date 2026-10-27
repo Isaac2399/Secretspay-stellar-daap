@@ -1,7 +1,13 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { AuthError } from '../errors.js'
+import {
+  normalizeSinpeCode,
+  SINPE_CODE_RETENTION_MS,
+  SINPE_CODE_TTL_MS,
+} from './code.js'
 import type {
+  SinpeCodeIssue,
   SinpeStoreData,
   SinpeTransaction,
   UnassignedDeposit,
@@ -80,14 +86,18 @@ export async function listUnassignedDeposits(input?: {
     if (query && !depositMatchesQuery(row, query)) {
       return false
     }
-    if (status && status !== 'ALL' && row.status !== status) {
-      return false
+    if (!status || status === 'PENDING_ANY') {
+      return isPendingDepositStatus(row.status)
     }
-    if (!status) {
-      return row.status === 'PENDING_MANUAL_MATCH'
+    if (status === 'ALL') {
+      return true
     }
-    return true
+    return row.status === status
   })
+}
+
+export function isPendingDepositStatus(status: string): boolean {
+  return status === 'PENDING_MANUAL_MATCH' || status === 'PENDING_USER_CLAIM'
 }
 
 export async function findByMessageQuery(query: string): Promise<{
@@ -130,6 +140,72 @@ export async function listSinpeForUser(userId: string): Promise<{
     deposits: store.unassignedDeposits.filter((row) => row.assignedUserId === userId),
     transactions: store.sinpeTransactions.filter((row) => row.userId === userId),
   }
+}
+
+export async function findActiveCodeIssueForUser(
+  userId: string,
+  now = Date.now(),
+): Promise<SinpeCodeIssue | undefined> {
+  const store = await loadSinpeStore()
+  return store.codeIssues.find(
+    (row) => row.userId === userId && Date.parse(row.expiresAt) > now,
+  )
+}
+
+export async function findCodeIssueByCode(
+  code: string,
+): Promise<SinpeCodeIssue | undefined> {
+  const key = normalizeSinpeCode(code)
+  const store = await loadSinpeStore()
+  return store.codeIssues.find((row) => normalizeSinpeCode(row.code) === key)
+}
+
+export async function issueSinpeCodeForUser(input: {
+  id: string
+  userId: string
+  publicKey: string
+  code: string
+  now?: number
+}): Promise<SinpeCodeIssue> {
+  const store = await loadSinpeStore()
+  const nowMs = input.now ?? Date.now()
+  const issuedAt = new Date(nowMs).toISOString()
+  const expiresAt = new Date(nowMs + SINPE_CODE_TTL_MS).toISOString()
+  const issue: SinpeCodeIssue = {
+    id: input.id,
+    code: normalizeSinpeCode(input.code),
+    userId: input.userId,
+    publicKey: input.publicKey,
+    issuedAt,
+    expiresAt,
+  }
+  // Un solo código activo por usuario: los anteriores quedan en historial vencidos.
+  store.codeIssues = store.codeIssues.map((row) =>
+    row.userId === input.userId && Date.parse(row.expiresAt) > nowMs
+      ? { ...row, expiresAt: issuedAt }
+      : row,
+  )
+  store.codeIssues.unshift(issue)
+  pruneCodeIssues(store, nowMs)
+  await saveSinpeStore(store)
+  return issue
+}
+
+export async function listActiveCodeCodes(): Promise<Set<string>> {
+  const store = await loadSinpeStore()
+  const now = Date.now()
+  return new Set(
+    store.codeIssues
+      .filter((row) => Date.parse(row.expiresAt) > now)
+      .map((row) => normalizeSinpeCode(row.code)),
+  )
+}
+
+function pruneCodeIssues(store: SinpeStoreData, nowMs: number) {
+  const cutoff = nowMs - SINPE_CODE_RETENTION_MS
+  store.codeIssues = store.codeIssues.filter(
+    (row) => Date.parse(row.issuedAt) >= cutoff,
+  )
 }
 
 async function loadSinpeStore(): Promise<SinpeStoreData> {
@@ -176,7 +252,7 @@ async function saveSinpeStore(store: SinpeStoreData): Promise<void> {
 }
 
 function emptyStore(): SinpeStoreData {
-  return { sinpeTransactions: [], unassignedDeposits: [] }
+  return { sinpeTransactions: [], unassignedDeposits: [], codeIssues: [] }
 }
 
 function normalizeStore(store: SinpeStoreData): SinpeStoreData {
@@ -187,6 +263,7 @@ function normalizeStore(store: SinpeStoreData): SinpeStoreData {
     unassignedDeposits: Array.isArray(store.unassignedDeposits)
       ? store.unassignedDeposits
       : [],
+    codeIssues: Array.isArray(store.codeIssues) ? store.codeIssues : [],
   }
 }
 

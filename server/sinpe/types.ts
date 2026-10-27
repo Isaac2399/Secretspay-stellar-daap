@@ -1,5 +1,6 @@
 export type UnassignedDepositStatus =
   | 'PENDING_MANUAL_MATCH'
+  | 'PENDING_USER_CLAIM'
   | 'RESOLVED'
   | 'RESOLVED_BY_USER_CLAIM'
 
@@ -46,7 +47,18 @@ export type SinpeTransaction = {
   updatedAt: string
 }
 
+/** Código sc…ts emitido al copiar; válido `ttlMs` desde `issuedAt`. */
+export type SinpeCodeIssue = {
+  id: string
+  code: string
+  userId: string
+  publicKey: string
+  issuedAt: string
+  expiresAt: string
+}
+
 export type SinpeStoreData = {
   sinpeTransactions: SinpeTransaction[]
   unassignedDeposits: UnassignedDeposit[]
+  codeIssues: SinpeCodeIssue[]
 }

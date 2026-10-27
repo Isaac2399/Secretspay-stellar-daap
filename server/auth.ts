@@ -317,11 +317,35 @@ export async function ensureUserSinpeCode(
   if (isSuperAdminRecord(user) || isEventStaffRole(user.role)) {
     return user
   }
-  const expected = generateSinpeCode(user.publicKey)
-  if (user.sinpeCode === expected && isSecretsCode(expected)) {
+  // Los códigos activos se emiten al copiar (TTL 5 min). Aquí solo
+  // conservamos un código legado sc…ts por public key para SMS viejos.
+  if (user.sinpeCode && isSecretsCode(user.sinpeCode)) {
     return user
   }
+  const expected = generateSinpeCode(user.publicKey)
   user.sinpeCode = expected
+  await saveStore(store)
+  return user
+}
+
+/** Actualiza el código visible del usuario (p. ej. el efímero activo). */
+export async function setUserSinpeCode(
+  userId: string,
+  code: string,
+): Promise<StoredUser | undefined> {
+  const store = await loadStore()
+  const user = store.users.find((entry) => entry.id === userId)
+  if (!user || isSuperAdminRecord(user) || isEventStaffRole(user.role)) {
+    return user
+  }
+  const normalized = normalizeSinpeCode(code)
+  if (!isSinpeCode(normalized)) {
+    return user
+  }
+  if (user.sinpeCode === normalized) {
+    return user
+  }
+  user.sinpeCode = normalized
   await saveStore(store)
   return user
 }

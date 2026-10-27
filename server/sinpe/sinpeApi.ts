@@ -2,6 +2,7 @@ import { AuthError } from '../errors.js'
 import { searchAssignableUsers, userFromCookieHeader } from '../auth.js'
 import { requireSinpeOps, requireUserSearch } from '../superAdmin.js'
 import {
+  activateSinpeCode,
   assignUnassignedDeposit,
   claimSinpeDeposit,
   getSinpeIntent,
@@ -73,6 +74,11 @@ export async function handleSinpeRoutes(
     return { status: 200, body: await getSinpeIntent(session) }
   }
 
+  if (method === 'POST' && path === '/api/payments/sinpe-intent/activate') {
+    const session = await requireSession(input.cookie)
+    return { status: 200, body: await activateSinpeCode(session) }
+  }
+
   if (method === 'POST' && path === '/api/payments/claim-sinpe') {
     const session = await requireSession(input.cookie)
     const result = await claimSinpeDeposit({
@@ -95,6 +101,7 @@ export async function handleSinpeRoutes(
     const session = await userFromCookieHeader(input.cookie)
     const admin = await requireSinpeOps(session)
     const crcRaw = input.body.crc_amount ?? input.body.crcAmount
+    const rojosRaw = input.body.rojos_amount ?? input.body.rojosAmount
     const result = await assignUnassignedDeposit({
       referenceId: String(input.body.reference_id ?? input.body.referenceId ?? ''),
       userId: String(input.body.user_id ?? input.body.userId ?? ''),
@@ -103,6 +110,10 @@ export async function handleSinpeRoutes(
         crcRaw === undefined || crcRaw === null || crcRaw === ''
           ? undefined
           : Number(crcRaw),
+      rojosAmount:
+        rojosRaw === undefined || rojosRaw === null || rojosRaw === ''
+          ? undefined
+          : Number(rojosRaw),
     })
     return { status: 200, body: result }
   }

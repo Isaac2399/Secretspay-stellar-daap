@@ -11,6 +11,9 @@ export type StaffSendResult = {
   status: string
   asset: string
   source: string
+  referenceId?: string
+  referenceMarked?: boolean
+  warning?: string
 }
 
 export async function fetchStaffSendSource(): Promise<StaffSendSource> {
@@ -27,12 +30,19 @@ export async function sendStaffTransfer(input: {
   amount: string
   asset: string
   memo: string
+  referenceId?: string
 }): Promise<StaffSendResult> {
   const response = await fetch('/api/admin/send', {
     method: 'POST',
     credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(input),
+    body: JSON.stringify({
+      destination: input.destination,
+      amount: input.amount,
+      asset: input.asset,
+      memo: input.memo,
+      reference_id: input.referenceId || undefined,
+    }),
   })
   const body = await readJson<StaffSendResult>(response)
   if (!response.ok) {

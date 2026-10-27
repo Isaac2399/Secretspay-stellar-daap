@@ -123,7 +123,10 @@ export function ActivityList({
 
   const shown = filtered.slice(0, visible)
   const hasMore = filtered.length > visible
-  const pending = sinpeDeposits.some((row) => row.status === 'PENDING_MANUAL_MATCH')
+  const pending = sinpeDeposits.some(
+    (row) =>
+      row.status === 'PENDING_MANUAL_MATCH' || row.status === 'PENDING_USER_CLAIM',
+  )
 
   return (
     <section className="space-y-3">

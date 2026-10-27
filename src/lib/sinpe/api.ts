@@ -10,11 +10,17 @@ export type UnassignedDeposit = {
   sender: string
   rawMessage: string
   timestamp: number
-  status: 'PENDING_MANUAL_MATCH' | 'RESOLVED' | 'RESOLVED_BY_USER_CLAIM'
+  status:
+    | 'PENDING_MANUAL_MATCH'
+    | 'PENDING_USER_CLAIM'
+    | 'RESOLVED'
+    | 'RESOLVED_BY_USER_CLAIM'
   lastError?: string
   assignedUserId?: string
   assignedPublicKey?: string
   stellarHash?: string
+  resolvedByAdminId?: string
+  resolvedAt?: string
   createdAt: string
   updatedAt: string
 }
@@ -36,7 +42,13 @@ export type SinpeLookup = {
     stellarHash?: string
     publicKey?: string
     error?: string
+    comment?: string
   }
+  manualGrant?: boolean
+  alreadyFulfilled?: boolean
+  suggestedUser?: AssignableUser
+  matchedCode?: string
+  suggestionReason?: 'assigned' | 'code' | 'transaction'
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -84,19 +96,37 @@ export async function searchAdminUsers(query: string) {
   return request<{ users: AssignableUser[] }>(`/api/admin/users${qs}`)
 }
 
+export type SinpeIntent = {
+  phone: string
+  phoneDisplay: string
+  code: string | null
+  publicKey: string
+  expiresAt: string | null
+  issuedAt: string | null
+  remainingMs: number
+  ttlMs: number
+  serverNow: string
+  status: 'active' | 'idle'
+  activated?: boolean
+}
+
 export async function fetchSinpeIntent() {
-  return request<{
-    phone: string
-    phoneDisplay: string
-    code: string
-    publicKey: string
-  }>('/api/payments/sinpe-intent')
+  return request<SinpeIntent>('/api/payments/sinpe-intent')
+}
+
+/** Emite o reutiliza el código; el contador de 5 min arranca al activar/copiar. */
+export async function activateSinpeIntent() {
+  return request<SinpeIntent>('/api/payments/sinpe-intent/activate', {
+    method: 'POST',
+    body: '{}',
+  })
 }
 
 export async function assignDeposit(input: {
   referenceId: string
   userId: string
   crcAmount?: number
+  rojosAmount?: number
 }) {
   return request<{ deposit: UnassignedDeposit }>(
     '/api/admin/assign-deposit',
@@ -106,6 +136,7 @@ export async function assignDeposit(input: {
         reference_id: input.referenceId,
         user_id: input.userId,
         crc_amount: input.crcAmount,
+        rojos_amount: input.rojosAmount,
       }),
     },
   )
@@ -118,13 +149,15 @@ export async function lookupSinpeClaim(referenceId: string) {
 }
 
 export async function claimSinpe(referenceId: string) {
-  return request<{ message: string; rojos: number; stellarHash?: string }>(
-    '/api/payments/claim-sinpe',
-    {
-      method: 'POST',
-      body: JSON.stringify({ reference_id: referenceId }),
-    },
-  )
+  return request<{
+    outcome?: 'credited' | 'queued'
+    message: string
+    rojos: number
+    stellarHash?: string
+  }>('/api/payments/claim-sinpe', {
+    method: 'POST',
+    body: JSON.stringify({ reference_id: referenceId }),
+  })
 }
 
 export async function retryMySinpe() {

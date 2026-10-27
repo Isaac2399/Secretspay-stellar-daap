@@ -13,6 +13,7 @@ import {
   createSessionCookie,
   createUser,
   ensureUserLoyaltyTrustline,
+  findUserByPublicKey,
   updateUserPlace,
   updateUserPublicKey,
   userFromCookieHeader,
@@ -21,6 +22,8 @@ import {
   ensureDevSuperAdmin,
   ensureDevEventStaff,
 } from './auth.js'
+import { assertReferenceAvailableForManualGrant, markReferenceGrantedByAdmin } from './sinpe/service.js'
+import { loyaltyAssetFromEnv } from './provisionAccount.js'
 import { googleClientId, verifyGoogleAccessToken } from './googleAuth.js'
 import {
   getAdminOverview,
@@ -153,13 +156,58 @@ async function route(input: {
   if (method === 'POST' && path === '/api/admin/send') {
     const session = await userFromCookieHeader(input.cookie)
     const staff = await requireStaffTransfer(session)
+    const referenceId = String(
+      input.body.reference_id ?? input.body.referenceId ?? '',
+    ).trim()
+    const asset = String(input.body.asset ?? '')
+    if (referenceId && isLoyaltyAssetCode(asset)) {
+      await assertReferenceAvailableForManualGrant(referenceId)
+    }
     const result = await submitStaffTransfer({
       role: staff.role as StaffSendRole,
       destination: String(input.body.destination ?? ''),
       amount: String(input.body.amount ?? ''),
-      asset: String(input.body.asset ?? ''),
+      asset,
       memo: String(input.body.memo ?? ''),
     })
+    if (referenceId && isLoyaltyAssetCode(asset)) {
+      const destination = String(input.body.destination ?? '')
+      const byKey = await findUserByPublicKey(destination)
+      try {
+        await markReferenceGrantedByAdmin({
+          referenceId,
+          adminId: staff.id,
+          publicKey: destination,
+          userId: byKey?.id,
+          rojos: Number(input.body.amount),
+          stellarHash: result.hash,
+        })
+        return {
+          status: 200,
+          body: {
+            ...result,
+            referenceId,
+            referenceMarked: true,
+          },
+        }
+      } catch (error) {
+        console.error('[admin-send] ROJOS enviados pero no se marcó la referencia', {
+          referenceId,
+          hash: result.hash,
+          error,
+        })
+        return {
+          status: 200,
+          body: {
+            ...result,
+            referenceId,
+            referenceMarked: false,
+            warning:
+              'Los ROJOS se enviaron, pero no se pudo marcar el número de referencia. Revisalo en SINPE.',
+          },
+        }
+      }
+    }
     return { status: 200, body: result }
   }
 
@@ -331,4 +379,16 @@ async function route(input: {
   }
 
   return { status: 404, body: { error: 'Ruta no encontrada' } }
+}
+
+function isLoyaltyAssetCode(asset: string): boolean {
+  const code = asset.trim().toUpperCase()
+  if (!code || code === 'XLM' || code === 'USD' || code === 'USDC') {
+    return false
+  }
+  try {
+    return code === loyaltyAssetFromEnv().getCode().toUpperCase()
+  } catch {
+    return code === 'ROJOS'
+  }
 }

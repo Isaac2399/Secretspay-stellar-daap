@@ -70,8 +70,15 @@ export default function ProfilePage() {
         ) : null}
         {account.role !== 'cashier' && account.role !== 'sinpe_ops' && account.role !== 'admin' ? (
           <div>
-            <p className="text-xs text-app-muted">Código SINPE (sc…ts)</p>
-            <p className="mt-1 break-all font-mono text-lg tracking-wide">{account.sinpeCode ?? '—'}</p>
+            <p className="text-xs text-app-muted">Código SINPE</p>
+            <p className="mt-1 text-sm text-white/80">
+              Se genera al copiarlo en Agregar → SINPE Móvil y dura 5 minutos.
+            </p>
+            {account.sinpeCode ? (
+              <p className="mt-1 break-all font-mono text-xs tracking-wide text-app-muted">
+                Último emitido: {account.sinpeCode}
+              </p>
+            ) : null}
           </div>
         ) : null}
         <div>

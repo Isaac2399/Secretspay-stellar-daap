@@ -67,6 +67,7 @@ export default defineConfig(({ mode }) => {
     'SINPE_SMS_API_KEY',
     'SINPE_TREASURY_SECRET_KEY',
     'SINPE_RECEIVE_PHONE',
+    'SINPE_SMS_ALLOWED_SENDERS',
     'SINPE_CODE_SECRET',
     'ROJOS_DISTRIBUTOR_SECRET_KEY',
     'GUEST_DEMO',

@@ -191,6 +191,9 @@ export function AdminDashboard() {
         <div className="space-y-8">
           <p className="flex items-center gap-2 text-xs text-app-muted">
             <Smartphone className="h-4 w-4 text-app-accent" />
+            Reclamos por referencia · SMS sin cuenta · confirmación manual
+          </p>
+          <p className="flex items-center gap-2 text-xs text-app-muted">
             <Link className="underline" to="/admin/unassigned-deposits">
               /admin/unassigned-deposits
             </Link>

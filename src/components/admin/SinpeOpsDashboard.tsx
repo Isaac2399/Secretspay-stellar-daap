@@ -9,10 +9,11 @@ export function SinpeOpsDashboard() {
         <p className="text-xs font-medium uppercase tracking-wide text-app-accent">
           Mesa SINPE
         </p>
-        <h1 className="mt-1 text-xl font-semibold">Depósitos sin cuenta</h1>
+        <h1 className="mt-1 text-xl font-semibold">Depósitos y reclamos</h1>
         <p className="mt-1 text-sm text-app-muted">
-          Empareja comprobantes SINPE con la cuenta correcta. No envía ROJOS a
-          mano: eso solo lo hace el super admin (o la caja con efectivo).
+          Empareja SMS sin cuenta y reclamos por número de referencia. Si
+          otorgás a mano, ese comprobante queda marcado y no se acredita otra
+          vez cuando llegue el SMS.
         </p>
       </div>
       <p className="flex items-center gap-2 text-xs text-app-muted">
