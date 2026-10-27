@@ -4,6 +4,8 @@
     { "source": "/api/v1/:path*", "destination": "/api/:path*" },
     { "source": "/api/events/orders/ready", "destination": "/api/events/ready" },
     { "source": "/api/events/orders/complete", "destination": "/api/events/complete" },
+    { "source": "/api/events/admin/detail", "destination": "/api/events/admin-detail" },
+    { "source": "/api/events/admin/products", "destination": "/api/events/admin-products" },
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ]
 }

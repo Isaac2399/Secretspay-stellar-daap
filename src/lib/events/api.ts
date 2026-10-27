@@ -120,7 +120,7 @@ export async function fetchAdminEventDetail(merchantId: string) {
     settings: EventSettings
     products: EventProduct[]
     email: string
-  }>(`/api/events/admin/detail?merchantId=${encodeURIComponent(merchantId)}`)
+  }>(`/api/events/admin-detail?merchantId=${encodeURIComponent(merchantId)}`)
 }
 
 export async function saveAdminEvent(input: {
@@ -149,7 +149,7 @@ export async function createAdminEventProduct(
     promo?: EventProductPromo | null
   },
 ) {
-  return request<{ product: EventProduct }>('/api/events/admin/products', {
+  return request<{ product: EventProduct }>('/api/events/admin-products', {
     method: 'POST',
     body: JSON.stringify({ ...input, merchantId }),
   })
@@ -168,14 +168,14 @@ export async function updateAdminEventProduct(
     promo?: EventProductPromo | null
   },
 ) {
-  return request<{ product: EventProduct }>('/api/events/admin/products', {
+  return request<{ product: EventProduct }>('/api/events/admin-products', {
     method: 'PATCH',
     body: JSON.stringify({ ...input, merchantId }),
   })
 }
 
 export async function deleteAdminEventProduct(merchantId: string, id: string) {
-  return request<{ ok: boolean }>('/api/events/admin/products', {
+  return request<{ ok: boolean }>('/api/events/admin-products', {
     method: 'DELETE',
     body: JSON.stringify({ merchantId, id }),
   })

@@ -90,7 +90,8 @@ export async function handleEventRoutes(
     return { status: 200, body: { events: await listEventsForAdmin() } }
   }
 
-  if (method === 'GET' && path === '/api/events/admin/detail') {
+  // Vercel solo enruta un segmento bajo /api/events/[action].
+  if (method === 'GET' && path === '/api/events/admin-detail') {
     requirePlatformAdmin(session)
     const merchantId = String(input.body.merchantId ?? '').trim()
     if (!merchantId) {
@@ -111,7 +112,10 @@ export async function handleEventRoutes(
     }
   }
 
-  if (method === 'POST' && path === '/api/events/admin/products') {
+  if (
+    method === 'POST' &&
+    (path === '/api/events/admin-products' || path === '/api/events/admin/products')
+  ) {
     requirePlatformAdmin(session)
     const merchantId = String(input.body.merchantId ?? '').trim()
     if (!merchantId) {
@@ -123,7 +127,10 @@ export async function handleEventRoutes(
     }
   }
 
-  if (method === 'PATCH' && path === '/api/events/admin/products') {
+  if (
+    method === 'PATCH' &&
+    (path === '/api/events/admin-products' || path === '/api/events/admin/products')
+  ) {
     requirePlatformAdmin(session)
     const merchantId = String(input.body.merchantId ?? '').trim()
     if (!merchantId) {
@@ -135,7 +142,10 @@ export async function handleEventRoutes(
     }
   }
 
-  if (method === 'DELETE' && path === '/api/events/admin/products') {
+  if (
+    method === 'DELETE' &&
+    (path === '/api/events/admin-products' || path === '/api/events/admin/products')
+  ) {
     requirePlatformAdmin(session)
     const merchantId = String(input.body.merchantId ?? '').trim()
     if (!merchantId) {
