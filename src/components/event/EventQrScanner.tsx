@@ -35,9 +35,12 @@ function writeCameraAllowed(allowed: boolean) {
 export function EventQrScanner({
   onScan,
   busy,
+  resetKey = 0,
 }: {
-  onScan: (value: string) => void
+  onScan: (value: string) => void | Promise<void>
   busy?: boolean
+  /** Increment after closing success/error so the operator can scan again. */
+  resetKey?: number
 }) {
   const rawId = useId().replace(/:/g, '')
   const scannerId = `event-qr-${rawId}`
@@ -45,6 +48,7 @@ export function EventQrScanner({
   const handlingRef = useRef(false)
   const busyRef = useRef(Boolean(busy))
   const onScanRef = useRef(onScan)
+  const lastValueRef = useRef<string | null>(null)
   onScanRef.current = onScan
   busyRef.current = Boolean(busy)
 
@@ -52,6 +56,11 @@ export function EventQrScanner({
   const [cameraAllowed, setCameraAllowed] = useState(readCameraAllowed)
   const [pasted, setPasted] = useState('')
   const [scanError, setScanError] = useState<string | null>(null)
+
+  useEffect(() => {
+    handlingRef.current = false
+    lastValueRef.current = null
+  }, [resetKey])
 
   useEffect(() => {
     if (!cameraOn) {
@@ -68,13 +77,18 @@ export function EventQrScanner({
             if (handlingRef.current || busyRef.current || cancelled) {
               return
             }
+            const value = decoded.trim()
+            if (!value || value === lastValueRef.current) {
+              return
+            }
+            // Lock immediately so fps callbacks cannot fire a second complete.
             handlingRef.current = true
-            onScanRef.current(decoded)
-            window.setTimeout(() => {
-              handlingRef.current = false
-            }, 1600)
+            lastValueRef.current = value
+            cancelled = true
+            setCameraOn(false)
+            void Promise.resolve(onScanRef.current(value)).catch(() => undefined)
           },
-          { fps: 10 },
+          { fps: 8 },
         )
         if (cancelled) {
           await stopQrScanner(scanner)
@@ -116,8 +130,11 @@ export function EventQrScanner({
           <button
             type="button"
             className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-app-accent py-2.5 text-sm font-medium text-white"
+            disabled={busy}
             onClick={() => {
               setScanError(null)
+              handlingRef.current = false
+              lastValueRef.current = null
               setCameraOn(true)
             }}
           >
@@ -147,8 +164,17 @@ export function EventQrScanner({
       <button
         type="button"
         className="rounded-xl bg-app-chip px-4 py-2 text-sm disabled:opacity-60"
-        disabled={busy}
-        onClick={() => onScan(pasted)}
+        disabled={busy || !pasted.trim()}
+        onClick={() => {
+          const value = pasted.trim()
+          if (!value || handlingRef.current || busyRef.current) {
+            return
+          }
+          handlingRef.current = true
+          lastValueRef.current = value
+          setCameraOn(false)
+          void Promise.resolve(onScan(value)).catch(() => undefined)
+        }}
       >
         Usar código
       </button>

@@ -1,4 +1,4 @@
-import { randomBytes, randomUUID } from 'node:crypto'
+import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto'
 import { StrKey } from '@stellar/stellar-sdk'
 import { findUserById, secretKeyForUser } from '../auth.js'
 import {
@@ -412,15 +412,40 @@ export async function completeOrderByQr(merchantId: string, rawQr: string) {
   }
   const store = await loadEventStore()
   const order = store.orders.find((row) => row.id === parsed.orderId)
+
+  // Wrong bar / forged id / other event: same opaque message (no order leak).
   if (!order || order.merchantId !== merchantId) {
-    throw new AuthError('Ese QR no es de esta barra', 404)
+    throw new AuthError(
+      'Ese QR no es de esta barra o no existe. No entregues productos.',
+      404,
+    )
   }
-  if (order.pickupToken !== parsed.pickupToken) {
-    throw new AuthError('El código del pedido no coincide', 400)
+  if (!tokensMatch(order.pickupToken, parsed.pickupToken)) {
+    throw new AuthError(
+      'El código del pedido no coincide. Puede ser un QR falso o alterado.',
+      400,
+    )
   }
+  if (!order.stellarHash) {
+    throw new AuthError(
+      'Ese pedido no tiene pago registrado. No entregues productos.',
+      400,
+    )
+  }
+  if (order.status === 'cancelled') {
+    throw new AuthError('Ese pedido está cancelado. No entregues productos.', 400)
+  }
+  // Re-scan of a completed order, or a screenshot/copy of an already-used QR.
   if (order.status === 'completed') {
-    throw new AuthError('Ese pedido ya se entregó', 400)
+    throw new AuthError(
+      'Ese pedido ya fue entregado. No vuelvas a dar productos.',
+      409,
+    )
   }
+  if (order.status !== 'preparing' && order.status !== 'ready') {
+    throw new AuthError('Ese pedido no se puede entregar', 400)
+  }
+
   order.status = 'completed'
   order.completedAt = new Date().toISOString()
   if (!order.readyAt) {
@@ -428,6 +453,19 @@ export async function completeOrderByQr(merchantId: string, rawQr: string) {
   }
   await saveEventStore(store)
   return publicOrder(order, false)
+}
+
+function tokensMatch(expected: string, provided: string): boolean {
+  try {
+    const left = Buffer.from(expected, 'utf8')
+    const right = Buffer.from(provided, 'utf8')
+    if (left.length !== right.length) {
+      return false
+    }
+    return timingSafeEqual(left, right)
+  } catch {
+    return false
+  }
 }
 
 type ReservedCart = {
@@ -559,7 +597,7 @@ async function commitOrder(input: {
     customerEmail: input.customer.email,
     orderNumber: input.reserved.orderNumber,
     pickupLabel: input.reserved.pickupLabel,
-    pickupToken: randomBytes(9).toString('hex'),
+    pickupToken: randomBytes(16).toString('hex'),
     items: input.reserved.items,
     total: input.reserved.total,
     asset: input.reserved.asset,

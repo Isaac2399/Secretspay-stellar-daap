@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ErrorModal } from '@/components/feedback/ErrorModal'
 import { MerchantEventCatalog } from '@/components/event/MerchantEventCatalog'
+import { MerchantOrderQueue } from '@/components/event/MerchantOrderQueue'
 import { fetchAdminEvents } from '@/lib/events/api'
 import { readableError } from '@/lib/auth/readableError'
 import { formatAmount } from '@/lib/stellar/useAccountBalances'
@@ -9,6 +10,7 @@ import type { EventAdminRow } from '@/types/event'
 export function AdminEventsPanel() {
   const [events, setEvents] = useState<EventAdminRow[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [adminTab, setAdminTab] = useState<'carta' | 'pedidos'>('carta')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -108,15 +110,45 @@ export function AdminEventsPanel() {
       </section>
 
       {selected ? (
-        <MerchantEventCatalog
-          key={selected.merchantId}
-          merchantId={selected.merchantId}
-          asAdmin
-          merchantEmail={selected.email}
-          onSettingsSaved={() => {
-            void reload().catch((err) => setError(readableError(err)))
-          }}
-        />
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              className={`rounded-2xl py-2.5 text-sm ${
+                adminTab === 'carta' ? 'bg-app-accent' : 'bg-app-chip'
+              }`}
+              onClick={() => setAdminTab('carta')}
+            >
+              Productos
+            </button>
+            <button
+              type="button"
+              className={`rounded-2xl py-2.5 text-sm ${
+                adminTab === 'pedidos' ? 'bg-app-accent' : 'bg-app-chip'
+              }`}
+              onClick={() => setAdminTab('pedidos')}
+            >
+              Entregar QR
+            </button>
+          </div>
+          {adminTab === 'carta' ? (
+            <MerchantEventCatalog
+              key={`${selected.merchantId}-carta`}
+              merchantId={selected.merchantId}
+              asAdmin
+              merchantEmail={selected.email}
+              onSettingsSaved={() => {
+                void reload().catch((err) => setError(readableError(err)))
+              }}
+            />
+          ) : (
+            <MerchantOrderQueue
+              key={`${selected.merchantId}-pedidos`}
+              merchantId={selected.merchantId}
+              asAdmin
+            />
+          )}
+        </div>
       ) : null}
 
       {error ? <ErrorModal message={error} onClose={() => setError(null)} /> : null}

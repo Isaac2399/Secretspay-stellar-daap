@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { ErrorModal } from '@/components/feedback/ErrorModal'
+import { SuccessModal } from '@/components/feedback/SuccessModal'
 import { readableError } from '@/lib/auth/readableError'
 import {
   completeEventOrderByQr,
@@ -17,16 +18,27 @@ const STATUS_LABEL: Record<EventOrder['status'], string> = {
   cancelled: 'Cancelado',
 }
 
-export function MerchantOrderQueue() {
+const ALREADY_DELIVERED_RE =
+  /ya (se |fue )?entreg/i
+
+export function MerchantOrderQueue({
+  merchantId,
+  asAdmin = false,
+}: {
+  merchantId?: string
+  asAdmin?: boolean
+} = {}) {
   const [orders, setOrders] = useState<EventOrder[]>([])
   const [error, setError] = useState<string | null>(null)
-  const [message, setMessage] = useState<string | null>(null)
+  const [delivered, setDelivered] = useState<EventOrder | null>(null)
   const [busy, setBusy] = useState(false)
+  const [scannerReset, setScannerReset] = useState(0)
+  const completingRef = useRef(false)
 
   const reload = useCallback(async () => {
-    const result = await fetchMerchantOrders()
+    const result = await fetchMerchantOrders(asAdmin ? merchantId : undefined)
     setOrders(result.orders)
-  }, [])
+  }, [asAdmin, merchantId])
 
   useEffect(() => {
     let cancelled = false
@@ -45,24 +57,40 @@ export function MerchantOrderQueue() {
   }, [reload])
 
   async function complete(qr: string) {
-    if (!qr.trim()) {
+    if (!qr.trim() || completingRef.current) {
       return
     }
+    completingRef.current = true
     setBusy(true)
     setError(null)
+    setDelivered(null)
     try {
-      const result = await completeEventOrderByQr(qr.trim())
-      setMessage(`Pedido #${result.order.orderNumber} entregado`)
+      const result = await completeEventOrderByQr(
+        qr.trim(),
+        asAdmin ? merchantId : undefined,
+      )
+      setDelivered(result.order)
       await reload()
     } catch (err) {
-      setError(readableError(err))
+      const message = readableError(err)
+      // Re-scan / screenshot of an already used QR → warn; do not confuse with success.
+      setError(
+        ALREADY_DELIVERED_RE.test(message)
+          ? 'Ese pedido ya fue entregado. No vuelvas a dar productos.'
+          : message,
+      )
     } finally {
+      completingRef.current = false
       setBusy(false)
+      setScannerReset((n) => n + 1)
     }
   }
 
   const open = orders.filter((order) => order.status !== 'completed')
   const done = orders.filter((order) => order.status === 'completed').slice(0, 8)
+  const deliveredItems = delivered
+    ? delivered.items.map((item) => `${item.qty}× ${item.name}`).join(', ')
+    : null
 
   return (
     <div className="space-y-5">
@@ -75,7 +103,11 @@ export function MerchantOrderQueue() {
 
       <section className="rounded-[24px] bg-app-card p-4">
         <h3 className="mb-3 text-sm font-semibold">Leer QR de retiro</h3>
-        <EventQrScanner busy={busy} onScan={(value) => void complete(value)} />
+        <EventQrScanner
+          busy={busy}
+          resetKey={scannerReset}
+          onScan={(value) => complete(value)}
+        />
       </section>
 
       {open.map((order) => (
@@ -102,7 +134,7 @@ export function MerchantOrderQueue() {
               className="w-full rounded-xl bg-app-accent py-2.5 text-sm font-medium disabled:opacity-60"
               disabled={busy}
               onClick={() =>
-                void markEventOrderReady(order.id)
+                void markEventOrderReady(order.id, asAdmin ? merchantId : undefined)
                   .then(() => reload())
                   .catch((err) => setError(readableError(err)))
               }
@@ -126,8 +158,21 @@ export function MerchantOrderQueue() {
         </section>
       ) : null}
 
-      {message ? <p className="text-sm text-app-accent">{message}</p> : null}
-      {error ? <ErrorModal message={error} onClose={() => setError(null)} /> : null}
+      {delivered ? (
+        <SuccessModal
+          title="Pedido entregado"
+          message={`Pedido #${delivered.orderNumber} confirmado como entregado`}
+          detail={deliveredItems}
+          onClose={() => setDelivered(null)}
+        />
+      ) : null}
+      {!delivered && error ? (
+        <ErrorModal
+          title={ALREADY_DELIVERED_RE.test(error) ? 'Pedido ya entregado' : 'No se puede entregar'}
+          message={error}
+          onClose={() => setError(null)}
+        />
+      ) : null}
     </div>
   )
 }

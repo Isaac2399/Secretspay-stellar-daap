@@ -195,20 +195,23 @@ export async function fetchMyEventOrders() {
   return request<{ orders: EventOrder[] }>('/api/events/my-orders')
 }
 
-export async function fetchMerchantOrders() {
-  return request<{ orders: EventOrder[] }>('/api/events/orders')
+export async function fetchMerchantOrders(merchantId?: string) {
+  const query = merchantId
+    ? `?merchantId=${encodeURIComponent(merchantId)}`
+    : ''
+  return request<{ orders: EventOrder[] }>(`/api/events/orders${query}`)
 }
 
-export async function markEventOrderReady(orderId: string) {
+export async function markEventOrderReady(orderId: string, merchantId?: string) {
   return request<{ order: EventOrder }>('/api/events/ready', {
     method: 'POST',
-    body: JSON.stringify({ orderId }),
+    body: JSON.stringify({ orderId, ...(merchantId ? { merchantId } : {}) }),
   })
 }
 
-export async function completeEventOrderByQr(qr: string) {
+export async function completeEventOrderByQr(qr: string, merchantId?: string) {
   return request<{ order: EventOrder }>('/api/events/complete', {
     method: 'POST',
-    body: JSON.stringify({ qr }),
+    body: JSON.stringify({ qr, ...(merchantId ? { merchantId } : {}) }),
   })
 }

@@ -180,19 +180,19 @@ export async function handleEventRoutes(
   }
 
   if (method === 'GET' && path === '/api/events/orders') {
-    const merchant = requireMerchant(session)
-    return { status: 200, body: { orders: await listMerchantOrders(merchant.id) } }
+    const merchantId = resolveBarMerchantId(session, input.body.merchantId)
+    return { status: 200, body: { orders: await listMerchantOrders(merchantId) } }
   }
 
   if (
     method === 'POST' &&
     (path === '/api/events/ready' || path === '/api/events/orders/ready')
   ) {
-    const merchant = requireMerchant(session)
+    const merchantId = resolveBarMerchantId(session, input.body.merchantId)
     return {
       status: 200,
       body: {
-        order: await markOrderReady(merchant.id, String(input.body.orderId ?? '')),
+        order: await markOrderReady(merchantId, String(input.body.orderId ?? '')),
       },
     }
   }
@@ -201,11 +201,11 @@ export async function handleEventRoutes(
     method === 'POST' &&
     (path === '/api/events/complete' || path === '/api/events/orders/complete')
   ) {
-    const merchant = requireMerchant(session)
+    const merchantId = resolveBarMerchantId(session, input.body.merchantId)
     const qr = String(input.body.qr ?? input.body.pickupQr ?? '')
     return {
       status: 200,
-      body: { order: await completeOrderByQr(merchant.id, qr) },
+      body: { order: await completeOrderByQr(merchantId, qr) },
     }
   }
 
@@ -224,4 +224,22 @@ function requirePlatformAdmin(session: PublicUser): PublicUser {
     throw new AuthError('Solo el super admin puede revisar todos los eventos', 403)
   }
   return session
+}
+
+/** Merchant acts as self; super admin must pass merchantId of the bar. */
+function resolveBarMerchantId(
+  session: PublicUser,
+  merchantIdRaw: unknown,
+): string {
+  if (session.role === 'merchant') {
+    return session.id
+  }
+  if (session.role === 'admin') {
+    const merchantId = String(merchantIdRaw ?? '').trim()
+    if (!merchantId) {
+      throw new AuthError('Elige la empresa de la barra', 400)
+    }
+    return merchantId
+  }
+  throw new AuthError('Solo la empresa o el super admin pueden entregar pedidos', 403)
 }
