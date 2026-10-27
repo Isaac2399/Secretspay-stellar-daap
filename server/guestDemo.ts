@@ -35,10 +35,10 @@ const ROJOS_CREDIT = '250'
 const USDC_FLOOR = 5
 const USDC_CREDIT = '25'
 
-/** Opt out for the pilot: GUEST_DEMO=0 hides the judge demo. */
+/** Apagada por defecto (piloto). Solo con GUEST_DEMO=1. */
 function guestDemoEnabled(): boolean {
   const flag = (process.env.GUEST_DEMO ?? '').trim().toLowerCase()
-  return flag !== '0' && flag !== 'false' && flag !== 'off'
+  return flag === '1' || flag === 'true' || flag === 'on'
 }
 
 /** Pilot default: no free ROJOS on guest demo. Opt in with GUEST_DEMO_ROJOS=1. */
