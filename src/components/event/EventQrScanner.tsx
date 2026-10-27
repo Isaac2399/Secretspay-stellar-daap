@@ -71,6 +71,15 @@ export function EventQrScanner({
 
     async function start() {
       try {
+        // Dos frames de layout antes de medir/abrir (evita preview a mitad)
+        await new Promise<void>((resolve) => {
+          window.requestAnimationFrame(() => {
+            window.requestAnimationFrame(() => resolve())
+          })
+        })
+        if (cancelled) {
+          return
+        }
         const scanner = await startQrScanner(
           scannerId,
           (decoded) => {
@@ -105,13 +114,10 @@ export function EventQrScanner({
       }
     }
 
-    const timer = window.setTimeout(() => {
-      void start()
-    }, 150)
+    void start()
 
     return () => {
       cancelled = true
-      window.clearTimeout(timer)
       void stopQrScanner(scannerRef.current)
       scannerRef.current = null
     }
@@ -119,7 +125,13 @@ export function EventQrScanner({
 
   return (
     <div className="space-y-3">
-      {cameraOn ? <div id={scannerId} className="qr-scanner" /> : null}
+      {/* Mantén el marco en el DOM al abrir para que el alto exista antes del stream */}
+      <div
+        id={scannerId}
+        className="qr-scanner"
+        style={{ display: cameraOn ? 'block' : 'none' }}
+        aria-hidden={!cameraOn}
+      />
       {!cameraOn ? (
         <div className="space-y-3 rounded-2xl bg-app-chip p-4">
           <p className="text-sm text-white/80">

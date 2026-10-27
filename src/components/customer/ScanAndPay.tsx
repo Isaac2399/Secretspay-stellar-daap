@@ -66,6 +66,14 @@ export function ScanAndPay() {
 
     async function start() {
       try {
+        await new Promise<void>((resolve) => {
+          window.requestAnimationFrame(() => {
+            window.requestAnimationFrame(() => resolve())
+          })
+        })
+        if (cancelled) {
+          return
+        }
         const scanner = await startQrScanner(scannerId, (decoded) => {
           if (cancelled || handlingRef.current) {
             return
@@ -97,14 +105,11 @@ export function ScanAndPay() {
       }
     }
 
-    const timer = window.setTimeout(() => {
-      void start()
-    }, 150)
+    void start()
 
     return () => {
       cancelled = true
       handlingRef.current = true
-      window.clearTimeout(timer)
       void stopQrScanner(scannerRef.current)
       scannerRef.current = null
     }
@@ -147,9 +152,12 @@ export function ScanAndPay() {
 
   return (
     <div className="space-y-4">
-      {!payload && cameraOn ? (
-        <div id={scannerId} className="qr-scanner" />
-      ) : null}
+      <div
+        id={scannerId}
+        className="qr-scanner"
+        style={{ display: !payload && cameraOn ? 'block' : 'none' }}
+        aria-hidden={Boolean(payload) || !cameraOn}
+      />
 
       {!payload && !cameraOn ? (
         <div className="space-y-3 rounded-2xl bg-app-chip p-4">

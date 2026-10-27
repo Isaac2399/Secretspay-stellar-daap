@@ -61,25 +61,21 @@ export function cameraErrorMessage(error: unknown): string {
 
 export async function waitForScannerElement(
   elementId: string,
-  attempts = 30,
+  attempts = 40,
 ): Promise<HTMLElement> {
   for (let i = 0; i < attempts; i += 1) {
     const el = document.getElementById(elementId)
-    if (el && el.clientWidth > 0) {
-      return el
-    }
-    // Fuerza layout si el contenedor todavía mide 0
     if (el) {
-      el.style.minHeight = el.style.minHeight || '280px'
+      // Fuerza layout antes de medir (móvil a veces monta con alto 0 un frame)
       el.getBoundingClientRect()
-      if (el.clientWidth > 0) {
+      if (el.clientWidth >= 200 && el.clientHeight >= 200) {
         return el
       }
     }
     await new Promise((resolve) => window.setTimeout(resolve, 50))
   }
   const el = document.getElementById(elementId)
-  if (el) {
+  if (el && el.clientWidth > 0) {
     return el
   }
   throw new Error(`No apareció el visor de cámara (#${elementId}).`)
@@ -88,20 +84,34 @@ export async function waitForScannerElement(
 function safeQrbox(viewWidth: number, viewHeight: number) {
   const edge = Math.max(
     120,
-    Math.min(Math.floor(Math.min(viewWidth, viewHeight) * 0.7), 280),
+    Math.min(Math.floor(Math.min(viewWidth, viewHeight) * 0.72), 280),
   )
-  // html5-qrcode falla si qrbox > viewfinder
   const width = Math.min(edge, Math.max(50, viewWidth - 8))
   const height = Math.min(edge, Math.max(50, viewHeight - 8))
   return { width, height }
 }
 
-async function warmPermission(): Promise<void> {
+async function ensureCameraPermission(): Promise<void> {
   if (!navigator.mediaDevices?.getUserMedia) {
     throw Object.assign(new Error('Este navegador no soporta cámara'), {
       name: 'NotSupportedError',
     })
   }
+
+  // Si ya hay permiso, no abras/cierres un stream previo: en iOS eso deja el
+  // preview cortado o negro hasta bloquear/desbloquear el teléfono.
+  const nav = navigator as Navigator & {
+    permissions?: { query: (desc: { name: string }) => Promise<{ state: string }> }
+  }
+  try {
+    const status = await nav.permissions?.query({ name: 'camera' })
+    if (status?.state === 'granted') {
+      return
+    }
+  } catch {
+    // Safari a menudo no soporta permissions.query('camera')
+  }
+
   const stream = await navigator.mediaDevices.getUserMedia({
     audio: false,
     video: { facingMode: { ideal: 'environment' } },
@@ -109,6 +119,8 @@ async function warmPermission(): Promise<void> {
   for (const track of stream.getTracks()) {
     track.stop()
   }
+  // Dale un respiro al hardware antes del segundo getUserMedia de html5-qrcode
+  await new Promise((resolve) => window.setTimeout(resolve, 120))
 }
 
 async function stopWithoutClear(scanner: Html5Qrcode): Promise<void> {
@@ -122,8 +134,51 @@ async function stopWithoutClear(scanner: Html5Qrcode): Promise<void> {
   }
 }
 
+/** Asegura que el <video> llene el marco y esté reproduciendo (iOS/Android). */
+async function settleVideoPreview(elementId: string): Promise<void> {
+  const root = document.getElementById(elementId)
+  if (!root) {
+    return
+  }
+  const video = root.querySelector('video')
+  if (!video) {
+    return
+  }
+
+  video.setAttribute('playsinline', 'true')
+  video.setAttribute('webkit-playsinline', 'true')
+  video.muted = true
+  video.playsInline = true
+
+  const play = async () => {
+    try {
+      await video.play()
+    } catch {
+      // autoplay policies; el stream igual puede verse
+    }
+  }
+
+  if (video.readyState < 2) {
+    await new Promise<void>((resolve) => {
+      const done = () => resolve()
+      video.addEventListener('loadeddata', done, { once: true })
+      video.addEventListener('loadedmetadata', done, { once: true })
+      window.setTimeout(done, 800)
+    })
+  }
+
+  await play()
+
+  // Fuerza un layout pass: sin esto algunos Android/iOS dejan el video a mitad
+  root.style.transform = 'translateZ(0)'
+  void root.offsetHeight
+  window.dispatchEvent(new Event('resize'))
+  await new Promise((resolve) => window.setTimeout(resolve, 50))
+  await play()
+}
+
 /**
- * Arranca el escáner de forma agresiva y compatible con iOS/Android/desktop.
+ * Arranca el escáner de forma compatible con iOS/Android/desktop.
  * No hace clear() entre reintentos (rompe el DOM de html5-qrcode).
  */
 export async function startQrScanner(
@@ -139,11 +194,9 @@ export async function startQrScanner(
 
   await waitForScannerElement(elementId)
 
-  // Pedir permiso primero; en iOS habilita labels de getCameras()
   try {
-    await warmPermission()
+    await ensureCameraPermission()
   } catch (error) {
-    // Si falla environment, probar cualquier cámara
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: false,
@@ -152,14 +205,19 @@ export async function startQrScanner(
       for (const track of stream.getTracks()) {
         track.stop()
       }
+      await new Promise((resolve) => window.setTimeout(resolve, 120))
     } catch (fallbackError) {
       throw fallbackError ?? error
     }
   }
 
+  // Re-medir después del prompt de permisos (el viewport puede haber cambiado)
+  await waitForScannerElement(elementId)
+
   const scanConfig: Html5QrcodeCameraScanConfig = {
     fps: config.fps ?? 10,
     qrbox: safeQrbox,
+    aspectRatio: 3 / 4,
     disableFlip: false,
   }
 
@@ -168,7 +226,11 @@ export async function startQrScanner(
     /back|rear|environment|trasera|posterior/i.test(cam.label ?? ''),
   )
 
-  const candidates: Array<string | MediaTrackConstraints> = []
+  // facingMode primero: un solo getUserMedia, preview más estable en móvil
+  const candidates: Array<string | MediaTrackConstraints> = [
+    { facingMode: { ideal: 'environment' } },
+    { facingMode: 'environment' },
+  ]
   if (rear?.id) {
     candidates.push(rear.id)
   }
@@ -177,23 +239,14 @@ export async function startQrScanner(
       candidates.push(cam.id)
     }
   }
-  // facingMode al final: en desktop a veces falla environment
-  candidates.push(
-    { facingMode: 'environment' },
-    { facingMode: 'user' },
-  )
-
-  if (candidates.length === 0) {
-    throw Object.assign(new Error('No hay cámara disponible'), {
-      name: 'NotFoundError',
-    })
-  }
+  candidates.push({ facingMode: 'user' })
 
   let lastError: unknown
   for (const camera of candidates) {
     const scanner = new Html5Qrcode(elementId, { verbose: false })
     try {
       await scanner.start(camera, scanConfig, onSuccess, () => undefined)
+      await settleVideoPreview(elementId)
       return scanner
     } catch (error) {
       lastError = error
@@ -203,7 +256,6 @@ export async function startQrScanner(
       } catch {
         // ignore
       }
-      // Recrea el contenedor vacío para el siguiente intento
       const el = document.getElementById(elementId)
       if (el) {
         el.innerHTML = ''

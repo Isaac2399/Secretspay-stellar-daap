@@ -1,7 +1,10 @@
 .qr-scanner {
   position: relative;
   width: 100%;
+  /* Alto fijo desde el primer paint: evita el preview cortado a la mitad en móvil */
+  aspect-ratio: 3 / 4;
   min-height: 280px;
+  max-height: min(70vh, 520px);
   min-width: 240px;
   overflow: hidden;
   border-radius: 16px;
@@ -9,21 +12,31 @@
   background: #121212;
 }
 
-.qr-scanner video {
-  display: block;
+/* html5-qrcode envuelve el video en un div; debe llenar el marco */
+.qr-scanner > div,
+.qr-scanner #qr-shaded-region {
+  position: absolute !important;
+  inset: 0 !important;
   width: 100% !important;
-  max-height: 70vh;
-  height: auto !important;
-  object-fit: cover;
+  height: 100% !important;
+  border: 0 !important;
+  box-sizing: border-box !important;
+}
+
+.qr-scanner video {
+  position: absolute !important;
+  inset: 0 !important;
+  display: block !important;
+  width: 100% !important;
+  height: 100% !important;
+  max-width: none !important;
+  max-height: none !important;
+  object-fit: cover !important;
   background: #000;
+  transform: none !important;
 }
 
 .qr-scanner video:nth-of-type(n + 2),
 .qr-scanner img {
   display: none !important;
-}
-
-/* html5-qrcode inyecta un dashboard; lo dejamos limpio en móvil */
-.qr-scanner > div {
-  border: 0 !important;
 }
