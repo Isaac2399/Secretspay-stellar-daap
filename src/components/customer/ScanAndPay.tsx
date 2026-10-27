@@ -9,6 +9,12 @@ import {
 import { confirmPaymentWithFeeBump } from '@/lib/stellar/feeBump'
 import { stellarConfig } from '@/lib/stellar/config'
 import { fieldClass } from '@/components/auth/AuthLayout'
+import {
+  cameraErrorMessage,
+  startQrScanner,
+  stopQrScanner,
+  waitForScannerElement,
+} from '@/lib/camera/qrScanner'
 import './ScanAndPay.css'
 
 const CAMERA_SESSION_KEY = 'stellar-pay:camera-allowed'
@@ -58,62 +64,40 @@ export function ScanAndPay() {
 
     let cancelled = false
     handlingRef.current = false
-    const scanner = new Html5Qrcode(scannerId, { verbose: false })
-    scannerRef.current = scanner
 
     async function start() {
       try {
-        const cameras = await Html5Qrcode.getCameras()
+        await waitForScannerElement(scannerId)
         if (cancelled) {
           return
         }
-        if (!cameras.length) {
-          setScanError('No hay cámara. Pega el texto del QR abajo.')
-          setCameraOn(false)
+        const scanner = new Html5Qrcode(scannerId, { verbose: false })
+        scannerRef.current = scanner
+        await startQrScanner(scanner, (decoded) => {
+          if (cancelled || handlingRef.current) {
+            return
+          }
+          try {
+            const parsed = deserializePaymentPayload(decoded)
+            handlingRef.current = true
+            setScanError(null)
+            setPayload(parsed)
+            setCameraOn(false)
+          } catch (err) {
+            setScanError(
+              err instanceof Error ? err.message : 'QR de pago inválido',
+            )
+          }
+        })
+        if (cancelled) {
+          await stopQrScanner(scanner)
           return
         }
-        const rear = cameras.find((cam) =>
-          /back|rear|environment|trasera/i.test(cam.label),
-        )
-        await scanner.start(
-          rear?.id ?? cameras[0].id,
-          {
-            fps: 12,
-            qrbox: (viewWidth, viewHeight) => {
-              const edge = Math.floor(Math.min(viewWidth, viewHeight) * 0.8)
-              return { width: edge, height: edge }
-            },
-            aspectRatio: 1,
-            disableFlip: false,
-          },
-          (decoded) => {
-            if (cancelled || handlingRef.current) {
-              return
-            }
-            try {
-              const parsed = deserializePaymentPayload(decoded)
-              handlingRef.current = true
-              setScanError(null)
-              setPayload(parsed)
-              setCameraOn(false)
-            } catch (err) {
-              setScanError(
-                err instanceof Error ? err.message : 'QR de pago inválido',
-              )
-            }
-          },
-          () => undefined,
-        )
         writeCameraAllowed(true)
         setCameraAllowed(true)
-        if (cancelled) {
-          await stopScanner(scanner)
-        }
-      } catch {
+      } catch (error) {
         if (!cancelled) {
-          setScanError(
-            'No se pudo abrir la cámara. Revisa el permiso del navegador o pega el texto del QR.',
-          )
+          setScanError(cameraErrorMessage(error))
           setCameraOn(false)
         }
       }
@@ -121,13 +105,13 @@ export function ScanAndPay() {
 
     const timer = window.setTimeout(() => {
       void start()
-    }, 200)
+    }, 120)
 
     return () => {
       cancelled = true
       handlingRef.current = true
       window.clearTimeout(timer)
-      void stopScanner(scanner)
+      void stopQrScanner(scannerRef.current)
       scannerRef.current = null
     }
   }, [cameraOn, payload, scannerId])
@@ -284,27 +268,13 @@ export function ScanAndPay() {
         </div>
       ) : null}
 
-      {!payload && scanError ? <ErrorModal message={scanError} /> : null}
+      {!payload && scanError ? (
+        <ErrorModal message={scanError} onClose={() => setScanError(null)} />
+      ) : null}
 
       {status ? (
         <p className="break-all text-sm text-white/70">{status}</p>
       ) : null}
     </div>
   )
-}
-
-async function stopScanner(scanner: Html5Qrcode) {
-  try {
-    const state = scanner.getState()
-    if (state === 2 || state === 3) {
-      await scanner.stop()
-    }
-  } catch {
-    // already stopped
-  }
-  try {
-    scanner.clear()
-  } catch {
-    // ignore
-  }
 }

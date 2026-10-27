@@ -3,6 +3,12 @@ import { ErrorModal } from '@/components/feedback/ErrorModal'
 import { Camera, CameraOff } from 'lucide-react'
 import { Html5Qrcode } from 'html5-qrcode'
 import { fieldClass } from '@/components/auth/AuthLayout'
+import {
+  cameraErrorMessage,
+  startQrScanner,
+  stopQrScanner,
+  waitForScannerElement,
+} from '@/lib/camera/qrScanner'
 import '@/components/customer/ScanAndPay.css'
 
 const CAMERA_SESSION_KEY = 'stellar-pay:camera-allowed'
@@ -38,8 +44,11 @@ export function EventQrScanner({
   const scannerId = `event-qr-${rawId}`
   const scannerRef = useRef<Html5Qrcode | null>(null)
   const handlingRef = useRef(false)
+  const busyRef = useRef(Boolean(busy))
   const onScanRef = useRef(onScan)
   onScanRef.current = onScan
+  busyRef.current = Boolean(busy)
+
   const [cameraOn, setCameraOn] = useState(false)
   const [cameraAllowed, setCameraAllowed] = useState(readCameraAllowed)
   const [pasted, setPasted] = useState('')
@@ -51,28 +60,19 @@ export function EventQrScanner({
     }
     let cancelled = false
     handlingRef.current = false
-    const scanner = new Html5Qrcode(scannerId, { verbose: false })
-    scannerRef.current = scanner
 
     async function start() {
       try {
-        const cameras = await Html5Qrcode.getCameras()
+        await waitForScannerElement(scannerId)
         if (cancelled) {
           return
         }
-        if (!cameras.length) {
-          setScanError('No hay cámara. Pega el texto del QR abajo.')
-          setCameraOn(false)
-          return
-        }
-        const rear = cameras.find((cam) =>
-          /back|rear|environment|trasera/i.test(cam.label),
-        )
-        await scanner.start(
-          rear?.id ?? cameras[0].id,
-          { fps: 12, qrbox: { width: 220, height: 220 } },
+        const scanner = new Html5Qrcode(scannerId, { verbose: false })
+        scannerRef.current = scanner
+        await startQrScanner(
+          scanner,
           (decoded) => {
-            if (handlingRef.current || busy) {
+            if (handlingRef.current || busyRef.current || cancelled) {
               return
             }
             handlingRef.current = true
@@ -81,23 +81,33 @@ export function EventQrScanner({
               handlingRef.current = false
             }, 1600)
           },
-          () => undefined,
+          { fps: 10, qrbox: { width: 220, height: 220 } },
         )
-      } catch {
+        if (cancelled) {
+          await stopQrScanner(scanner)
+          return
+        }
+        writeCameraAllowed(true)
+        setCameraAllowed(true)
+      } catch (error) {
         if (!cancelled) {
-          setScanError('No se pudo abrir la cámara.')
+          setScanError(cameraErrorMessage(error))
           setCameraOn(false)
         }
       }
     }
 
-    void start()
+    const timer = window.setTimeout(() => {
+      void start()
+    }, 120)
+
     return () => {
       cancelled = true
-      void stopScanner(scanner)
+      window.clearTimeout(timer)
+      void stopQrScanner(scannerRef.current)
       scannerRef.current = null
     }
-  }, [busy, cameraOn, scannerId])
+  }, [cameraOn, scannerId])
 
   return (
     <div className="space-y-3">
@@ -107,14 +117,13 @@ export function EventQrScanner({
           <p className="text-sm text-white/80">
             {cameraAllowed
               ? 'Enciende la cámara para leer el QR del pedido.'
-              : 'Activa la cámara para marcar el pedido como entregado.'}
+              : 'Activa la cámara para marcar el pedido como entregado. El navegador pedirá permiso.'}
           </p>
           <button
             type="button"
             className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-app-accent py-2.5 text-sm font-medium text-white"
             onClick={() => {
-              writeCameraAllowed(true)
-              setCameraAllowed(true)
+              setScanError(null)
               setCameraOn(true)
             }}
           >
@@ -149,16 +158,9 @@ export function EventQrScanner({
       >
         Usar código
       </button>
-      {scanError ? <ErrorModal message={scanError} /> : null}
+      {scanError ? (
+        <ErrorModal message={scanError} onClose={() => setScanError(null)} />
+      ) : null}
     </div>
   )
-}
-
-async function stopScanner(scanner: Html5Qrcode) {
-  try {
-    await scanner.stop()
-    scanner.clear()
-  } catch {
-    // already stopped
-  }
 }
