@@ -34,6 +34,18 @@ const ROJOS_FLOOR = 40
 const ROJOS_CREDIT = '250'
 const USDC_FLOOR = 5
 const USDC_CREDIT = '25'
+
+/** Opt out for the pilot: GUEST_DEMO=0 hides the judge demo. */
+function guestDemoEnabled(): boolean {
+  const flag = (process.env.GUEST_DEMO ?? '').trim().toLowerCase()
+  return flag !== '0' && flag !== 'false' && flag !== 'off'
+}
+
+/** Pilot default: no free ROJOS on guest demo. Opt in with GUEST_DEMO_ROJOS=1. */
+function guestDemoRojosEnabled(): boolean {
+  const flag = (process.env.GUEST_DEMO_ROJOS ?? '').trim().toLowerCase()
+  return flag === '1' || flag === 'true' || flag === 'on'
+}
 const WARM_RETRY_MS = 5_000
 const USDC_RETRY_MS = 10 * 60 * 1000
 
@@ -61,7 +73,7 @@ function enqueue<T>(task: () => Promise<T>): Promise<T> {
 
 /** Fills one empty seat, then schedules the next so a claim can cut in. */
 export function scheduleGuestDemoWarm(): void {
-  if (!isTestnet() || warmQueued || Date.now() < warmRetryAt) {
+  if (!guestDemoEnabled() || !isTestnet() || warmQueued || Date.now() < warmRetryAt) {
     return
   }
   warmQueued = true
@@ -81,7 +93,7 @@ export function scheduleGuestDemoWarm(): void {
 }
 
 export async function guestDemoStatus(): Promise<{ ready: boolean; available: boolean }> {
-  if (!isTestnet()) {
+  if (!guestDemoEnabled() || !isTestnet()) {
     return { ready: false, available: false }
   }
   scheduleGuestDemoWarm()
@@ -99,8 +111,8 @@ export function claimGuestDemoUser(): Promise<PublicUser> {
 }
 
 async function claimUnsafe(): Promise<PublicUser> {
-  if (!isTestnet()) {
-    throw new AuthError('La demo instantánea solo está disponible en Testnet.', 403)
+  if (!guestDemoEnabled() || !isTestnet()) {
+    throw new AuthError('La demo instantánea no está disponible.', 403)
   }
   if (!(await loadStore()).users.some(isFundedGuest)) {
     await fillOneSlot()
@@ -172,7 +184,7 @@ async function topUpGuest(user: StoredUser): Promise<void> {
     await ensureLoyaltyTrustline(secret)
     account = await server.loadAccount(user.publicKey)
   }
-  if (assetBalance(account, loyalty) < ROJOS_FLOOR) {
+  if (guestDemoRojosEnabled() && assetBalance(account, loyalty) < ROJOS_FLOOR) {
     await creditLoyaltyFromTreasury({
       destination: user.publicKey,
       amount: ROJOS_CREDIT,

@@ -61,10 +61,19 @@ export async function creditLoyaltyFromTreasury(input: {
     throw new AuthError('El monto de ROJOS no es válido', 400)
   }
   const loyalty = loyaltyAssetFromEnv()
-  return creditFromTreasury({
+  if (!StrKey.isValidEd25519PublicKey(input.destination)) {
+    throw new AuthError('La cuenta destino no es válida', 400)
+  }
+  const server = new Horizon.Server(horizonUrl())
+  return submitHorizonPayment({
+    server,
+    passphrase: networkPassphrase(),
+    sponsor: sponsorKeypair(),
+    baseFee: String(await server.fetchBaseFee()),
+    sourceSecret: loyaltyTreasurySecret(),
     destination: input.destination,
-    amount: input.amount,
     asset: loyalty,
+    amount: input.amount,
     memo: input.memo ?? 'SINPE',
   })
 }
@@ -82,7 +91,7 @@ export function staffSendSource(role: StaffSendRole): {
       label: 'Mesa SINPE',
     }
   }
-  const secret = superAdminSigningSecret()
+  const secret = loyaltyTreasurySecret()
   return {
     publicKey: Keypair.fromSecret(secret).publicKey(),
     label: 'Super admin',
@@ -103,8 +112,21 @@ export async function submitStaffTransfer(input: {
     throw new AuthError('El monto no es válido', 400)
   }
   const asset = resolveAsset(input.asset)
+  const loyalty = loyaltyAssetFromEnv()
+  if (
+    input.role === 'sinpe_ops' &&
+    !asset.isNative() &&
+    loyalty &&
+    asset.getCode() === loyalty.getCode() &&
+    asset.getIssuer() === loyalty.getIssuer()
+  ) {
+    throw new AuthError(
+      'Solo el super admin puede enviar ROJOS. La mesa SINPE solo empareja depósitos.',
+      403,
+    )
+  }
   const sourceSecret =
-    input.role === 'sinpe_ops' ? treasurySecret() : superAdminSigningSecret()
+    input.role === 'sinpe_ops' ? treasurySecret() : loyaltyTreasurySecret()
   const source = Keypair.fromSecret(sourceSecret)
   if (source.publicKey() === input.destination) {
     throw new AuthError('No puedes enviarte a la misma cuenta', 400)
@@ -129,12 +151,16 @@ export async function submitStaffTransfer(input: {
   }
 }
 
-function superAdminSigningSecret(): string {
+/**
+ * Billetera que tiene los ~10M ROJOS (issuer GBSLP3N4…).
+ * Debe coincidir con SUPER_ADMIN_PUBLIC_KEY.
+ */
+function loyaltyTreasurySecret(): string {
   const expected = superAdminPublicKey()
   const names = [
     'SUPER_ADMIN_SECRET_KEY',
-    'ROJOS_DISTRIBUTOR_SECRET_KEY',
     'SINPE_TREASURY_SECRET_KEY',
+    'ROJOS_DISTRIBUTOR_SECRET_KEY',
     'SPONSOR_SECRET_KEY',
   ]
   for (const name of names) {
@@ -144,7 +170,7 @@ function superAdminSigningSecret(): string {
     }
   }
   throw new AuthError(
-    'La cuenta super admin no tiene secret key. Configura SUPER_ADMIN_SECRET_KEY con la misma public key del distribuidor.',
+    'Falta la secret key de la cuenta que tiene los ROJOS. Configura SUPER_ADMIN_SECRET_KEY con la misma public key que SUPER_ADMIN_PUBLIC_KEY (GC5IQE74…).',
     503,
   )
 }

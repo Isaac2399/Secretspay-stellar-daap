@@ -221,7 +221,7 @@ export type StoredUser = {
   secretKeyEnc?: string
   createdAt: string
   sinpeCode?: string
-  /** ISO time when the one-time signup gift of 3 ROJOS was credited. */
+  /** ISO time when the optional signup gift of ROJOS was credited (off by default). */
   welcomeRegaliaAt?: string
   /** Ephemeral Testnet customer used by the judge / guest demo. */
   guestDemo?: boolean
@@ -492,7 +492,7 @@ async function persistNewUser(input: {
   return toPublicUser(user)
 }
 
-/** One-time 3 ROJOS gift. Existing accounts never pass through here. */
+/** Optional one-time ROJOS gift (WELCOME_REGALIA=1). Existing accounts never pass through here. */
 async function grantSignupRegalia(publicKey: string): Promise<string | undefined> {
   const { grantWelcomeRegalia } = await import('./welcomeRegalia.js')
   try {
@@ -501,12 +501,12 @@ async function grantSignupRegalia(publicKey: string): Promise<string | undefined
   } catch (error) {
     if (error instanceof AuthError) {
       throw new AuthError(
-        `No se pudo acreditar la regalía de 3 ROJOS: ${error.message}`,
+        `No se pudo acreditar la regalía de ROJOS: ${error.message}`,
         error.status,
       )
     }
     const message = error instanceof Error ? error.message : 'error de red'
-    throw new AuthError(`No se pudo acreditar la regalía de 3 ROJOS: ${message}`, 502)
+    throw new AuthError(`No se pudo acreditar la regalía de ROJOS: ${message}`, 502)
   }
 }
 

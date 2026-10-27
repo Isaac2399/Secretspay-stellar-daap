@@ -17,6 +17,7 @@ export function AdminEventsPanel() {
   const [merchantId, setMerchantId] = useState('')
   const [title, setTitle] = useState('')
   const [pickupLabel, setPickupLabel] = useState('Barra')
+  const [active, setActive] = useState(true)
   const [feePercent, setFeePercent] = useState('2.5')
   const [feeAccount, setFeeAccount] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -58,6 +59,7 @@ export function AdminEventsPanel() {
     setMerchantId(row.merchantId)
     setTitle(row.title)
     setPickupLabel(row.pickupLabel || 'Barra')
+    setActive(row.active !== false)
     setFeePercent(row.feePercent || '0')
     setFeeAccount(row.feeAccount)
   }
@@ -71,11 +73,16 @@ export function AdminEventsPanel() {
         merchantId,
         title,
         pickupLabel,
+        active,
         feePercent,
         feeAccount,
       })
       await reload()
-      setMessage('Evento guardado. La próxima compra ya separa la comisión.')
+      setMessage(
+        active
+          ? 'Evento activo. Visible para clientes y con la comisión configurada.'
+          : 'Evento inactivo. Ya no aparece en la app de clientes.',
+      )
     } catch (err) {
       setError(readableError(err))
     } finally {
@@ -128,6 +135,20 @@ export function AdminEventsPanel() {
             onChange={(e) => setPickupLabel(e.target.value)}
           />
         </label>
+        <label className="flex items-center justify-between gap-3 rounded-2xl bg-app-chip px-3 py-3 text-sm">
+          <span>
+            Visible para clientes
+            <span className="mt-0.5 block text-xs text-app-muted">
+              {active ? 'Activo en la app' : 'Oculto / inactivo'}
+            </span>
+          </span>
+          <input
+            type="checkbox"
+            className="h-5 w-5 accent-[var(--app-accent,#e11d48)]"
+            checked={active}
+            onChange={(e) => setActive(e.target.checked)}
+          />
+        </label>
         <label className="grid gap-1 text-sm">
           Comisión por compra (%)
           <input
@@ -168,9 +189,18 @@ export function AdminEventsPanel() {
                 <h3 className="font-medium">{row.title}</h3>
                 <p className="text-xs text-app-muted">{row.email}</p>
               </div>
-              <p className="text-sm font-medium text-app-accent">
-                {row.feeBps > 0 ? `${row.feePercent}%` : 'Sin comisión'}
-              </p>
+              <div className="text-right">
+                <p
+                  className={`text-sm font-medium ${
+                    row.active !== false ? 'text-app-accent' : 'text-app-muted'
+                  }`}
+                >
+                  {row.active !== false ? 'Activo' : 'Inactivo'}
+                </p>
+                <p className="text-xs text-app-muted">
+                  {row.feeBps > 0 ? `${row.feePercent}%` : 'Sin comisión'}
+                </p>
+              </div>
             </div>
             <p className="break-all font-mono text-[11px] text-white/70">
               {row.feeAccount ? shortenPublicKey(row.feeAccount) : 'Sin cuenta de comisión'}

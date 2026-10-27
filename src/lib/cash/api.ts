@@ -63,9 +63,6 @@ export function previewRojos(crcAmount: number): {
   if (!Number.isFinite(crcAmount) || crcAmount <= 0) {
     return { rojos: 0, promoApplied: false }
   }
-  if (Math.abs(crcAmount - 9000) < 0.009) {
-    return { rojos: 10, promoApplied: true }
-  }
   return {
     rojos: Number((crcAmount / 1000).toFixed(7)),
     promoApplied: false,

@@ -62,7 +62,7 @@ export function UnassignedDepositsPanel() {
         <h2 className="text-sm font-semibold">Depósitos SINPE sin asignar</h2>
         <p className="mt-1 text-xs text-app-muted">
           Buscá por el SMS completo, el código sc…ts o el comprobante del banco.
-          Paridad ₡1,000 = 1 ROJO. Promo ₡9,000 = 10 ROJOS.
+          Paridad ₡1,000 = 1 ROJO. Sin promo: lo que enviaron es lo que reciben.
         </p>
       </div>
       <form

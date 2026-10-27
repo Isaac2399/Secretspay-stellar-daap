@@ -1,9 +1,5 @@
-/** Paridad base: ₡1,000 CRC = 1 ROJO. */
+/** Paridad base: ₡1,000 CRC = 1 ROJO. Sin promo: lo que pagan es lo que reciben. */
 export const CRC_PER_ROJO = 1000
-
-/** Paquete promocional: ₡9,000 acredita 10 ROJOS (1 token extra). */
-export const PROMO_CRC_AMOUNT = 9000
-export const PROMO_ROJOS_AMOUNT = 10
 
 export function calculateRojos(crcAmount: number): {
   rojos: number
@@ -11,9 +7,6 @@ export function calculateRojos(crcAmount: number): {
 } {
   if (!Number.isFinite(crcAmount) || crcAmount <= 0) {
     throw new Error('El monto en colones no es válido')
-  }
-  if (Math.abs(crcAmount - PROMO_CRC_AMOUNT) < 0.009) {
-    return { rojos: PROMO_ROJOS_AMOUNT, promoApplied: true }
   }
   const rojos = roundRojos(crcAmount / CRC_PER_ROJO)
   if (rojos <= 0) {

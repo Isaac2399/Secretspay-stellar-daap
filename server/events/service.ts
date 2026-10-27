@@ -65,6 +65,11 @@ export async function listVenues(): Promise<EventVenue[]> {
     if (!product.active) {
       continue
     }
+    const settings = store.settings[product.merchantId]
+    if (settings && !normalizeSettings(settings).active) {
+      continue
+    }
+    // Sin settings aún: visible si tiene productos (compatibilidad).
     counts.set(product.merchantId, (counts.get(product.merchantId) ?? 0) + 1)
   }
   return [...counts.entries()].map(([merchantId, productCount]) => {
@@ -87,6 +92,9 @@ export async function getCatalog(merchantId: string) {
     throw new AuthError('No hay barra para esa empresa', 404)
   }
   const settings = store.settings[merchantId]
+  if (settings && !normalizeSettings(settings).active) {
+    throw new AuthError('Este evento no está activo ahora', 404)
+  }
   return {
     venue: {
       merchantId,
@@ -133,6 +141,7 @@ export async function getMerchantSettings(merchant: PublicUserLike): Promise<Eve
         merchantId: merchant.id,
         title: venueTitle(undefined, merchant),
         pickupLabel: 'Barra',
+        active: true,
         feeBps: 0,
         feeAccount: '',
       },
@@ -149,12 +158,15 @@ export async function saveMerchantSettings(
   if (!title) {
     throw new AuthError('Indica el nombre del evento o barra', 400)
   }
+  const store = await loadEventStore()
+  const previous = store.settings[merchant.id]
   const feeBps = parseFeeBps(input.feePercent ?? input.feeBps)
   const feeAccount = parseFeeAccount(input.feeAccount, feeBps)
   const settings: EventSettings = {
     merchantId: merchant.id,
     title: title.slice(0, 80),
     pickupLabel: pickupLabel.slice(0, 40),
+    active: parseActive(input.active, previous?.active ?? true),
     feeBps,
     feeAccount,
   }
@@ -164,11 +176,10 @@ export async function saveMerchantSettings(
     feeBps,
     treasury,
   })
-  const store = await loadEventStore()
   if (hash) {
     settings.chainHash = hash
-  } else if (store.settings[merchant.id]?.chainHash) {
-    settings.chainHash = store.settings[merchant.id].chainHash
+  } else if (previous?.chainHash) {
+    settings.chainHash = previous.chainHash
   }
   store.settings[merchant.id] = settings
   await saveEventStore(store)
@@ -293,9 +304,13 @@ export async function placeOrder(
     throw new AuthError('La barra no está disponible', 404)
   }
 
-  const reserved = await reserveStock(merchantId, rawItems)
   const stored = (await loadEventStore()).settings[merchantId]
   const settings = stored ? normalizeSettings(stored) : undefined
+  if (settings && !settings.active) {
+    throw new AuthError('Este evento no está activo ahora', 404)
+  }
+
+  const reserved = await reserveStock(merchantId, rawItems)
   const split = splitPurchase(reserved.total, settings)
   if (split.feeAccount && split.feeAccount === customer.publicKey) {
     await restoreStock(reserved.stockDelta)
@@ -668,6 +683,7 @@ export async function listEventsForAdmin(): Promise<EventAdminRow[]> {
           merchantId: user.id,
           title: venueTitle(undefined, user),
           pickupLabel: 'Barra',
+          active: true,
           feeBps: 0,
           feeAccount: '',
         },
@@ -700,6 +716,7 @@ export async function listEventsForAdmin(): Promise<EventAdminRow[]> {
         merchantPublicKey: user.publicKey,
         title: settings.title,
         pickupLabel: settings.pickupLabel,
+        active: settings.active,
         feeBps: settings.feeBps,
         feePercent: feePercentLabel(settings.feeBps),
         feeAccount: settings.feeAccount,
@@ -746,9 +763,27 @@ export function splitPurchase(
 function normalizeSettings(settings: EventSettings): EventSettings {
   return {
     ...settings,
+    active: settings.active !== false,
     feeBps: settings.feeBps ?? 0,
     feeAccount: settings.feeAccount ?? '',
   }
+}
+
+function parseActive(value: unknown, fallback: boolean): boolean {
+  if (value === undefined || value === null || value === '') {
+    return fallback
+  }
+  if (typeof value === 'boolean') {
+    return value
+  }
+  const raw = String(value).trim().toLowerCase()
+  if (raw === '1' || raw === 'true' || raw === 'on' || raw === 'active') {
+    return true
+  }
+  if (raw === '0' || raw === 'false' || raw === 'off' || raw === 'inactive') {
+    return false
+  }
+  return fallback
 }
 
 function parseFeeBps(value: unknown): number {

@@ -81,6 +81,7 @@ export function MerchantEventCatalog({ merchantId }: { merchantId: string }) {
   const [products, setProducts] = useState<EventProduct[]>([])
   const [title, setTitle] = useState('')
   const [pickupLabel, setPickupLabel] = useState('Barra')
+  const [active, setActive] = useState(true)
   const [feePercent, setFeePercent] = useState('0')
   const [feeAccount, setFeeAccount] = useState('')
   const [createDraft, setCreateDraft] = useState(() => emptyDraft('Barra'))
@@ -98,6 +99,7 @@ export function MerchantEventCatalog({ merchantId }: { merchantId: string }) {
     setSettings(settingsResult.settings)
     setTitle(settingsResult.settings.title)
     setPickupLabel(settingsResult.settings.pickupLabel)
+    setActive(settingsResult.settings.active !== false)
     setFeePercent(feePercentFromBps(settingsResult.settings.feeBps))
     setFeeAccount(settingsResult.settings.feeAccount ?? '')
     setProducts(productsResult.products)
@@ -132,12 +134,18 @@ export function MerchantEventCatalog({ merchantId }: { merchantId: string }) {
       const result = await saveEventSettings({
         title,
         pickupLabel,
+        active,
         feePercent,
         feeAccount,
       })
       setSettings(result.settings)
+      setActive(result.settings.active !== false)
       setCreateDraft((prev) => ({ ...prev, pickupLabel }))
-      setMessage('Evento actualizado')
+      setMessage(
+        result.settings.active !== false
+          ? 'Evento activo y visible para clientes'
+          : 'Evento inactivo: oculto para clientes',
+      )
     } catch (err) {
       setError(readableError(err))
     } finally {
@@ -216,6 +224,20 @@ export function MerchantEventCatalog({ merchantId }: { merchantId: string }) {
             value={pickupLabel}
             onChange={(e) => setPickupLabel(e.target.value)}
             placeholder="Barra A"
+          />
+        </label>
+        <label className="flex items-center justify-between gap-3 rounded-2xl bg-app-chip px-3 py-3 text-sm">
+          <span>
+            Visible para clientes
+            <span className="mt-0.5 block text-xs text-app-muted">
+              {active ? 'Activo en la app' : 'Oculto / inactivo'}
+            </span>
+          </span>
+          <input
+            type="checkbox"
+            className="h-5 w-5 accent-[var(--app-accent,#e11d48)]"
+            checked={active}
+            onChange={(e) => setActive(e.target.checked)}
           />
         </label>
         <label className="grid gap-1 text-sm">

@@ -101,6 +101,7 @@ export async function fetchEventSettings() {
 export async function saveEventSettings(input: {
   title: string
   pickupLabel: string
+  active: boolean
   feePercent: string
   feeAccount: string
 }) {
@@ -118,6 +119,7 @@ export async function saveAdminEvent(input: {
   merchantId: string
   title: string
   pickupLabel: string
+  active: boolean
   feePercent: string
   feeAccount: string
 }) {

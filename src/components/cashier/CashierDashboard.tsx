@@ -72,7 +72,7 @@ export function CashierDashboard() {
         <h1 className="mt-1 text-xl font-semibold">Caja en efectivo</h1>
         <p className="mt-1 text-sm text-app-muted">
           Recibe colones, busca la cuenta y acredita ROJOS. Paridad ₡1,000 = 1
-          ROJO. Promo ₡9,000 = 10 ROJOS.
+          ROJO. Sin promo: lo que pagan es lo que reciben.
         </p>
       </div>
 
@@ -138,7 +138,7 @@ export function CashierDashboard() {
           value={crc}
           onChange={(event) => setCrc(event.target.value)}
           inputMode="decimal"
-          placeholder="9000"
+          placeholder="10000"
           className="w-full rounded-2xl bg-app-chip px-3 py-3 text-sm outline-none"
         />
         {preview.rojos > 0 ? (

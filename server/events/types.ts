@@ -59,6 +59,8 @@ export type EventSettings = {
   merchantId: string
   title: string
   pickupLabel: string
+  /** Si es false, el evento no aparece ni se puede pedir desde la app del cliente. */
+  active: boolean
   /** Puntos básicos. 250 = 2,5 %. 0 = no se cobra comisión. */
   feeBps: number
   /** Cuenta G… que recibe `feeBps` de cada compra. */
@@ -82,6 +84,7 @@ export type EventAdminRow = {
   merchantPublicKey: string
   title: string
   pickupLabel: string
+  active: boolean
   feeBps: number
   feePercent: string
   feeAccount: string

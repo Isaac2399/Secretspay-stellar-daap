@@ -57,6 +57,8 @@ export type EventSettings = {
   merchantId: string
   title: string
   pickupLabel: string
+  /** Si es false, el evento no aparece ni se puede pedir desde la app del cliente. */
+  active: boolean
   feeBps: number
   feeAccount: string
   /** Transacción en la que esta comisión quedó escrita en el contrato. */
@@ -78,6 +80,7 @@ export type EventAdminRow = {
   merchantPublicKey: string
   title: string
   pickupLabel: string
+  active: boolean
   feeBps: number
   feePercent: string
   feeAccount: string
