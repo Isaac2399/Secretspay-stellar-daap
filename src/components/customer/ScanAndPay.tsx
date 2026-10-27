@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { ErrorModal } from '@/components/feedback/ErrorModal'
 import { Camera, CameraOff } from 'lucide-react'
-import { Html5Qrcode } from 'html5-qrcode'
+import type { Html5Qrcode } from 'html5-qrcode'
 import {
   deserializePaymentPayload,
   type PaymentQrPayload,
@@ -13,7 +13,6 @@ import {
   cameraErrorMessage,
   startQrScanner,
   stopQrScanner,
-  waitForScannerElement,
 } from '@/lib/camera/qrScanner'
 import './ScanAndPay.css'
 
@@ -67,13 +66,7 @@ export function ScanAndPay() {
 
     async function start() {
       try {
-        await waitForScannerElement(scannerId)
-        if (cancelled) {
-          return
-        }
-        const scanner = new Html5Qrcode(scannerId, { verbose: false })
-        scannerRef.current = scanner
-        await startQrScanner(scanner, (decoded) => {
+        const scanner = await startQrScanner(scannerId, (decoded) => {
           if (cancelled || handlingRef.current) {
             return
           }
@@ -93,6 +86,7 @@ export function ScanAndPay() {
           await stopQrScanner(scanner)
           return
         }
+        scannerRef.current = scanner
         writeCameraAllowed(true)
         setCameraAllowed(true)
       } catch (error) {
@@ -105,7 +99,7 @@ export function ScanAndPay() {
 
     const timer = window.setTimeout(() => {
       void start()
-    }, 120)
+    }, 150)
 
     return () => {
       cancelled = true
@@ -119,10 +113,6 @@ export function ScanAndPay() {
   function enableCamera() {
     setScanError(null)
     setCameraOn(true)
-  }
-
-  function disableCamera() {
-    setCameraOn(false)
   }
 
   function usePastedPayload() {
@@ -166,7 +156,7 @@ export function ScanAndPay() {
           <p className="text-sm text-white/80">
             {cameraAllowed
               ? 'La cámara está apagada. Puedes encenderla otra vez en esta sesión.'
-              : 'La cámara está apagada. Al activarla el navegador pedirá permiso; lo recordamos solo en esta sesión.'}
+              : 'Al activar la cámara el navegador pedirá permiso. Usa Safari o Chrome, no un WebView de Instagram/Facebook.'}
           </p>
           <button
             type="button"
@@ -183,7 +173,7 @@ export function ScanAndPay() {
         <button
           type="button"
           className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-app-chip py-2.5 text-sm text-white/80"
-          onClick={disableCamera}
+          onClick={() => setCameraOn(false)}
         >
           <CameraOff className="h-4 w-4" />
           Apagar cámara
@@ -269,7 +259,11 @@ export function ScanAndPay() {
       ) : null}
 
       {!payload && scanError ? (
-        <ErrorModal message={scanError} onClose={() => setScanError(null)} />
+        <ErrorModal
+          title="Cámara"
+          message={scanError}
+          onClose={() => setScanError(null)}
+        />
       ) : null}
 
       {status ? (

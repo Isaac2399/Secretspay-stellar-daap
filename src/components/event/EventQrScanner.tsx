@@ -1,13 +1,12 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { ErrorModal } from '@/components/feedback/ErrorModal'
 import { Camera, CameraOff } from 'lucide-react'
-import { Html5Qrcode } from 'html5-qrcode'
+import type { Html5Qrcode } from 'html5-qrcode'
 import { fieldClass } from '@/components/auth/AuthLayout'
 import {
   cameraErrorMessage,
   startQrScanner,
   stopQrScanner,
-  waitForScannerElement,
 } from '@/lib/camera/qrScanner'
 import '@/components/customer/ScanAndPay.css'
 
@@ -63,14 +62,8 @@ export function EventQrScanner({
 
     async function start() {
       try {
-        await waitForScannerElement(scannerId)
-        if (cancelled) {
-          return
-        }
-        const scanner = new Html5Qrcode(scannerId, { verbose: false })
-        scannerRef.current = scanner
-        await startQrScanner(
-          scanner,
+        const scanner = await startQrScanner(
+          scannerId,
           (decoded) => {
             if (handlingRef.current || busyRef.current || cancelled) {
               return
@@ -81,12 +74,13 @@ export function EventQrScanner({
               handlingRef.current = false
             }, 1600)
           },
-          { fps: 10, qrbox: { width: 220, height: 220 } },
+          { fps: 10 },
         )
         if (cancelled) {
           await stopQrScanner(scanner)
           return
         }
+        scannerRef.current = scanner
         writeCameraAllowed(true)
         setCameraAllowed(true)
       } catch (error) {
@@ -99,7 +93,7 @@ export function EventQrScanner({
 
     const timer = window.setTimeout(() => {
       void start()
-    }, 120)
+    }, 150)
 
     return () => {
       cancelled = true
@@ -117,7 +111,7 @@ export function EventQrScanner({
           <p className="text-sm text-white/80">
             {cameraAllowed
               ? 'Enciende la cámara para leer el QR del pedido.'
-              : 'Activa la cámara para marcar el pedido como entregado. El navegador pedirá permiso.'}
+              : 'Activa la cámara. Usa Safari o Chrome (no Instagram/Facebook). El navegador pedirá permiso.'}
           </p>
           <button
             type="button"
@@ -159,7 +153,11 @@ export function EventQrScanner({
         Usar código
       </button>
       {scanError ? (
-        <ErrorModal message={scanError} onClose={() => setScanError(null)} />
+        <ErrorModal
+          title="Cámara"
+          message={scanError}
+          onClose={() => setScanError(null)}
+        />
       ) : null}
     </div>
   )

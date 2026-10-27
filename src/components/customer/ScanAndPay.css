@@ -1,6 +1,8 @@
 .qr-scanner {
   position: relative;
+  width: 100%;
   min-height: 280px;
+  min-width: 240px;
   overflow: hidden;
   border-radius: 16px;
   border: 1px solid #2a2a2c;
