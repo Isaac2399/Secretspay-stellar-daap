@@ -10,6 +10,8 @@ import {
   listMerchantOrders,
   listMerchantProducts,
   listMyOrders,
+  createProductForMerchant,
+  getEventDetailForAdmin,
   listEventsForAdmin,
   listVenues,
   markOrderReady,
@@ -88,6 +90,15 @@ export async function handleEventRoutes(
     return { status: 200, body: { events: await listEventsForAdmin() } }
   }
 
+  if (method === 'GET' && path === '/api/events/admin/detail') {
+    requirePlatformAdmin(session)
+    const merchantId = String(input.body.merchantId ?? '').trim()
+    if (!merchantId) {
+      throw new AuthError('Elige la empresa del evento', 400)
+    }
+    return { status: 200, body: await getEventDetailForAdmin(merchantId) }
+  }
+
   if (method === 'PUT' && path === '/api/events/admin') {
     requirePlatformAdmin(session)
     const merchantId = String(input.body.merchantId ?? '').trim()
@@ -98,6 +109,43 @@ export async function handleEventRoutes(
       status: 200,
       body: { settings: await saveEventForMerchant(merchantId, input.body) },
     }
+  }
+
+  if (method === 'POST' && path === '/api/events/admin/products') {
+    requirePlatformAdmin(session)
+    const merchantId = String(input.body.merchantId ?? '').trim()
+    if (!merchantId) {
+      throw new AuthError('Elige la empresa del evento', 400)
+    }
+    return {
+      status: 201,
+      body: { product: await createProductForMerchant(merchantId, input.body) },
+    }
+  }
+
+  if (method === 'PATCH' && path === '/api/events/admin/products') {
+    requirePlatformAdmin(session)
+    const merchantId = String(input.body.merchantId ?? '').trim()
+    if (!merchantId) {
+      throw new AuthError('Elige la empresa del evento', 400)
+    }
+    return {
+      status: 200,
+      body: { product: await updateProduct(merchantId, input.body) },
+    }
+  }
+
+  if (method === 'DELETE' && path === '/api/events/admin/products') {
+    requirePlatformAdmin(session)
+    const merchantId = String(input.body.merchantId ?? '').trim()
+    if (!merchantId) {
+      throw new AuthError('Elige la empresa del evento', 400)
+    }
+    await deleteProduct(
+      merchantId,
+      String(input.body.id ?? input.body.productId ?? ''),
+    )
+    return { status: 200, body: { ok: true } }
   }
 
   if (method === 'GET' && path === '/api/events/settings') {

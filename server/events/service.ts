@@ -732,11 +732,37 @@ export async function saveEventForMerchant(
   merchantId: string,
   input: Record<string, unknown>,
 ): Promise<EventSettings> {
+  const merchant = await requireMerchantRecord(merchantId)
+  return saveMerchantSettings(merchant, input)
+}
+
+export async function getEventDetailForAdmin(merchantId: string): Promise<{
+  settings: EventSettings
+  products: EventProduct[]
+  email: string
+}> {
+  const merchant = await requireMerchantRecord(merchantId)
+  return {
+    settings: await getMerchantSettings(merchant),
+    products: await listMerchantProducts(merchantId),
+    email: merchant.email,
+  }
+}
+
+export async function createProductForMerchant(
+  merchantId: string,
+  input: Record<string, unknown>,
+): Promise<EventProduct> {
+  const merchant = await requireMerchantRecord(merchantId)
+  return createProduct(merchant, input)
+}
+
+async function requireMerchantRecord(merchantId: string) {
   const merchant = await findUserById(merchantId)
   if (!merchant || merchant.role !== 'merchant') {
     throw new AuthError('Elige una empresa registrada', 404)
   }
-  return saveMerchantSettings(merchant, input)
+  return merchant
 }
 
 export function splitPurchase(

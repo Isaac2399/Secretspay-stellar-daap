@@ -115,6 +115,14 @@ export async function fetchAdminEvents() {
   return request<{ events: EventAdminRow[] }>('/api/events/admin')
 }
 
+export async function fetchAdminEventDetail(merchantId: string) {
+  return request<{
+    settings: EventSettings
+    products: EventProduct[]
+    email: string
+  }>(`/api/events/admin/detail?merchantId=${encodeURIComponent(merchantId)}`)
+}
+
 export async function saveAdminEvent(input: {
   merchantId: string
   title: string
@@ -126,6 +134,50 @@ export async function saveAdminEvent(input: {
   return request<{ settings: EventSettings }>('/api/events/admin', {
     method: 'PUT',
     body: JSON.stringify(input),
+  })
+}
+
+export async function createAdminEventProduct(
+  merchantId: string,
+  input: {
+    name: string
+    price: string
+    stock: number
+    asset?: string
+    pickupLabel?: string
+    active?: boolean
+    promo?: EventProductPromo | null
+  },
+) {
+  return request<{ product: EventProduct }>('/api/events/admin/products', {
+    method: 'POST',
+    body: JSON.stringify({ ...input, merchantId }),
+  })
+}
+
+export async function updateAdminEventProduct(
+  merchantId: string,
+  input: {
+    id: string
+    name?: string
+    price?: string
+    stock?: number
+    asset?: string
+    pickupLabel?: string
+    active?: boolean
+    promo?: EventProductPromo | null
+  },
+) {
+  return request<{ product: EventProduct }>('/api/events/admin/products', {
+    method: 'PATCH',
+    body: JSON.stringify({ ...input, merchantId }),
+  })
+}
+
+export async function deleteAdminEventProduct(merchantId: string, id: string) {
+  return request<{ ok: boolean }>('/api/events/admin/products', {
+    method: 'DELETE',
+    body: JSON.stringify({ merchantId, id }),
   })
 }
 

@@ -4,11 +4,16 @@ import { ErrorModal } from '@/components/feedback/ErrorModal'
 import { fieldClass } from '@/components/auth/AuthLayout'
 import { readableError } from '@/lib/auth/readableError'
 import {
+  createAdminEventProduct,
   createEventProduct,
+  deleteAdminEventProduct,
   deleteEventProduct,
+  fetchAdminEventDetail,
   fetchEventSettings,
   fetchMerchantProducts,
+  saveAdminEvent,
   saveEventSettings,
+  updateAdminEventProduct,
   updateEventProduct,
 } from '@/lib/events/api'
 import { formatStockLabel, stockCountClass } from '@/lib/events/stock'
@@ -76,7 +81,17 @@ function promoFromDraft(draft: ProductDraft): EventProductPromo | null {
   }
 }
 
-export function MerchantEventCatalog({ merchantId }: { merchantId: string }) {
+export function MerchantEventCatalog({
+  merchantId,
+  asAdmin = false,
+  merchantEmail,
+  onSettingsSaved,
+}: {
+  merchantId: string
+  asAdmin?: boolean
+  merchantEmail?: string
+  onSettingsSaved?: () => void
+}) {
   const [settings, setSettings] = useState<EventSettings | null>(null)
   const [products, setProducts] = useState<EventProduct[]>([])
   const [title, setTitle] = useState('')
@@ -92,6 +107,17 @@ export function MerchantEventCatalog({ merchantId }: { merchantId: string }) {
   const [busy, setBusy] = useState(false)
 
   async function reload() {
+    if (asAdmin) {
+      const detail = await fetchAdminEventDetail(merchantId)
+      setSettings(detail.settings)
+      setTitle(detail.settings.title)
+      setPickupLabel(detail.settings.pickupLabel)
+      setActive(detail.settings.active !== false)
+      setFeePercent(feePercentFromBps(detail.settings.feeBps))
+      setFeeAccount(detail.settings.feeAccount ?? '')
+      setProducts(detail.products)
+      return
+    }
     const [settingsResult, productsResult] = await Promise.all([
       fetchEventSettings(),
       fetchMerchantProducts(),
@@ -113,6 +139,16 @@ export function MerchantEventCatalog({ merchantId }: { merchantId: string }) {
       }
     })
     const id = window.setInterval(() => {
+      if (asAdmin) {
+        void fetchAdminEventDetail(merchantId)
+          .then((detail) => {
+            if (!cancelled) {
+              setProducts(detail.products)
+            }
+          })
+          .catch(() => undefined)
+        return
+      }
       void fetchMerchantProducts()
         .then((result) => {
           if (!cancelled) {
@@ -125,19 +161,28 @@ export function MerchantEventCatalog({ merchantId }: { merchantId: string }) {
       cancelled = true
       window.clearInterval(id)
     }
-  }, [])
+  }, [merchantId, asAdmin])
 
   async function saveSettings() {
     setBusy(true)
     setError(null)
     try {
-      const result = await saveEventSettings({
-        title,
-        pickupLabel,
-        active,
-        feePercent,
-        feeAccount,
-      })
+      const result = asAdmin
+        ? await saveAdminEvent({
+            merchantId,
+            title,
+            pickupLabel,
+            active,
+            feePercent,
+            feeAccount,
+          })
+        : await saveEventSettings({
+            title,
+            pickupLabel,
+            active,
+            feePercent,
+            feeAccount,
+          })
       setSettings(result.settings)
       setActive(result.settings.active !== false)
       setCreateDraft((prev) => ({ ...prev, pickupLabel }))
@@ -146,6 +191,7 @@ export function MerchantEventCatalog({ merchantId }: { merchantId: string }) {
           ? 'Evento activo y visible para clientes'
           : 'Evento inactivo: oculto para clientes',
       )
+      onSettingsSaved?.()
     } catch (err) {
       setError(readableError(err))
     } finally {
@@ -158,14 +204,19 @@ export function MerchantEventCatalog({ merchantId }: { merchantId: string }) {
     setError(null)
     setMessage(null)
     try {
-      await createEventProduct({
+      const payload = {
         name: createDraft.name,
         price: createDraft.price,
         stock: Number(createDraft.stock),
         asset: createDraft.asset,
         pickupLabel: createDraft.pickupLabel || pickupLabel,
         promo: promoFromDraft(createDraft),
-      })
+      }
+      if (asAdmin) {
+        await createAdminEventProduct(merchantId, payload)
+      } else {
+        await createEventProduct(payload)
+      }
       setCreateDraft(emptyDraft(pickupLabel))
       setMessage('Producto añadido')
       await reload()
@@ -184,7 +235,7 @@ export function MerchantEventCatalog({ merchantId }: { merchantId: string }) {
     setError(null)
     setMessage(null)
     try {
-      await updateEventProduct({
+      const payload = {
         id: editingId,
         name: editDraft.name,
         price: editDraft.price,
@@ -192,7 +243,12 @@ export function MerchantEventCatalog({ merchantId }: { merchantId: string }) {
         asset: editDraft.asset,
         pickupLabel: editDraft.pickupLabel || pickupLabel,
         promo: promoFromDraft(editDraft),
-      })
+      }
+      if (asAdmin) {
+        await updateAdminEventProduct(merchantId, payload)
+      } else {
+        await updateEventProduct(payload)
+      }
       setEditingId(null)
       setEditDraft(null)
       setMessage('Producto actualizado')
@@ -204,6 +260,39 @@ export function MerchantEventCatalog({ merchantId }: { merchantId: string }) {
     }
   }
 
+  async function toggleProductActive(product: EventProduct) {
+    try {
+      if (asAdmin) {
+        await updateAdminEventProduct(merchantId, {
+          id: product.id,
+          active: !product.active,
+        })
+      } else {
+        await updateEventProduct({ id: product.id, active: !product.active })
+      }
+      await reload()
+    } catch (err) {
+      setError(readableError(err))
+    }
+  }
+
+  async function removeProduct(productId: string) {
+    try {
+      if (asAdmin) {
+        await deleteAdminEventProduct(merchantId, productId)
+      } else {
+        await deleteEventProduct(productId)
+      }
+      if (editingId === productId) {
+        setEditingId(null)
+        setEditDraft(null)
+      }
+      await reload()
+    } catch (err) {
+      setError(readableError(err))
+    }
+  }
+
   const displayUrl =
     typeof window !== 'undefined'
       ? `${window.location.origin}/event/display/${merchantId}`
@@ -212,7 +301,12 @@ export function MerchantEventCatalog({ merchantId }: { merchantId: string }) {
   return (
     <div className="space-y-5">
       <section className="space-y-3 rounded-[24px] bg-app-card p-4">
-        <h2 className="text-[17px] font-semibold">Evento / barra</h2>
+        <h2 className="text-[17px] font-semibold">
+          {asAdmin ? 'Editar evento' : 'Evento / barra'}
+        </h2>
+        {asAdmin && merchantEmail ? (
+          <p className="text-xs text-app-muted">{merchantEmail}</p>
+        ) : null}
         <label className="grid gap-1 text-sm">
           Nombre
           <input className={fieldClass} value={title} onChange={(e) => setTitle(e.target.value)} />
@@ -386,28 +480,14 @@ export function MerchantEventCatalog({ merchantId }: { merchantId: string }) {
                     <button
                       type="button"
                       className="rounded-xl bg-app-chip py-2 text-xs"
-                      onClick={() =>
-                        void updateEventProduct({ id: product.id, active: !product.active })
-                          .then(() => reload())
-                          .catch((err) => setError(readableError(err)))
-                      }
+                      onClick={() => void toggleProductActive(product)}
                     >
                       {product.active ? 'Ocultar' : 'Mostrar'}
                     </button>
                     <button
                       type="button"
                       className="rounded-xl bg-app-chip py-2 text-xs text-red-300"
-                      onClick={() =>
-                        void deleteEventProduct(product.id)
-                          .then(() => {
-                            if (editingId === product.id) {
-                              setEditingId(null)
-                              setEditDraft(null)
-                            }
-                            return reload()
-                          })
-                          .catch((err) => setError(readableError(err)))
-                      }
+                      onClick={() => void removeProduct(product.id)}
                     >
                       Borrar
                     </button>
