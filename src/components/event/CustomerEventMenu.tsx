@@ -159,7 +159,7 @@ export function CustomerEventMenu({
       setConfirmed(true)
       setCart({})
       void ensurePush()
-      await reload()
+      void reload().catch(() => undefined)
     } catch (err) {
       setError(readableError(err))
     } finally {
@@ -179,102 +179,23 @@ export function CustomerEventMenu({
         {onBack ? (
           <button
             type="button"
-            className="text-sm text-app-accent disabled:opacity-40"
+            className="rounded-2xl bg-app-chip px-5 py-3 text-base font-medium text-app-accent disabled:opacity-40"
             disabled={busy}
             onClick={onBack}
           >
             ← Barras
           </button>
         ) : null}
-        <h1 className="mt-1 text-xl font-semibold">{venue?.title ?? 'Evento'}</h1>
-        <p className="mt-1 text-sm text-app-muted">
-          Ordena, paga en la app y retira en {venue?.pickupLabel ?? 'la barra'} con
-          tu número y QR.
+        <h1 className="mt-3 text-2xl font-semibold">{venue?.title ?? 'Evento'}</h1>
+        <p className="mt-1 text-base text-app-muted">
+          Suma lo que quieres, paga y retira en {venue?.pickupLabel ?? 'la barra'}{' '}
+          con tu número y QR.
         </p>
       </div>
 
-      <section className="space-y-3">
-        <h2 className="text-[17px] font-semibold">Productos</h2>
-        {products.length === 0 ? (
-          <p className="text-sm text-app-muted">Aún no hay carta en esta barra.</p>
-        ) : (
-          products.map((product) => {
-            const qty = cart[product.id] ?? 0
-            const soldOut = product.stock <= 0
-            return (
-              <article key={product.id} className="rounded-[24px] bg-app-card p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <h3 className="font-medium">{product.name}</h3>
-                    <p className="mt-1 text-sm text-white/80">
-                      {formatAmount(product.price)} {product.asset}
-                    </p>
-                    {product.promo ? (
-                      <p className="mt-1 text-xs text-app-accent">{product.promo.label}</p>
-                    ) : null}
-                    <p className={`mt-1 text-xs ${stockCountClass(product.stock)}`}>
-                      {formatStockLabel(product.stock)}
-                      <span className="text-app-muted"> · {product.pickupLabel}</span>
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      className="grid h-8 w-8 place-items-center rounded-full bg-app-chip disabled:opacity-40"
-                      disabled={busy || qty <= 0}
-                      onClick={() =>
-                        setCart((prev) => ({
-                          ...prev,
-                          [product.id]: Math.max(0, (prev[product.id] ?? 0) - 1),
-                        }))
-                      }
-                    >
-                      <Minus className="h-4 w-4" />
-                    </button>
-                    <span className="w-4 text-center text-sm">{qty}</span>
-                    <button
-                      type="button"
-                      className="grid h-8 w-8 place-items-center rounded-full bg-app-accent disabled:opacity-40"
-                      disabled={busy || soldOut || qty >= product.stock}
-                      onClick={() =>
-                        setCart((prev) => ({
-                          ...prev,
-                          [product.id]: Math.min(product.stock, (prev[product.id] ?? 0) + 1),
-                        }))
-                      }
-                    >
-                      <Plus className="h-4 w-4" />
-                    </button>
-                  </div>
-                </div>
-              </article>
-            )
-          })
-        )}
-      </section>
-
-      {lines.length > 0 ? (
-        <button
-          type="button"
-          className="w-full rounded-2xl bg-app-accent py-3 text-sm font-medium text-white disabled:opacity-60"
-          disabled={busy}
-          aria-busy={busy}
-          onClick={() => void checkout()}
-        >
-          {busy ? (
-            <span className="inline-flex items-center justify-center gap-2">
-              <LoaderCircle className="h-4 w-4 animate-spin" />
-              Pagando…
-            </span>
-          ) : (
-            `Pagar y ordenar (${lines.length})`
-          )}
-        </button>
-      ) : null}
-
       {pendingOrders.length > 0 || placed?.status === 'preparing' || placed?.status === 'ready' ? (
         <section className="space-y-3">
-          <h2 className="text-[17px] font-semibold">Pendientes</h2>
+          <h2 className="text-xl font-semibold">Pedidos</h2>
           {placed && (placed.status === 'preparing' || placed.status === 'ready') ? (
             <CustomerOrderTicket order={placed} />
           ) : null}
@@ -288,7 +209,7 @@ export function CustomerEventMenu({
 
       {paidOrders.length > 0 || placed?.status === 'completed' ? (
         <section className="space-y-3">
-          <h2 className="text-[17px] font-semibold">Pagados</h2>
+          <h2 className="text-xl font-semibold">Recogidos</h2>
           {placed?.status === 'completed' ? (
             <CustomerOrderTicket order={placed} compact />
           ) : null}
@@ -307,6 +228,85 @@ export function CustomerEventMenu({
             <CustomerOrderTicket key={order.id} order={order} compact />
           ))}
         </section>
+      ) : null}
+
+      <section className="space-y-3">
+        <h2 className="text-xl font-semibold">Productos</h2>
+        {products.length === 0 ? (
+          <p className="text-sm text-app-muted">Aún no hay carta en esta barra.</p>
+        ) : (
+          products.map((product) => {
+            const qty = cart[product.id] ?? 0
+            const soldOut = product.stock <= 0
+            return (
+              <article key={product.id} className="rounded-[28px] bg-app-card p-5">
+                <h3 className="text-xl font-semibold">{product.name}</h3>
+                <p className="mt-1 text-lg text-white/90">
+                  {formatAmount(product.price)} {product.asset}
+                </p>
+                {product.promo ? (
+                  <p className="mt-1 text-sm text-app-accent">{product.promo.label}</p>
+                ) : null}
+                <p className={`mt-1 text-sm ${stockCountClass(product.stock)}`}>
+                  {formatStockLabel(product.stock)}
+                  <span className="text-app-muted"> · {product.pickupLabel}</span>
+                </p>
+                <div className="mt-4 flex items-center justify-between">
+                  <button
+                    type="button"
+                    aria-label={`Quitar ${product.name}`}
+                    className="grid h-16 w-16 place-items-center rounded-full bg-app-chip disabled:opacity-40"
+                    disabled={busy || qty <= 0}
+                    onClick={() =>
+                      setCart((prev) => ({
+                        ...prev,
+                        [product.id]: Math.max(0, (prev[product.id] ?? 0) - 1),
+                      }))
+                    }
+                  >
+                    <Minus className="h-7 w-7" />
+                  </button>
+                  <span className="min-w-10 text-center text-3xl font-semibold tabular-nums">
+                    {qty}
+                  </span>
+                  <button
+                    type="button"
+                    aria-label={`Agregar ${product.name}`}
+                    className="grid h-16 w-16 place-items-center rounded-full bg-app-accent disabled:opacity-40"
+                    disabled={busy || soldOut || qty >= product.stock}
+                    onClick={() =>
+                      setCart((prev) => ({
+                        ...prev,
+                        [product.id]: Math.min(product.stock, (prev[product.id] ?? 0) + 1),
+                      }))
+                    }
+                  >
+                    <Plus className="h-7 w-7" />
+                  </button>
+                </div>
+              </article>
+            )
+          })
+        )}
+      </section>
+
+      {lines.length > 0 ? (
+        <button
+          type="button"
+          className="sticky bottom-24 z-20 w-full rounded-[28px] bg-app-accent py-5 text-xl font-semibold text-white shadow-[0_8px_30px_rgba(0,0,0,0.45)] disabled:opacity-60"
+          disabled={busy}
+          aria-busy={busy}
+          onClick={() => void checkout()}
+        >
+          {busy ? (
+            <span className="inline-flex items-center justify-center gap-2">
+              <LoaderCircle className="h-6 w-6 animate-spin" />
+              Pagando…
+            </span>
+          ) : (
+            `Pagar y ordenar (${lines.length})`
+          )}
+        </button>
       ) : null}
 
       <ErrorModal message={error} onClose={() => setError(null)} />
@@ -373,7 +373,7 @@ function OrderReadyNotice({
         </p>
         <button
           type="button"
-          className="mt-6 w-full rounded-2xl bg-app-accent py-3 text-sm font-semibold text-white"
+          className="mt-6 w-full rounded-[28px] bg-app-accent py-5 text-xl font-semibold text-white"
           onClick={onClose}
         >
           Ver pedido
@@ -405,7 +405,7 @@ function OrderConfirmedNotice({ onClose }: { onClose: () => void }) {
         </h2>
         <button
           type="button"
-          className="mt-6 w-full rounded-2xl bg-app-accent py-3 text-sm font-semibold text-white"
+          className="mt-6 w-full rounded-[28px] bg-app-accent py-5 text-xl font-semibold text-white"
           onClick={onClose}
         >
           Entendido

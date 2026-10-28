@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Check, Copy, Landmark, LogOut, Shield, Store, User } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
+import { CustomerFaq } from '@/components/customer/CustomerFaq'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { categoryLabel } from '@/lib/places/categories'
 
@@ -96,6 +97,8 @@ export default function ProfilePage() {
           </button>
         </div>
       </div>
+
+      {account.role === 'customer' ? <CustomerFaq /> : null}
 
       {account.role === 'admin' ? (
         <Link

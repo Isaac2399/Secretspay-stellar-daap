@@ -5,7 +5,7 @@ import { formatAmount } from '@/lib/stellar/useAccountBalances'
 const STATUS_LABEL: Record<EventOrder['status'], string> = {
   preparing: 'En preparación',
   ready: 'Listo para retirar',
-  completed: 'Entregado',
+  completed: 'Recogido',
   cancelled: 'Cancelado',
 }
 

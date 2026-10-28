@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { ErrorModal } from '@/components/feedback/ErrorModal'
 import {
   ArrowDownLeft,
@@ -28,7 +28,14 @@ type DashboardHeroProps = {
   onSend: () => void
   onDepositCompleted?: (tx: Sep24Transaction) => void
   onRojosCredited?: () => void
+  /** Vista cliente: solo el saldo ROJOS, sin XLM, USDC ni envío. */
+  loyaltyOnly?: boolean
+  /** Botones que van en la misma columna que Agregar ROJOS. */
+  customerActions?: ReactNode
 }
+
+export const customerActionClass =
+  'm-0 box-border flex h-[4.25rem] w-full items-center justify-center gap-3 rounded-[28px] border-0 px-5 text-xl font-semibold leading-none no-underline'
 
 type AssetKey = 'loyalty' | 'xlm' | 'usdc'
 
@@ -40,24 +47,28 @@ export function DashboardHero({
   onSend,
   onDepositCompleted,
   onRojosCredited,
+  loyaltyOnly = false,
+  customerActions,
 }: DashboardHeroProps) {
   const [asset, setAsset] = useState<AssetKey>('loyalty')
   const [copied, setCopied] = useState(false)
   const [receiveOpen, setReceiveOpen] = useState(false)
 
-  const assets = useMemo(
-    () =>
-      [
-        {
-          key: 'loyalty' as const,
-          code: stellarConfig.loyalty.code,
-          value: balances.loyalty,
-        },
-        { key: 'xlm' as const, code: 'XLM', value: balances.xlm },
-        { key: 'usdc' as const, code: 'USDC', value: balances.usdc },
-      ] as const,
-    [balances],
-  )
+  const assets = useMemo(() => {
+    const loyalty = {
+      key: 'loyalty' as const,
+      code: stellarConfig.loyalty.code,
+      value: balances.loyalty,
+    }
+    if (loyaltyOnly) {
+      return [loyalty]
+    }
+    return [
+      loyalty,
+      { key: 'xlm' as const, code: 'XLM', value: balances.xlm },
+      { key: 'usdc' as const, code: 'USDC', value: balances.usdc },
+    ]
+  }, [balances, loyaltyOnly])
 
   const selected = assets.find((item) => item.key === asset) ?? assets[0]
   const others = assets.filter((item) => item.key !== selected.key)
@@ -94,10 +105,10 @@ export function DashboardHero({
         <button
           type="button"
           onClick={onScan}
-          aria-label="Escanear QR"
-          className="grid h-10 w-10 place-items-center rounded-xl hover:bg-white/10"
+          aria-label={loyaltyOnly ? 'Pagar con QR' : 'Escanear QR'}
+          className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-app-card"
         >
-          <ScanLine className="h-5 w-5" />
+          <ScanLine className="h-6 w-6" />
         </button>
       </div>
 
@@ -108,45 +119,65 @@ export function DashboardHero({
           </span>
           <span className="text-lg font-medium text-white/55">{selected.code}</span>
         </p>
-        <p className="mt-3 text-xs text-app-muted">Toca un token para verlo en grande</p>
-        <div className="mt-2 flex flex-wrap gap-2">
-          {others.map((item) => (
-            <button
-              key={item.key}
-              type="button"
-              onClick={() => setAsset(item.key)}
-              className="rounded-full bg-app-chip px-3 py-1.5 text-sm text-white/80"
-            >
-              <span className="tabular-nums">{formatAmount(item.value)}</span> {item.code}
-            </button>
-          ))}
-        </div>
-        <p className="mt-2 text-xs text-app-muted">Testnet · no es saldo fiat</p>
+        {loyaltyOnly ? null : (
+          <>
+            <p className="mt-3 text-xs text-app-muted">Toca un token para verlo en grande</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {others.map((item) => (
+                <button
+                  key={item.key}
+                  type="button"
+                  onClick={() => setAsset(item.key)}
+                  className="rounded-full bg-app-chip px-3 py-1.5 text-sm text-white/80"
+                >
+                  <span className="tabular-nums">{formatAmount(item.value)}</span> {item.code}
+                </button>
+              ))}
+            </div>
+            <p className="mt-2 text-xs text-app-muted">Testnet · no es saldo fiat</p>
+          </>
+        )}
         {error ? <ErrorModal message={error} /> : null}
 
-        <button
-          type="button"
-          onClick={() => void copyPublicKey()}
-          className="mt-4 inline-flex max-w-full items-center gap-2 rounded-full bg-app-chip px-3 py-1.5 text-xs text-white/80"
-        >
-          <span className="truncate font-mono">{shortenPublicKey(user.publicKey)}</span>
-          {copied ? (
-            <Check className="h-3.5 w-3.5 shrink-0 text-green-400" />
-          ) : (
-            <Copy className="h-3.5 w-3.5 shrink-0" />
-          )}
-          {copied ? 'Copiada' : 'Copiar key'}
-        </button>
+        {loyaltyOnly ? null : (
+          <button
+            type="button"
+            onClick={() => void copyPublicKey()}
+            className="mt-4 inline-flex max-w-full items-center gap-2 rounded-full bg-app-chip px-3 py-1.5 text-xs text-white/80"
+          >
+            <span className="truncate font-mono">{shortenPublicKey(user.publicKey)}</span>
+            {copied ? (
+              <Check className="h-3.5 w-3.5 shrink-0 text-green-400" />
+            ) : (
+              <Copy className="h-3.5 w-3.5 shrink-0" />
+            )}
+            {copied ? 'Copiada' : 'Copiar key'}
+          </button>
+        )}
       </div>
 
-      <div className="grid grid-cols-2 gap-2">
-        <QuickAction
-          icon={ArrowDownLeft}
-          label="Agregar"
-          onClick={() => setReceiveOpen(true)}
-        />
-        <QuickAction icon={ArrowUpRight} label="Enviar" onClick={onSend} />
-      </div>
+      {loyaltyOnly ? (
+        <div className="grid gap-3">
+          <button
+            type="button"
+            onClick={() => setReceiveOpen(true)}
+            className={`${customerActionClass} bg-app-card text-white`}
+          >
+            <ArrowDownLeft className="h-7 w-7 shrink-0" />
+            Agregar dinero
+          </button>
+          {customerActions}
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 gap-2">
+          <QuickAction
+            icon={ArrowDownLeft}
+            label="Agregar"
+            onClick={() => setReceiveOpen(true)}
+          />
+          <QuickAction icon={ArrowUpRight} label="Enviar" onClick={onSend} />
+        </div>
+      )}
 
       {receiveOpen ? (
         <AddFundsSheet

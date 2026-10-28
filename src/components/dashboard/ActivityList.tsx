@@ -41,6 +41,8 @@ type ActivityListProps = {
   error: string | null
   includeSinpe?: boolean
   includeOrders?: boolean
+  /** Si se indica, la lista solo muestra ese asset (por ejemplo ROJOS). */
+  onlyAsset?: string
 }
 
 export function ActivityList({
@@ -50,6 +52,7 @@ export function ActivityList({
   error,
   includeSinpe = false,
   includeOrders = false,
+  onlyAsset,
 }: ActivityListProps) {
   const [visible, setVisible] = useState(INITIAL_VISIBLE)
   const [filter, setFilter] = useState<ActivityFilter>('all')
@@ -116,10 +119,12 @@ export function ActivityList({
     return includeOrders ? mergeBarOrders(withSinpe, barOrders) : withSinpe
   }, [includeSinpe, includeOrders, items, sinpeCredits, sinpeDeposits, barOrders])
 
-  const filtered = useMemo(
-    () => merged.filter((item) => matchesFilter(item, filter)),
-    [merged, filter],
-  )
+  const filtered = useMemo(() => {
+    const byAsset = onlyAsset
+      ? merged.filter((item) => item.asset.toUpperCase() === onlyAsset.toUpperCase())
+      : merged
+    return byAsset.filter((item) => matchesFilter(item, filter))
+  }, [merged, filter, onlyAsset])
 
   const shown = filtered.slice(0, visible)
   const hasMore = filtered.length > visible
@@ -173,11 +178,13 @@ export function ActivityList({
               {filter === 'all' ? 'Sin movimientos aún' : 'Nada en este filtro'}
             </p>
             <p className="text-xs text-app-muted">
-              {filter === 'sinpe'
-                ? 'Las recargas SINPE aparecen aquí, junto al resto de movimientos.'
-                : filter === 'all'
-                  ? `Cuando envíes o recibas ${publicKey ? 'fondos' : 'tokens'}, aparecerán aquí.`
-                  : 'Prueba otro filtro para ver más movimientos.'}
+              {onlyAsset
+                ? `Cuando uses ${onlyAsset}, los movimientos aparecen aquí.`
+                : filter === 'sinpe'
+                  ? 'Las recargas SINPE aparecen aquí, junto al resto de movimientos.'
+                  : filter === 'all'
+                    ? `Cuando envíes o recibas ${publicKey ? 'fondos' : 'tokens'}, aparecerán aquí.`
+                    : 'Prueba otro filtro para ver más movimientos.'}
             </p>
           </div>
         ) : null}

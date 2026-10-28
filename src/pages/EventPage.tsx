@@ -102,8 +102,8 @@ export default function EventPage() {
     <div className="space-y-4">
       <div>
         <p className="text-xs font-medium uppercase tracking-wide text-app-accent">Evento</p>
-        <h1 className="mt-1 text-xl font-semibold">Barras</h1>
-        <p className="mt-1 text-sm text-app-muted">
+        <h1 className="mt-1 text-2xl font-semibold">Barras</h1>
+        <p className="mt-2 text-base text-app-muted">
           Elige una barra, ordena y muestra tu número al retirar.
         </p>
       </div>
@@ -111,11 +111,11 @@ export default function EventPage() {
         <button
           key={venue.merchantId}
           type="button"
-          className="w-full rounded-[24px] bg-app-card p-4 text-left"
+          className="w-full rounded-[28px] bg-app-card px-5 py-6 text-left"
           onClick={() => setParams({ merchant: venue.merchantId })}
         >
-          <h2 className="font-medium">{venue.title}</h2>
-          <p className="mt-1 text-sm text-app-muted">
+          <h2 className="text-2xl font-semibold">{venue.title}</h2>
+          <p className="mt-2 text-base text-app-muted">
             {venue.productCount} productos · retiro en {venue.pickupLabel}
           </p>
         </button>

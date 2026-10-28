@@ -168,10 +168,10 @@ export function ScanAndPay() {
           </p>
           <button
             type="button"
-            className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-app-accent py-2.5 text-sm font-medium text-white"
+            className="inline-flex w-full items-center justify-center gap-2 rounded-[24px] bg-app-accent py-5 text-lg font-semibold text-white"
             onClick={enableCamera}
           >
-            <Camera className="h-4 w-4" />
+            <Camera className="h-6 w-6" />
             {cameraAllowed ? 'Encender cámara' : 'Activar cámara'}
           </button>
         </div>
@@ -243,7 +243,7 @@ export function ScanAndPay() {
           <div className="flex gap-3">
             <button
               type="button"
-              className="flex-1 rounded-xl bg-app-chip py-2.5 text-sm"
+              className="flex-1 rounded-[24px] bg-app-chip py-4 text-base font-medium"
               onClick={() => {
                 handlingRef.current = false
                 setPayload(null)
@@ -256,7 +256,7 @@ export function ScanAndPay() {
             </button>
             <button
               type="button"
-              className="flex-1 rounded-xl bg-app-accent py-2.5 text-sm font-medium text-white disabled:opacity-60"
+              className="flex-1 rounded-[24px] bg-app-accent py-4 text-base font-semibold text-white disabled:opacity-60"
               onClick={() => void onConfirm()}
               disabled={submitting}
             >

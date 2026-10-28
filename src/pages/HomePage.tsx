@@ -5,20 +5,22 @@ import { SinpeOpsDashboard } from '@/components/admin/SinpeOpsDashboard'
 import { CashierDashboard } from '@/components/cashier/CashierDashboard'
 import { AccountStrip } from '@/components/dashboard/AccountStrip'
 import { ActivityList } from '@/components/dashboard/ActivityList'
-import { DashboardHero } from '@/components/dashboard/DashboardHero'
+import { customerActionClass, DashboardHero } from '@/components/dashboard/DashboardHero'
 import { CreateInvoiceQR } from '@/components/merchant/CreateInvoiceQR'
 import { ScanAndPay } from '@/components/customer/ScanAndPay'
 import { SendByPublicKey } from '@/components/customer/SendByPublicKey'
+import { GlassWater } from 'lucide-react'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { stellarConfig } from '@/lib/stellar/config'
 import { useAccountBalances } from '@/lib/stellar/useAccountBalances'
 import { useRecentActivity } from '@/lib/stellar/useRecentActivity'
 
 export default function HomePage() {
-  const { user, isGuestDemo } = useAuth()
+  const { user } = useAuth()
   const { balances, error, reload } = useAccountBalances(user?.publicKey ?? '')
   const activity = useRecentActivity(user?.publicKey ?? '')
   const [sendOpen, setSendOpen] = useState(false)
+  const [payOpen, setPayOpen] = useState(false)
   const sendRef = useRef<HTMLElement>(null)
   const scanRef = useRef<HTMLElement>(null)
 
@@ -47,6 +49,74 @@ export default function HomePage() {
 
   const isCustomer = user.role === 'customer'
 
+  if (isCustomer) {
+    return (
+      <div className="space-y-6">
+        <DashboardHero
+          user={user}
+          balances={balances}
+          error={error}
+          loyaltyOnly
+          onScan={() => setPayOpen(true)}
+          onSend={() => undefined}
+          onDepositCompleted={(tx) => {
+            void reload()
+            void activity.reloadAfterDeposit(tx)
+          }}
+          onRojosCredited={() => {
+            void reload()
+            void activity.reload()
+          }}
+          customerActions={
+            <>
+              <Link
+                to="/event"
+                className={`${customerActionClass} bg-app-accent text-white`}
+              >
+                <GlassWater className="h-7 w-7 shrink-0" />
+                Ordenar
+              </Link>
+            </>
+          }
+        />
+
+        <ActivityList
+          publicKey={user.publicKey}
+          items={activity.items}
+          loading={activity.loading}
+          error={activity.error}
+          includeSinpe
+          onlyAsset={stellarConfig.loyalty.code}
+        />
+
+        {payOpen ? (
+          <div
+            className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-4 sm:items-center"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="pay-qr-title"
+          >
+            <div className="max-h-[92dvh] w-full max-w-lg overflow-y-auto rounded-[28px] bg-app-card p-5">
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <h2 id="pay-qr-title" className="text-lg font-semibold">
+                  Pagar con QR
+                </h2>
+                <button
+                  type="button"
+                  className="text-sm text-app-muted"
+                  onClick={() => setPayOpen(false)}
+                >
+                  Cerrar
+                </button>
+              </div>
+              <ScanAndPay />
+            </div>
+          </div>
+        ) : null}
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6">
       <DashboardHero
@@ -67,28 +137,15 @@ export default function HomePage() {
         }}
       />
 
-      {isCustomer ? null : <AccountStrip balances={balances} />}
+      <AccountStrip balances={balances} />
 
-      <Link
-        to="/event"
-        className="block rounded-[24px] bg-app-card p-5"
-      >
+      <Link to="/event" className="block rounded-[24px] bg-app-card p-5">
         <p className="text-xs font-medium uppercase tracking-wide text-app-accent">
           Evento
         </p>
-        <h2 className="mt-1 text-[17px] font-semibold">
-          {isGuestDemo
-            ? 'Probar compra en barra'
-            : isCustomer
-              ? 'Ordenar en barra'
-              : 'Carta y pedidos de barra'}
-        </h2>
+        <h2 className="mt-1 text-[17px] font-semibold">Carta y pedidos de barra</h2>
         <p className="mt-1 text-sm text-app-muted">
-          {isGuestDemo
-            ? 'El saldo de prueba ya está en la cuenta. Elige un producto y paga en Testnet.'
-            : isCustomer
-              ? 'Pide, paga en la app y muestra el QR al retirar.'
-              : 'Añade productos, marca pedidos listos y abre la pantalla de TV.'}
+          Añade productos, marca pedidos listos y abre la pantalla de TV.
         </p>
       </Link>
 
@@ -98,7 +155,6 @@ export default function HomePage() {
         loading={activity.loading}
         error={activity.error}
         includeSinpe
-        includeOrders={isCustomer}
       />
 
       {sendOpen ? (
@@ -118,34 +174,23 @@ export default function HomePage() {
         </section>
       ) : null}
 
-      {isCustomer ? (
-        <section
-          ref={scanRef}
-          id="qr"
-          className="scroll-mt-4 rounded-[24px] bg-app-card p-5"
-        >
-          <h2 className="mb-4 text-[17px] font-semibold">Pagar con QR</h2>
-          <ScanAndPay />
-        </section>
-      ) : (
-        <section
-          ref={scanRef}
-          id="cobrar"
-          className="scroll-mt-4 rounded-[24px] bg-app-card p-5"
-        >
-          <p className="mb-1 text-xs font-medium uppercase tracking-wide text-app-accent">
-            Empresa
-          </p>
-          <h2 className="mb-1 text-[17px] font-semibold">Cobrar / Factura QR</h2>
-          <p className="mb-4 text-sm text-app-muted">
-            Genera un QR para que el cliente pague en Testnet.
-          </p>
-          <CreateInvoiceQR
-            merchantPublicKey={user.publicKey}
-            loyaltyBalance={balances.loyalty}
-          />
-        </section>
-      )}
+      <section
+        ref={scanRef}
+        id="cobrar"
+        className="scroll-mt-4 rounded-[24px] bg-app-card p-5"
+      >
+        <p className="mb-1 text-xs font-medium uppercase tracking-wide text-app-accent">
+          Empresa
+        </p>
+        <h2 className="mb-1 text-[17px] font-semibold">Cobrar / Factura QR</h2>
+        <p className="mb-4 text-sm text-app-muted">
+          Genera un QR para que el cliente pague en Testnet.
+        </p>
+        <CreateInvoiceQR
+          merchantPublicKey={user.publicKey}
+          loyaltyBalance={balances.loyalty}
+        />
+      </section>
     </div>
   )
 }
