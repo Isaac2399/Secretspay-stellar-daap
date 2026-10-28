@@ -116,7 +116,7 @@ export async function fetchSinpeIntent() {
 
 /** Emite o reutiliza el código; el contador de 5 min arranca al activar/copiar. */
 export async function activateSinpeIntent() {
-  return request<SinpeIntent>('/api/payments/sinpe-intent/activate', {
+  return request<SinpeIntent>('/api/payments/sinpe-activate', {
     method: 'POST',
     body: '{}',
   })

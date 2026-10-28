@@ -74,7 +74,12 @@ export async function handleSinpeRoutes(
     return { status: 200, body: await getSinpeIntent(session) }
   }
 
-  if (method === 'POST' && path === '/api/payments/sinpe-intent/activate') {
+  // Un solo segmento: Vercel/api/payments/[action] no enruta /sinpe-intent/activate.
+  if (
+    method === 'POST' &&
+    (path === '/api/payments/sinpe-activate' ||
+      path === '/api/payments/sinpe-intent/activate')
+  ) {
     const session = await requireSession(input.cookie)
     return { status: 200, body: await activateSinpeCode(session) }
   }
