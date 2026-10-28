@@ -13,6 +13,7 @@ import {
 import { AuthError } from '../errors.js'
 import { loyaltyAssetFromEnv } from '../provisionAccount.js'
 import { loadStore } from '../userStore.js'
+import { notifyOrderReady } from './push.js'
 import { parsePickupQr, serializePickupQr } from './qr.js'
 import { loadEventStore, saveEventStore } from './store.js'
 import type {
@@ -397,9 +398,16 @@ export async function markOrderReady(merchantId: string, orderId: string) {
   if (order.status === 'completed') {
     throw new AuthError('Ese pedido ya se entregó', 400)
   }
+  const becameReady = order.status !== 'ready'
   order.status = 'ready'
-  order.readyAt = new Date().toISOString()
+  order.readyAt = order.readyAt ?? new Date().toISOString()
   await saveEventStore(store)
+  if (becameReady) {
+    // No bloquear la barra si falla el push (permiso, SW, suscripción muerta).
+    void notifyOrderReady(order).catch((error) => {
+      console.warn('[events] push listo falló', order.id, error)
+    })
+  }
   return publicOrder(order, false)
 }
 

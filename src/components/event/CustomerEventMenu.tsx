@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Minus, Plus } from 'lucide-react'
 import { readableError } from '@/lib/auth/readableError'
 import { ErrorModal } from '@/components/feedback/ErrorModal'
@@ -7,6 +7,7 @@ import {
   fetchMyEventOrders,
   placeEventOrder,
 } from '@/lib/events/api'
+import { enableOrderReadyPush, notifyOrderReadyLocally } from '@/lib/events/push'
 import { formatStockLabel, stockCountClass } from '@/lib/events/stock'
 import { formatAmount } from '@/lib/stellar/useAccountBalances'
 import type { EventOrder, EventProduct, EventVenue } from '@/types/event'
@@ -27,6 +28,32 @@ export function CustomerEventMenu({
   const [busy, setBusy] = useState(false)
   const [placed, setPlaced] = useState<EventOrder | null>(null)
   const [confirmed, setConfirmed] = useState(false)
+  const statusByIdRef = useRef<Record<string, EventOrder['status']>>({})
+  const pushArmedRef = useRef(false)
+
+  function applyOrders(nextOrders: EventOrder[]) {
+    const prev = statusByIdRef.current
+    for (const order of nextOrders) {
+      const before = prev[order.id]
+      if (order.status === 'ready' && before && before !== 'ready') {
+        notifyOrderReadyLocally(order)
+      }
+      prev[order.id] = order.status
+    }
+    setOrders(nextOrders)
+  }
+
+  async function ensurePush() {
+    if (pushArmedRef.current) {
+      return
+    }
+    pushArmedRef.current = true
+    try {
+      await enableOrderReadyPush()
+    } catch {
+      pushArmedRef.current = false
+    }
+  }
 
   async function reload() {
     const [catalog, mine] = await Promise.all([
@@ -35,7 +62,7 @@ export function CustomerEventMenu({
     ])
     setVenue(catalog.venue)
     setProducts(catalog.products)
-    setOrders(mine.orders.filter((order) => order.merchantId === merchantId))
+    applyOrders(mine.orders.filter((order) => order.merchantId === merchantId))
   }
 
   useEffect(() => {
@@ -56,7 +83,7 @@ export function CustomerEventMenu({
         }
         setVenue(catalog.venue)
         setProducts(catalog.products)
-        setOrders(mine.orders.filter((order) => order.merchantId === merchantId))
+        applyOrders(mine.orders.filter((order) => order.merchantId === merchantId))
         setCart((prev) => {
           const next = { ...prev }
           for (const [id, qty] of Object.entries(next)) {
@@ -84,6 +111,15 @@ export function CustomerEventMenu({
     }
   }, [merchantId])
 
+  useEffect(() => {
+    const hasOpen = orders.some(
+      (order) => order.status === 'preparing' || order.status === 'ready',
+    )
+    if (hasOpen) {
+      void ensurePush()
+    }
+  }, [orders])
+
   const lines = useMemo(
     () =>
       products
@@ -107,8 +143,10 @@ export function CustomerEventMenu({
         })),
       })
       setPlaced(result.order)
+      statusByIdRef.current[result.order.id] = result.order.status
       setConfirmed(true)
       setCart({})
+      void ensurePush()
       await reload()
     } catch (err) {
       setError(readableError(err))

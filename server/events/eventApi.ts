@@ -1,5 +1,11 @@
 import { userFromCookieHeader, type PublicUser } from '../auth.js'
 import { AuthError } from '../errors.js'
+import { getVapidPublicKey, isPushConfigured } from './push.js'
+import {
+  removeSubscription,
+  saveSubscription,
+  type PushSubscriptionJson,
+} from './pushStore.js'
 import {
   completeOrderByQr,
   createProduct,
@@ -179,6 +185,38 @@ export async function handleEventRoutes(
     return { status: 200, body: { orders: await listMyOrders(session.id) } }
   }
 
+  if (method === 'GET' && path === '/api/events/push-vapid') {
+    const publicKey = getVapidPublicKey()
+    return {
+      status: 200,
+      body: {
+        configured: isPushConfigured() && Boolean(publicKey),
+        publicKey,
+      },
+    }
+  }
+
+  if (method === 'POST' && path === '/api/events/push-subscribe') {
+    if (session.role !== 'customer') {
+      throw new AuthError('Solo el cliente puede suscribirse a avisos de pedido', 403)
+    }
+    if (!isPushConfigured()) {
+      throw new AuthError('Las notificaciones push no están configuradas', 503)
+    }
+    const subscription = parseSubscriptionBody(input.body)
+    await saveSubscription(session.id, subscription)
+    return { status: 200, body: { ok: true } }
+  }
+
+  if (method === 'POST' && path === '/api/events/push-unsubscribe') {
+    const endpoint = String(input.body.endpoint ?? '').trim()
+    if (!endpoint) {
+      throw new AuthError('Falta el endpoint de la suscripción', 400)
+    }
+    await removeSubscription(session.id, endpoint)
+    return { status: 200, body: { ok: true } }
+  }
+
   if (method === 'GET' && path === '/api/events/orders') {
     const merchantId = resolveBarMerchantId(session, input.body.merchantId)
     return { status: 200, body: { orders: await listMerchantOrders(merchantId) } }
@@ -242,4 +280,27 @@ function resolveBarMerchantId(
     return merchantId
   }
   throw new AuthError('Solo la empresa o el super admin pueden entregar pedidos', 403)
+}
+
+function parseSubscriptionBody(body: Record<string, unknown>): PushSubscriptionJson {
+  const raw =
+    body.subscription && typeof body.subscription === 'object'
+      ? (body.subscription as Record<string, unknown>)
+      : body
+  const endpoint = String(raw.endpoint ?? '').trim()
+  const keysRaw =
+    raw.keys && typeof raw.keys === 'object'
+      ? (raw.keys as Record<string, unknown>)
+      : {}
+  const p256dh = String(keysRaw.p256dh ?? '').trim()
+  const auth = String(keysRaw.auth ?? '').trim()
+  if (!endpoint || !p256dh || !auth) {
+    throw new AuthError('Suscripción push incompleta', 400)
+  }
+  return {
+    endpoint,
+    expirationTime:
+      typeof raw.expirationTime === 'number' ? raw.expirationTime : null,
+    keys: { p256dh, auth },
+  }
 }
