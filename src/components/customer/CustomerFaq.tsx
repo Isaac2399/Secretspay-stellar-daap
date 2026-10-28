@@ -16,7 +16,7 @@ const FAQS = [
   },
   {
     q: '¿Cómo sé si mi pedido está listo?',
-    a: 'En Evento, tus pedidos aparecen arriba de la carta. Si está listo, muestra el QR en la barra.',
+    a: 'En Evento, debajo de los productos, ves tus pedidos. Si está listo, muestra el QR en la barra.',
   },
   {
     q: '¿Qué significa recogido?',

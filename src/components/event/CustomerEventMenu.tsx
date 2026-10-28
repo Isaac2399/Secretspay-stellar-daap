@@ -193,43 +193,6 @@ export function CustomerEventMenu({
         </p>
       </div>
 
-      {pendingOrders.length > 0 || placed?.status === 'preparing' || placed?.status === 'ready' ? (
-        <section className="space-y-3">
-          <h2 className="text-xl font-semibold">Pedidos</h2>
-          {placed && (placed.status === 'preparing' || placed.status === 'ready') ? (
-            <CustomerOrderTicket order={placed} />
-          ) : null}
-          {pendingOrders
-            .filter((order) => order.id !== placed?.id)
-            .map((order) => (
-              <CustomerOrderTicket key={order.id} order={order} />
-            ))}
-        </section>
-      ) : null}
-
-      {paidOrders.length > 0 || placed?.status === 'completed' ? (
-        <section className="space-y-3">
-          <h2 className="text-xl font-semibold">Recogidos</h2>
-          {placed?.status === 'completed' ? (
-            <CustomerOrderTicket order={placed} compact />
-          ) : null}
-          {paidOrders
-            .filter((order) => order.id !== placed?.id)
-            .map((order) => (
-              <CustomerOrderTicket key={order.id} order={order} compact />
-            ))}
-        </section>
-      ) : null}
-
-      {cancelledOrders.length > 0 ? (
-        <section className="space-y-3">
-          <h2 className="text-sm font-medium text-app-muted">Cancelados</h2>
-          {cancelledOrders.map((order) => (
-            <CustomerOrderTicket key={order.id} order={order} compact />
-          ))}
-        </section>
-      ) : null}
-
       <section className="space-y-3">
         <h2 className="text-xl font-semibold">Productos</h2>
         {products.length === 0 ? (
@@ -307,6 +270,43 @@ export function CustomerEventMenu({
             `Pagar y ordenar (${lines.length})`
           )}
         </button>
+      ) : null}
+
+      {pendingOrders.length > 0 || placed?.status === 'preparing' || placed?.status === 'ready' ? (
+        <section className="space-y-3">
+          <h2 className="text-xl font-semibold">Pedidos</h2>
+          {placed && (placed.status === 'preparing' || placed.status === 'ready') ? (
+            <CustomerOrderTicket order={placed} />
+          ) : null}
+          {pendingOrders
+            .filter((order) => order.id !== placed?.id)
+            .map((order) => (
+              <CustomerOrderTicket key={order.id} order={order} />
+            ))}
+        </section>
+      ) : null}
+
+      {paidOrders.length > 0 || placed?.status === 'completed' ? (
+        <section className="space-y-3">
+          <h2 className="text-xl font-semibold">Recogidos</h2>
+          {placed?.status === 'completed' ? (
+            <CustomerOrderTicket order={placed} compact />
+          ) : null}
+          {paidOrders
+            .filter((order) => order.id !== placed?.id)
+            .map((order) => (
+              <CustomerOrderTicket key={order.id} order={order} compact />
+            ))}
+        </section>
+      ) : null}
+
+      {cancelledOrders.length > 0 ? (
+        <section className="space-y-3">
+          <h2 className="text-sm font-medium text-app-muted">Cancelados</h2>
+          {cancelledOrders.map((order) => (
+            <CustomerOrderTicket key={order.id} order={order} compact />
+          ))}
+        </section>
       ) : null}
 
       <ErrorModal message={error} onClose={() => setError(null)} />
