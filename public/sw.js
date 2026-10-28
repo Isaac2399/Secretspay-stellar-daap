@@ -13,6 +13,7 @@ self.addEventListener('push', (event) => {
     title: 'Pedido listo',
     body: 'Tu pedido ya se puede retirar en la barra.',
     url: '/event',
+    orderId: '',
   }
   try {
     if (event.data) {
@@ -21,6 +22,7 @@ self.addEventListener('push', (event) => {
         title: typeof parsed.title === 'string' ? parsed.title : data.title,
         body: typeof parsed.body === 'string' ? parsed.body : data.body,
         url: typeof parsed.url === 'string' ? parsed.url : data.url,
+        orderId: typeof parsed.orderId === 'string' ? parsed.orderId : '',
       }
     }
   } catch {
@@ -34,14 +36,19 @@ self.addEventListener('push', (event) => {
     }
   }
 
+  const tag = data.orderId ? `order-ready-${data.orderId}` : `order-ready-${Date.now()}`
   event.waitUntil(
     self.registration.showNotification(data.title, {
       body: data.body,
       icon: '/favicon.svg',
       badge: '/favicon.svg',
       data: { url: data.url },
-      tag: 'order-ready',
+      tag,
       renotify: true,
+      requireInteraction: true,
+      silent: false,
+      vibrate: [200, 100, 200, 100, 280],
+      timestamp: Date.now(),
     }),
   )
 })

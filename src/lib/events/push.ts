@@ -99,13 +99,21 @@ export function notifyOrderReadyLocally(order: {
           icon: '/favicon.svg',
           tag: `order-ready-${order.id}`,
           data: { url: '/event' },
+          renotify: true,
+          requireInteraction: true,
+          silent: false,
+          vibrate: [200, 100, 200, 100, 280],
         }),
       )
       return
     }
+    navigator.vibrate?.([200, 100, 200, 100, 280])
     new Notification('Pedido listo', {
       body: `#${order.orderNumber} · Retira en ${order.pickupLabel}`,
       tag: `order-ready-${order.id}`,
+      requireInteraction: true,
+      silent: false,
+      vibrate: [200, 100, 200, 100, 280],
     })
   } catch {
     // silencioso: el ticket en pantalla sigue siendo la fuente de verdad

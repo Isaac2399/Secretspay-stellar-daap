@@ -28,19 +28,31 @@ export function CustomerEventMenu({
   const [busy, setBusy] = useState(false)
   const [placed, setPlaced] = useState<EventOrder | null>(null)
   const [confirmed, setConfirmed] = useState(false)
+  const [readyAlert, setReadyAlert] = useState<EventOrder | null>(null)
   const statusByIdRef = useRef<Record<string, EventOrder['status']>>({})
   const pushArmedRef = useRef(false)
 
   function applyOrders(nextOrders: EventOrder[]) {
     const prev = statusByIdRef.current
+    let justReady: EventOrder | null = null
     for (const order of nextOrders) {
       const before = prev[order.id]
       if (order.status === 'ready' && before && before !== 'ready') {
         notifyOrderReadyLocally(order)
+        justReady = order
       }
       prev[order.id] = order.status
     }
     setOrders(nextOrders)
+    setPlaced((current) => {
+      if (!current) {
+        return current
+      }
+      return nextOrders.find((order) => order.id === current.id) ?? current
+    })
+    if (justReady) {
+      setReadyAlert(justReady)
+    }
   }
 
   async function ensurePush() {
@@ -288,6 +300,49 @@ export function CustomerEventMenu({
       {confirmed ? (
         <OrderConfirmedNotice onClose={() => setConfirmed(false)} />
       ) : null}
+      {readyAlert ? (
+        <OrderReadyNotice order={readyAlert} onClose={() => setReadyAlert(null)} />
+      ) : null}
+    </div>
+  )
+}
+
+function OrderReadyNotice({
+  order,
+  onClose,
+}: {
+  order: EventOrder
+  onClose: () => void
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-[90] flex items-center justify-center bg-black/80 p-5 backdrop-blur-sm"
+      role="alertdialog"
+      aria-modal="true"
+      aria-labelledby="order-ready-title"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-sm rounded-[28px] border border-app-accent/50 bg-app-card p-6 shadow-[0_0_40px_rgba(255,255,255,0.08)]"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <p className="text-center text-xs font-medium uppercase tracking-wide text-app-accent">
+          Pedido listo
+        </p>
+        <h2 id="order-ready-title" className="mt-2 text-center text-3xl font-semibold">
+          #{order.orderNumber}
+        </h2>
+        <p className="mt-3 text-center text-[15px] leading-relaxed">
+          Ya puedes retirarlo en {order.pickupLabel}. Muestra el QR en la barra.
+        </p>
+        <button
+          type="button"
+          className="mt-6 w-full rounded-2xl bg-app-accent py-3 text-sm font-semibold text-white"
+          onClick={onClose}
+        >
+          Ver pedido
+        </button>
+      </div>
     </div>
   )
 }
