@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Minus, Plus } from 'lucide-react'
+import { LoaderCircle, Minus, Plus } from 'lucide-react'
 import { readableError } from '@/lib/auth/readableError'
 import { ErrorModal } from '@/components/feedback/ErrorModal'
 import {
@@ -177,7 +177,12 @@ export function CustomerEventMenu({
     <div className="space-y-5">
       <div>
         {onBack ? (
-          <button type="button" className="text-sm text-app-accent" onClick={onBack}>
+          <button
+            type="button"
+            className="text-sm text-app-accent disabled:opacity-40"
+            disabled={busy}
+            onClick={onBack}
+          >
             ← Barras
           </button>
         ) : null}
@@ -216,7 +221,7 @@ export function CustomerEventMenu({
                     <button
                       type="button"
                       className="grid h-8 w-8 place-items-center rounded-full bg-app-chip disabled:opacity-40"
-                      disabled={qty <= 0}
+                      disabled={busy || qty <= 0}
                       onClick={() =>
                         setCart((prev) => ({
                           ...prev,
@@ -230,7 +235,7 @@ export function CustomerEventMenu({
                     <button
                       type="button"
                       className="grid h-8 w-8 place-items-center rounded-full bg-app-accent disabled:opacity-40"
-                      disabled={soldOut || qty >= product.stock}
+                      disabled={busy || soldOut || qty >= product.stock}
                       onClick={() =>
                         setCart((prev) => ({
                           ...prev,
@@ -253,9 +258,17 @@ export function CustomerEventMenu({
           type="button"
           className="w-full rounded-2xl bg-app-accent py-3 text-sm font-medium text-white disabled:opacity-60"
           disabled={busy}
+          aria-busy={busy}
           onClick={() => void checkout()}
         >
-          {busy ? 'Pagando…' : `Pagar y ordenar (${lines.length})`}
+          {busy ? (
+            <span className="inline-flex items-center justify-center gap-2">
+              <LoaderCircle className="h-4 w-4 animate-spin" />
+              Pagando…
+            </span>
+          ) : (
+            `Pagar y ordenar (${lines.length})`
+          )}
         </button>
       ) : null}
 
@@ -297,12 +310,35 @@ export function CustomerEventMenu({
       ) : null}
 
       <ErrorModal message={error} onClose={() => setError(null)} />
+      {busy ? <PaymentPendingNotice /> : null}
       {confirmed ? (
         <OrderConfirmedNotice onClose={() => setConfirmed(false)} />
       ) : null}
       {readyAlert ? (
         <OrderReadyNotice order={readyAlert} onClose={() => setReadyAlert(null)} />
       ) : null}
+    </div>
+  )
+}
+
+function PaymentPendingNotice() {
+  return (
+    <div
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-5 backdrop-blur-sm"
+      role="alertdialog"
+      aria-modal="true"
+      aria-labelledby="payment-pending-title"
+      aria-busy="true"
+    >
+      <div className="w-full max-w-sm rounded-[28px] border border-app-accent/40 bg-app-card p-6 text-center shadow-[0_0_40px_rgba(255,255,255,0.08)]">
+        <LoaderCircle className="mx-auto h-10 w-10 animate-spin text-app-accent" />
+        <h2 id="payment-pending-title" className="mt-4 text-lg font-semibold">
+          Procesando el pago
+        </h2>
+        <p className="mt-2 text-sm leading-relaxed text-app-muted">
+          Estamos confirmando la transacción. No cierres esta pantalla.
+        </p>
+      </div>
     </div>
   )
 }
