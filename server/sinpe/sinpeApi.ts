@@ -74,10 +74,12 @@ export async function handleSinpeRoutes(
     return { status: 200, body: await getSinpeIntent(session) }
   }
 
-  // Un solo segmento: Vercel/api/payments/[action] no enruta /sinpe-intent/activate.
+  // POST en la misma ruta (1 segmento): Vercel ya enruta /sinpe-intent.
+  // Alias /sinpe-activate y la ruta anidada por compatibilidad.
   if (
     method === 'POST' &&
-    (path === '/api/payments/sinpe-activate' ||
+    (path === '/api/payments/sinpe-intent' ||
+      path === '/api/payments/sinpe-activate' ||
       path === '/api/payments/sinpe-intent/activate')
   ) {
     const session = await requireSession(input.cookie)
