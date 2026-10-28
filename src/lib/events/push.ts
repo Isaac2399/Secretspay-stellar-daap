@@ -89,32 +89,30 @@ export function notifyOrderReadyLocally(order: {
     return
   }
   markNotified(order.id)
+  const alertOptions: NotificationOptions & {
+    renotify?: boolean
+    vibrate?: number[]
+  } = {
+    body: `#${order.orderNumber} · Retira en ${order.pickupLabel}`,
+    icon: '/favicon.svg',
+    tag: `order-ready-${order.id}`,
+    data: { url: '/event' },
+    renotify: true,
+    requireInteraction: true,
+    silent: false,
+    vibrate: [200, 100, 200, 100, 280],
+  }
   try {
     const registration = navigator.serviceWorker?.controller
     if (registration) {
       // Preferir SW si ya está activo (mismo look que el push remoto).
       void navigator.serviceWorker.ready.then((ready) =>
-        ready.showNotification('Pedido listo', {
-          body: `#${order.orderNumber} · Retira en ${order.pickupLabel}`,
-          icon: '/favicon.svg',
-          tag: `order-ready-${order.id}`,
-          data: { url: '/event' },
-          renotify: true,
-          requireInteraction: true,
-          silent: false,
-          vibrate: [200, 100, 200, 100, 280],
-        }),
+        ready.showNotification('Pedido listo', alertOptions),
       )
       return
     }
     navigator.vibrate?.([200, 100, 200, 100, 280])
-    new Notification('Pedido listo', {
-      body: `#${order.orderNumber} · Retira en ${order.pickupLabel}`,
-      tag: `order-ready-${order.id}`,
-      requireInteraction: true,
-      silent: false,
-      vibrate: [200, 100, 200, 100, 280],
-    })
+    new Notification('Pedido listo', alertOptions)
   } catch {
     // silencioso: el ticket en pantalla sigue siendo la fuente de verdad
   }
