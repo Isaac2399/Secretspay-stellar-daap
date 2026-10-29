@@ -70,19 +70,17 @@ export function InvestorPortfolio({
         <h2 className="mt-1 text-[17px] font-semibold">Portafolio RWA</h2>
       </div>
 
-      <div className="grid grid-cols-1 gap-2">
-        <Stat label="Capital invertido" value={formatUsd(invested)} />
-        <div className="grid grid-cols-2 gap-2">
-          <Stat label="Renta mensual est." value={formatUsd(monthly)} />
-          <Stat label="Dividendos cobrados" value={formatUsd(claimed)} />
+      <div className="grid grid-cols-2 gap-2 xl:grid-cols-5">
+        <div className="col-span-2 xl:col-span-1">
+          <Stat label="Capital invertido" value={formatUsd(invested)} />
         </div>
-        <div className="grid grid-cols-2 gap-2">
-          <Stat label="Retorno cobrado" value={`${roi.toFixed(2)}%`} />
-          <Stat
-            label="Renta 12 meses est."
-            value={formatUsd(projection.at(-1)?.cumulative ?? monthly * 12)}
-          />
-        </div>
+        <Stat label="Renta mensual est." value={formatUsd(monthly)} />
+        <Stat label="Dividendos cobrados" value={formatUsd(claimed)} />
+        <Stat label="Retorno cobrado" value={`${roi.toFixed(2)}%`} />
+        <Stat
+          label="Renta 12 meses est."
+          value={formatUsd(projection.at(-1)?.cumulative ?? monthly * 12)}
+        />
       </div>
 
       {holdings.length === 0 ? (
@@ -90,7 +88,7 @@ export function InvestorPortfolio({
           Todavía no tiene tokens RWA. Explore oportunidades para abrir trustline e invertir en USDC.
         </p>
       ) : (
-        <ul className="space-y-2">
+        <ul className="grid gap-2 sm:grid-cols-2">
           {holdings.map((holding) => {
             const listing = listings.find((row) => row.id === holding.listingId)
             const share = poolSharePercent(holding.tokens, listing?.totalSupply ?? '0')
@@ -118,7 +116,7 @@ export function InvestorPortfolio({
       )}
 
       {!compact && holdings.length > 0 ? (
-        <>
+        <div className="grid gap-4 xl:grid-cols-2 xl:items-start">
           <div className="rounded-[24px] bg-app-card p-4">
             <AreaChart
               title="Ganancia proyectada del portafolio"
@@ -152,7 +150,7 @@ export function InvestorPortfolio({
               />
             </div>
           ) : null}
-        </>
+        </div>
       ) : null}
 
       <button
@@ -195,7 +193,7 @@ function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-[20px] bg-app-card p-4">
       <p className="text-xs text-app-muted">{label}</p>
-      <p className="mt-1 text-lg font-semibold tabular-nums">{value}</p>
+      <p className="mt-1 break-words text-lg font-semibold tabular-nums">{value}</p>
     </div>
   )
 }

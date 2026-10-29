@@ -17,7 +17,7 @@ export function AdminFinancePanel({ finance }: { finance: AdminFinance }) {
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
         <Kpi
           icon={Wallet}
           label="AUM tokenizado"
@@ -70,97 +70,99 @@ export function AdminFinancePanel({ finance }: { finance: AdminFinance }) {
         ) : null}
       </div>
 
-      <div className="rounded-[24px] bg-app-card p-4">
-        <AreaChart
-          title="Flujo USDC 12 meses (entradas vs salidas)"
-          caption="Suma de cobros y envíos USDC de empresas y clientes. Source: Horizon · últimos 12 meses."
-          xLabel="Mes"
-          yLabel="USDC"
-          formatY={(value) => formatUsd(value)}
-          series={[
-            {
-              name: 'Entradas',
-              colorClass: 'stroke-app-accent',
-              fillClass: 'fill-app-accent/20',
-              points: finance.monthly.map((row) => ({ label: row.label, value: row.inflow })),
-            },
-            {
-              name: 'Salidas',
-              colorClass: 'stroke-red-400',
-              points: finance.monthly.map((row) => ({ label: row.label, value: row.outflow })),
-            },
-          ]}
-        />
-      </div>
+      <div className="grid gap-4 xl:grid-cols-2 xl:items-start">
+        <div className="rounded-[24px] bg-app-card p-4">
+          <AreaChart
+            title="Flujo USDC 12 meses (entradas vs salidas)"
+            caption="Suma de cobros y envíos USDC de empresas y clientes. Source: Horizon · últimos 12 meses."
+            xLabel="Mes"
+            yLabel="USDC"
+            formatY={(value) => formatUsd(value)}
+            series={[
+              {
+                name: 'Entradas',
+                colorClass: 'stroke-app-accent',
+                fillClass: 'fill-app-accent/20',
+                points: finance.monthly.map((row) => ({ label: row.label, value: row.inflow })),
+              },
+              {
+                name: 'Salidas',
+                colorClass: 'stroke-red-400',
+                points: finance.monthly.map((row) => ({ label: row.label, value: row.outflow })),
+              },
+            ]}
+          />
+        </div>
 
-      <div className="rounded-[24px] bg-app-card p-4">
-        <BarList
-          title="Resultado neto USDC por mes"
-          caption="Entradas menos salidas. Rojo = mes negativo."
-          xLabel="USDC"
-          yLabel="Mes"
-          formatValue={(value) => formatUsd(value)}
-          items={finance.monthly.map((row) => ({
-            label: row.label,
-            value: row.net,
-            tone: row.net < 0 ? 'loss' : 'accent',
-          }))}
-        />
-      </div>
-
-      {finance.listingRaised.length > 0 ? (
         <div className="rounded-[24px] bg-app-card p-4">
           <BarList
-            title="Capital levantado por emisión"
-            caption="AUM publicado en el marketplace."
+            title="Resultado neto USDC por mes"
+            caption="Entradas menos salidas. Rojo = mes negativo."
             xLabel="USDC"
-            yLabel="Asset"
+            yLabel="Mes"
             formatValue={(value) => formatUsd(value)}
-            items={finance.listingRaised}
-          />
-        </div>
-      ) : null}
-
-      {finance.listingObligation.length > 0 ? (
-        <div className="rounded-[24px] bg-app-card p-4">
-          <BarList
-            title="Obligación mensual de dividendos"
-            caption="raised × APY / 12. Es pasivo de renta, no gasto operativo del super admin."
-            xLabel="USDC / mes"
-            yLabel="Asset"
-            formatValue={(value) => formatUsd(value)}
-            items={finance.listingObligation}
-          />
-        </div>
-      ) : null}
-
-      {finance.merchantRanking.length > 0 ? (
-        <div className="rounded-[24px] bg-app-card p-4">
-          <BarList
-            title="Ventas USDC por empresa"
-            caption="GMV recibido en wallets comercio."
-            xLabel="USDC"
-            yLabel="Empresa"
-            formatValue={(value) => formatUsd(value)}
-            items={finance.merchantRanking}
-          />
-        </div>
-      ) : null}
-
-      {finance.requestStatus.length > 0 ? (
-        <div className="rounded-[24px] bg-app-card p-4">
-          <DonutChart
-            title="Expedientes de tokenización"
-            caption="Pipeline interno · no incluye listados semilla sin solicitud."
-            slices={finance.requestStatus.map((slice, index) => ({
-              ...slice,
-              color: STATUS_COLORS[index % STATUS_COLORS.length] ?? '#1c8c62',
+            items={finance.monthly.map((row) => ({
+              label: row.label,
+              value: row.net,
+              tone: row.net < 0 ? 'loss' : 'accent',
             }))}
           />
         </div>
-      ) : null}
 
-      <div className="grid grid-cols-2 gap-2 text-xs">
+        {finance.listingRaised.length > 0 ? (
+          <div className="rounded-[24px] bg-app-card p-4">
+            <BarList
+              title="Capital levantado por emisión"
+              caption="AUM publicado en el marketplace."
+              xLabel="USDC"
+              yLabel="Asset"
+              formatValue={(value) => formatUsd(value)}
+              items={finance.listingRaised}
+            />
+          </div>
+        ) : null}
+
+        {finance.listingObligation.length > 0 ? (
+          <div className="rounded-[24px] bg-app-card p-4">
+            <BarList
+              title="Obligación mensual de dividendos"
+              caption="raised × APY / 12. Es pasivo de renta, no gasto operativo del super admin."
+              xLabel="USDC / mes"
+              yLabel="Asset"
+              formatValue={(value) => formatUsd(value)}
+              items={finance.listingObligation}
+            />
+          </div>
+        ) : null}
+
+        {finance.merchantRanking.length > 0 ? (
+          <div className="rounded-[24px] bg-app-card p-4">
+            <BarList
+              title="Ventas USDC por empresa"
+              caption="GMV recibido en wallets comercio."
+              xLabel="USDC"
+              yLabel="Empresa"
+              formatValue={(value) => formatUsd(value)}
+              items={finance.merchantRanking}
+            />
+          </div>
+        ) : null}
+
+        {finance.requestStatus.length > 0 ? (
+          <div className="rounded-[24px] bg-app-card p-4">
+            <DonutChart
+              title="Expedientes de tokenización"
+              caption="Pipeline interno · no incluye listados semilla sin solicitud."
+              slices={finance.requestStatus.map((slice, index) => ({
+                ...slice,
+                color: STATUS_COLORS[index % STATUS_COLORS.length] ?? '#1c8c62',
+              }))}
+            />
+          </div>
+        ) : null}
+      </div>
+
+      <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
         <Mini
           label="Libro inversionistas"
           value={formatUsd(finance.rwaBookUsd)}

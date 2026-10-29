@@ -351,9 +351,9 @@ export function StaffSendPanel() {
 
 function BalanceChip({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl bg-app-chip px-3 py-2">
-      <p className="text-[11px] text-app-muted">{label}</p>
-      <p className="text-sm font-semibold tabular-nums">{formatAmount(value)}</p>
+    <div className="min-w-0 rounded-2xl bg-app-chip px-2.5 py-2 sm:px-3">
+      <p className="truncate text-[11px] text-app-muted">{label}</p>
+      <p className="break-all text-sm font-semibold tabular-nums">{formatAmount(value)}</p>
     </div>
   )
 }

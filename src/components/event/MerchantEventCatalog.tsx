@@ -300,113 +300,115 @@ export function MerchantEventCatalog({
 
   return (
     <div className="space-y-5">
-      <section className="space-y-3 rounded-[24px] bg-app-card p-4">
-        <h2 className="text-[17px] font-semibold">
-          {asAdmin ? 'Editar evento' : 'Evento / barra'}
-        </h2>
-        {asAdmin && merchantEmail ? (
-          <p className="text-xs text-app-muted">{merchantEmail}</p>
-        ) : null}
-        <label className="grid gap-1 text-sm">
-          Nombre
-          <input className={fieldClass} value={title} onChange={(e) => setTitle(e.target.value)} />
-        </label>
-        <label className="grid gap-1 text-sm">
-          Punto de retiro
-          <input
-            className={fieldClass}
-            value={pickupLabel}
-            onChange={(e) => setPickupLabel(e.target.value)}
-            placeholder="Barra A"
-          />
-        </label>
-        <label className="flex items-center justify-between gap-3 rounded-2xl bg-app-chip px-3 py-3 text-sm">
-          <span>
-            Visible para clientes
-            <span className="mt-0.5 block text-xs text-app-muted">
-              {active ? 'Activo en la app' : 'Oculto / inactivo'}
+      <div className="grid gap-5 lg:grid-cols-2 lg:items-start">
+        <section className="space-y-3 rounded-[24px] bg-app-card p-4">
+          <h2 className="text-[17px] font-semibold">
+            {asAdmin ? 'Editar evento' : 'Evento / barra'}
+          </h2>
+          {asAdmin && merchantEmail ? (
+            <p className="text-xs text-app-muted">{merchantEmail}</p>
+          ) : null}
+          <label className="grid gap-1 text-sm">
+            Nombre
+            <input className={fieldClass} value={title} onChange={(e) => setTitle(e.target.value)} />
+          </label>
+          <label className="grid gap-1 text-sm">
+            Punto de retiro
+            <input
+              className={fieldClass}
+              value={pickupLabel}
+              onChange={(e) => setPickupLabel(e.target.value)}
+              placeholder="Barra A"
+            />
+          </label>
+          <label className="flex items-center justify-between gap-3 rounded-2xl bg-app-chip px-3 py-3 text-sm">
+            <span>
+              Visible para clientes
+              <span className="mt-0.5 block text-xs text-app-muted">
+                {active ? 'Activo en la app' : 'Oculto / inactivo'}
+              </span>
             </span>
-          </span>
-          <input
-            type="checkbox"
-            className="h-5 w-5 accent-[var(--app-accent,#e11d48)]"
-            checked={active}
-            onChange={(e) => setActive(e.target.checked)}
-          />
-        </label>
-        <label className="grid gap-1 text-sm">
-          Comisión por compra (%)
-          <input
-            className={fieldClass}
-            inputMode="decimal"
-            value={feePercent}
-            onChange={(e) => setFeePercent(e.target.value)}
-            placeholder="2.5"
-          />
-        </label>
-        <label className="grid gap-1 text-sm">
-          Cuenta que recibe la comisión
-          <input
-            className={fieldClass}
-            value={feeAccount}
-            onChange={(e) => setFeeAccount(e.target.value)}
-            placeholder="G…"
-            spellCheck={false}
-          />
-        </label>
-        <p className="text-xs text-app-muted">
-          Al guardar, la comisión queda en el contrato. Cada compra entra a ese
-          contrato y se reparte ahí: este porcentaje a la cuenta de abajo y el
-          resto a la empresa. La cuenta tiene que tener trustline del token.
-        </p>
-        {settings?.chainHash ? (
-          <a
-            className="text-xs text-app-accent underline"
-            href={expertTx(settings.chainHash)}
-            target="_blank"
-            rel="noreferrer"
+            <input
+              type="checkbox"
+              className="h-5 w-5 accent-[var(--app-accent,#e11d48)]"
+              checked={active}
+              onChange={(e) => setActive(e.target.checked)}
+            />
+          </label>
+          <label className="grid gap-1 text-sm">
+            Comisión por compra (%)
+            <input
+              className={fieldClass}
+              inputMode="decimal"
+              value={feePercent}
+              onChange={(e) => setFeePercent(e.target.value)}
+              placeholder="2.5"
+            />
+          </label>
+          <label className="grid gap-1 text-sm">
+            Cuenta que recibe la comisión
+            <input
+              className={fieldClass}
+              value={feeAccount}
+              onChange={(e) => setFeeAccount(e.target.value)}
+              placeholder="G…"
+              spellCheck={false}
+            />
+          </label>
+          <p className="text-xs text-app-muted">
+            Al guardar, la comisión queda en el contrato. Cada compra entra a ese
+            contrato y se reparte ahí: este porcentaje a la cuenta de abajo y el
+            resto a la empresa. La cuenta tiene que tener trustline del token.
+          </p>
+          {settings?.chainHash ? (
+            <a
+              className="text-xs text-app-accent underline"
+              href={expertTx(settings.chainHash)}
+              target="_blank"
+              rel="noreferrer"
+            >
+              Ver el evento en Stellar Expert
+            </a>
+          ) : null}
+          <button
+            type="button"
+            className="w-full rounded-2xl bg-app-accent py-2.5 text-sm font-medium disabled:opacity-60"
+            disabled={busy}
+            onClick={() => void saveSettings()}
           >
-            Ver el evento en Stellar Expert
-          </a>
-        ) : null}
-        <button
-          type="button"
-          className="w-full rounded-2xl bg-app-accent py-2.5 text-sm font-medium disabled:opacity-60"
-          disabled={busy}
-          onClick={() => void saveSettings()}
-        >
-          Guardar evento
-        </button>
-        <p className="break-all text-xs text-app-muted">
-          Pantalla de barra: {displayUrl}
-        </p>
-        {settings ? (
-          <a
-            className="block rounded-2xl bg-app-chip py-2.5 text-center text-sm"
-            href={displayUrl}
-            target="_blank"
-            rel="noreferrer"
+            Guardar evento
+          </button>
+          <p className="break-all text-xs text-app-muted">
+            Pantalla de barra: {displayUrl}
+          </p>
+          {settings ? (
+            <a
+              className="block rounded-2xl bg-app-chip py-2.5 text-center text-sm"
+              href={displayUrl}
+              target="_blank"
+              rel="noreferrer"
+            >
+              Abrir pantalla de TV
+            </a>
+          ) : null}
+        </section>
+
+        <section className="space-y-3 rounded-[24px] bg-app-card p-4">
+          <h2 className="text-[17px] font-semibold">Añadir producto</h2>
+          <ProductFields draft={createDraft} onChange={setCreateDraft} />
+          <button
+            type="button"
+            className="w-full rounded-2xl bg-app-accent py-2.5 text-sm font-medium disabled:opacity-60"
+            disabled={busy}
+            onClick={() => void addProduct()}
           >
-            Abrir pantalla de TV
-          </a>
-        ) : null}
-      </section>
+            Añadir a la carta
+          </button>
+        </section>
+      </div>
 
-      <section className="space-y-3 rounded-[24px] bg-app-card p-4">
-        <h2 className="text-[17px] font-semibold">Añadir producto</h2>
-        <ProductFields draft={createDraft} onChange={setCreateDraft} />
-        <button
-          type="button"
-          className="w-full rounded-2xl bg-app-accent py-2.5 text-sm font-medium disabled:opacity-60"
-          disabled={busy}
-          onClick={() => void addProduct()}
-        >
-          Añadir a la carta
-        </button>
-      </section>
-
-      <section className="space-y-3">
-        <h2 className="text-[17px] font-semibold">Carta</h2>
+      <section className="grid gap-3 sm:grid-cols-2 sm:items-start xl:grid-cols-3">
+        <h2 className="col-span-full text-[17px] font-semibold">Carta</h2>
         {products.map((product) => {
           const editing = editingId === product.id && editDraft
           return (

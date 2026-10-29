@@ -107,19 +107,21 @@ export default function EventPage() {
           Elige una barra, ordena y muestra tu número al retirar.
         </p>
       </div>
-      {venues.map((venue) => (
-        <button
-          key={venue.merchantId}
-          type="button"
-          className="w-full rounded-[28px] bg-app-card px-5 py-6 text-left"
-          onClick={() => setParams({ merchant: venue.merchantId })}
-        >
-          <h2 className="text-2xl font-semibold">{venue.title}</h2>
-          <p className="mt-2 text-base text-app-muted">
-            {venue.productCount} productos · retiro en {venue.pickupLabel}
-          </p>
-        </button>
-      ))}
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        {venues.map((venue) => (
+          <button
+            key={venue.merchantId}
+            type="button"
+            className="w-full rounded-[28px] bg-app-card px-5 py-6 text-left"
+            onClick={() => setParams({ merchant: venue.merchantId })}
+          >
+            <h2 className="text-2xl font-semibold">{venue.title}</h2>
+            <p className="mt-2 text-base text-app-muted">
+              {venue.productCount} productos · retiro en {venue.pickupLabel}
+            </p>
+          </button>
+        ))}
+      </div>
       {venues.length === 0 ? (
         <p className="text-sm text-app-muted">Todavía no hay cartas publicadas.</p>
       ) : null}

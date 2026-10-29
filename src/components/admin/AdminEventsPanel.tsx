@@ -57,7 +57,7 @@ export function AdminEventsPanel() {
         {!loading && events.length === 0 ? (
           <p className="text-sm text-app-muted">Todavía no hay empresas registradas.</p>
         ) : null}
-        <ul className="space-y-2">
+        <ul className="grid gap-2 sm:grid-cols-2">
           {events.map((row) => {
             const open = row.merchantId === selectedId
             return (
@@ -74,7 +74,7 @@ export function AdminEventsPanel() {
                   }
                 >
                   <div className="flex items-start justify-between gap-3">
-                    <div>
+                    <div className="min-w-0 break-words">
                       <h3 className="font-medium">{row.title}</h3>
                       <p className="text-xs text-app-muted">{row.email}</p>
                       <p className="mt-1 text-[11px] text-white/70">

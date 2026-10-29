@@ -75,7 +75,7 @@ export function AreaChart({
   return (
     <figure className="space-y-2">
       <figcaption className="text-sm font-semibold">{title}</figcaption>
-      <svg viewBox={`0 0 ${width} ${height}`} className="h-40 w-full" role="img" aria-label={title}>
+      <svg viewBox={`0 0 ${width} ${height}`} className="h-40 w-full sm:h-52" role="img" aria-label={title}>
         <line
           x1={pad.left}
           y1={pad.top + innerH}

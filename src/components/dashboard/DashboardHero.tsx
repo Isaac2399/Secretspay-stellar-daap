@@ -35,7 +35,7 @@ type DashboardHeroProps = {
 }
 
 export const customerActionClass =
-  'm-0 box-border flex h-[4.25rem] w-full items-center justify-center gap-3 rounded-[28px] border-0 px-5 text-xl font-semibold leading-none no-underline'
+  'm-0 box-border flex h-[4.25rem] w-full items-center justify-center gap-3 rounded-[28px] border-0 px-5 text-lg font-semibold leading-none no-underline min-[380px]:text-xl'
 
 type AssetKey = 'loyalty' | 'xlm' | 'usdc'
 
@@ -113,8 +113,8 @@ export function DashboardHero({
       </div>
 
       <div>
-        <p className="flex items-baseline gap-2">
-          <span className="text-5xl font-semibold tracking-tight tabular-nums">
+        <p className="flex min-w-0 flex-wrap items-baseline gap-x-2">
+          <span className="min-w-0 break-all text-4xl font-semibold tracking-tight tabular-nums min-[380px]:text-5xl">
             {formatAmount(selected.value)}
           </span>
           <span className="text-lg font-medium text-white/55">{selected.code}</span>

@@ -101,51 +101,55 @@ export function MerchantOrderQueue({
         </p>
       </div>
 
-      <section className="rounded-[24px] bg-app-card p-4">
-        <h3 className="mb-3 text-sm font-semibold">Leer QR de retiro</h3>
-        <EventQrScanner
-          busy={busy}
-          resetKey={scannerReset}
-          onScan={(value) => complete(value)}
-        />
-      </section>
+      <div className="grid gap-5 lg:grid-cols-2 lg:items-start">
+        <section className="rounded-[24px] bg-app-card p-4 lg:sticky lg:top-6">
+          <h3 className="mb-3 text-sm font-semibold">Leer QR de retiro</h3>
+          <EventQrScanner
+            busy={busy}
+            resetKey={scannerReset}
+            onScan={(value) => complete(value)}
+          />
+        </section>
 
-      {open.map((order) => (
-        <article key={order.id} className="space-y-2 rounded-[24px] bg-app-card p-4">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="text-2xl font-semibold">#{order.orderNumber}</p>
-              <p className="text-xs text-app-accent">{STATUS_LABEL[order.status]}</p>
-            </div>
-            <p className="text-sm">
-              {formatAmount(order.total)} {order.asset}
-            </p>
-          </div>
-          <ul className="text-sm text-white/80">
-            {order.items.map((item) => (
-              <li key={`${order.id}-${item.productId}`}>
-                {item.qty}× {item.name}
-              </li>
-            ))}
-          </ul>
-          {order.status === 'preparing' ? (
-            <button
-              type="button"
-              className="w-full rounded-xl bg-app-accent py-2.5 text-sm font-medium disabled:opacity-60"
-              disabled={busy}
-              onClick={() =>
-                void markEventOrderReady(order.id, asAdmin ? merchantId : undefined)
-                  .then(() => reload())
-                  .catch((err) => setError(readableError(err)))
-              }
-            >
-              Marcar listo
-            </button>
-          ) : (
-            <p className="text-xs text-app-muted">Esperando QR en la barra</p>
-          )}
-        </article>
-      ))}
+        <div className="space-y-5">
+          {open.map((order) => (
+            <article key={order.id} className="space-y-2 rounded-[24px] bg-app-card p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-2xl font-semibold">#{order.orderNumber}</p>
+                  <p className="text-xs text-app-accent">{STATUS_LABEL[order.status]}</p>
+                </div>
+                <p className="text-sm">
+                  {formatAmount(order.total)} {order.asset}
+                </p>
+              </div>
+              <ul className="text-sm text-white/80">
+                {order.items.map((item) => (
+                  <li key={`${order.id}-${item.productId}`}>
+                    {item.qty}× {item.name}
+                  </li>
+                ))}
+              </ul>
+              {order.status === 'preparing' ? (
+                <button
+                  type="button"
+                  className="w-full rounded-xl bg-app-accent py-2.5 text-sm font-medium disabled:opacity-60"
+                  disabled={busy}
+                  onClick={() =>
+                    void markEventOrderReady(order.id, asAdmin ? merchantId : undefined)
+                      .then(() => reload())
+                      .catch((err) => setError(readableError(err)))
+                  }
+                >
+                  Marcar listo
+                </button>
+              ) : (
+                <p className="text-xs text-app-muted">Esperando QR en la barra</p>
+              )}
+            </article>
+          ))}
+        </div>
+      </div>
 
       {done.length > 0 ? (
         <section className="space-y-2">

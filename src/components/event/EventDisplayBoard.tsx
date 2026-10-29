@@ -38,13 +38,19 @@ export function EventDisplayBoard({ merchantId }: { merchantId: string }) {
   }, [merchantId])
 
   return (
-    <div className="min-h-dvh bg-black px-8 py-6 text-white">
-      <header className="mb-8 flex items-end justify-between gap-4">
-        <div>
-          <p className="text-sm uppercase tracking-[0.2em] text-app-accent">Retiro en barra</p>
-          <h1 className="mt-2 text-4xl font-semibold">{venue?.title ?? 'Evento'}</h1>
+    <div className="min-h-dvh bg-black px-4 py-6 text-white sm:px-8 2xl:px-12 2xl:py-10">
+      <header className="mb-6 flex flex-wrap items-end justify-between gap-x-4 gap-y-2 sm:mb-8">
+        <div className="min-w-0">
+          <p className="text-xs uppercase tracking-[0.2em] text-app-accent sm:text-sm">
+            Retiro en barra
+          </p>
+          <h1 className="mt-2 break-words text-3xl font-semibold sm:text-4xl 2xl:text-6xl">
+            {venue?.title ?? 'Evento'}
+          </h1>
         </div>
-        <p className="text-lg text-app-muted">{venue?.pickupLabel ?? 'Barra'}</p>
+        <p className="text-base text-app-muted sm:text-lg 2xl:text-2xl">
+          {venue?.pickupLabel ?? 'Barra'}
+        </p>
       </header>
 
       {error ? <ErrorModal message={error} onClose={() => setError(null)} /> : null}
@@ -69,25 +75,29 @@ function BoardColumn({
   return (
     <section>
       <h2
-        className={`mb-4 text-2xl font-semibold ${
+        className={`mb-4 text-2xl font-semibold 2xl:text-4xl ${
           tone === 'ready' ? 'text-app-accent' : 'text-white/80'
         }`}
       >
         {title}
       </h2>
       {orders.length === 0 ? (
-        <p className="text-white/40">Nada por ahora</p>
+        <p className="text-white/40 2xl:text-xl">Nada por ahora</p>
       ) : (
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
           {orders.map((order) => (
             <div
               key={`${order.status}-${order.orderNumber}-${order.createdAt}`}
-              className={`rounded-3xl px-4 py-6 text-center ${
+              className={`rounded-3xl px-3 py-5 text-center sm:px-4 sm:py-6 ${
                 tone === 'ready' ? 'bg-app-accent/20' : 'bg-app-card'
               }`}
             >
-              <p className="text-5xl font-semibold tracking-tight">#{order.orderNumber}</p>
-              <p className="mt-2 text-sm text-white/70">{order.pickupLabel}</p>
+              <p className="text-4xl font-semibold tracking-tight tabular-nums sm:text-5xl 2xl:text-6xl">
+                #{order.orderNumber}
+              </p>
+              <p className="mt-2 truncate text-sm text-white/70 2xl:text-base">
+                {order.pickupLabel}
+              </p>
             </div>
           ))}
         </div>

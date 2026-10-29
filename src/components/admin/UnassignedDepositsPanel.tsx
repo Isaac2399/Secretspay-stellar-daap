@@ -171,7 +171,7 @@ function DepositGroup({
         <h3 className="text-sm font-semibold">{title}</h3>
         <p className="text-[11px] text-app-muted">{hint}</p>
       </div>
-      <ul className="space-y-2">
+      <ul className="grid gap-2 sm:grid-cols-2">
         {rows.map((row) => (
           <li key={row.id} className="rounded-[24px] bg-app-card p-4">
             <p className="text-xs text-app-muted">
@@ -188,7 +188,7 @@ function DepositGroup({
                 <span className="ml-2 text-[11px] text-app-accent">promo</span>
               ) : null}
             </p>
-            <p className="mt-1 font-mono text-[11px] text-white/70">
+            <p className="mt-1 break-all font-mono text-[11px] text-white/70">
               Comprobante {row.referenceId}
             </p>
             {row.assignedPublicKey ? (

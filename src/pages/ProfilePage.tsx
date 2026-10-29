@@ -28,7 +28,7 @@ export default function ProfilePage() {
   }
 
   return (
-    <section className="space-y-5">
+    <section className="mx-auto max-w-2xl space-y-5">
       <div>
         <h1 className="text-xl font-semibold">Perfil</h1>
         <p className="mt-1 text-sm text-app-muted">Cuenta y sesión</p>
@@ -37,7 +37,7 @@ export default function ProfilePage() {
       <div className="space-y-3 rounded-[24px] bg-app-card p-4">
         <div>
           <p className="text-xs text-app-muted">Email</p>
-          <p className="mt-1 text-sm">{account.email}</p>
+          <p className="mt-1 break-all text-sm">{account.email}</p>
         </div>
         <div className="flex items-center gap-2 text-sm">
           {account.role === 'admin' ? (

@@ -4,7 +4,7 @@ import { Smartphone, X } from 'lucide-react'
 export function WalletSheet({ onClose }: { onClose: () => void }) {
   return (
     <div
-      className="fixed inset-0 z-50 grid place-items-end bg-black/60 p-4"
+      className="fixed inset-0 z-50 grid place-items-end bg-black/60 p-4 sm:place-items-center"
       onClick={onClose}
     >
       <div

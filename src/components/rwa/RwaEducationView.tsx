@@ -73,7 +73,7 @@ export function RwaEducationView() {
             key={item.id}
             type="button"
             onClick={() => setIndex(slideIndex)}
-            className={`rounded-2xl px-2 py-2.5 text-[11px] font-medium ${
+            className={`min-w-0 truncate rounded-2xl px-2 py-2.5 text-[11px] font-medium sm:text-xs ${
               slideIndex === index
                 ? 'bg-app-accent text-white'
                 : 'bg-app-chip text-white/70'

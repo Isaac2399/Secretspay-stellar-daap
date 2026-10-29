@@ -51,7 +51,7 @@ export default function HomePage() {
 
   if (isCustomer) {
     return (
-      <div className="space-y-6">
+      <div className="grid gap-6 xl:grid-cols-2 xl:items-start xl:gap-8">
         <DashboardHero
           user={user}
           balances={balances}
@@ -118,79 +118,83 @@ export default function HomePage() {
   }
 
   return (
-    <div className="space-y-6">
-      <DashboardHero
-        user={user}
-        balances={balances}
-        error={error}
-        onScan={() =>
-          scanRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-        }
-        onSend={() => setSendOpen(true)}
-        onDepositCompleted={(tx) => {
-          void reload()
-          void activity.reloadAfterDeposit(tx)
-        }}
-        onRojosCredited={() => {
-          void reload()
-          void activity.reload()
-        }}
-      />
+    <div className="grid gap-6 xl:grid-cols-2 xl:items-start xl:gap-8">
+      <div className="min-w-0 space-y-6">
+        <DashboardHero
+          user={user}
+          balances={balances}
+          error={error}
+          onScan={() =>
+            scanRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+          }
+          onSend={() => setSendOpen(true)}
+          onDepositCompleted={(tx) => {
+            void reload()
+            void activity.reloadAfterDeposit(tx)
+          }}
+          onRojosCredited={() => {
+            void reload()
+            void activity.reload()
+          }}
+        />
 
-      <AccountStrip balances={balances} />
+        <AccountStrip balances={balances} />
 
-      <Link to="/event" className="block rounded-[24px] bg-app-card p-5">
-        <p className="text-xs font-medium uppercase tracking-wide text-app-accent">
-          Evento
-        </p>
-        <h2 className="mt-1 text-[17px] font-semibold">Carta y pedidos de barra</h2>
-        <p className="mt-1 text-sm text-app-muted">
-          Añade productos, marca pedidos listos y abre la pantalla de TV.
-        </p>
-      </Link>
+        <Link to="/event" className="block rounded-[24px] bg-app-card p-5">
+          <p className="text-xs font-medium uppercase tracking-wide text-app-accent">
+            Evento
+          </p>
+          <h2 className="mt-1 text-[17px] font-semibold">Carta y pedidos de barra</h2>
+          <p className="mt-1 text-sm text-app-muted">
+            Añade productos, marca pedidos listos y abre la pantalla de TV.
+          </p>
+        </Link>
 
-      <ActivityList
-        publicKey={user.publicKey}
-        items={activity.items}
-        loading={activity.loading}
-        error={activity.error}
-        includeSinpe
-      />
+        <ActivityList
+          publicKey={user.publicKey}
+          items={activity.items}
+          loading={activity.loading}
+          error={activity.error}
+          includeSinpe
+        />
+      </div>
 
-      {sendOpen ? (
+      <div className="min-w-0 space-y-6">
+        {sendOpen ? (
+          <section
+            ref={sendRef}
+            id="enviar"
+            className="scroll-mt-4 rounded-[24px] bg-app-card p-5"
+          >
+            <h2 className="mb-2 text-[17px] font-semibold">
+              Enviar {stellarConfig.loyalty.code}
+            </h2>
+            <p className="mb-4 text-sm text-app-muted">
+              Transfiere en Testnet a otra public key. El asset por defecto es{' '}
+              {stellarConfig.loyalty.code}.
+            </p>
+            <SendByPublicKey defaultAsset={stellarConfig.loyalty.code} />
+          </section>
+        ) : null}
+
         <section
-          ref={sendRef}
-          id="enviar"
+          ref={scanRef}
+          id="cobrar"
           className="scroll-mt-4 rounded-[24px] bg-app-card p-5"
         >
-          <h2 className="mb-2 text-[17px] font-semibold">
-            Enviar {stellarConfig.loyalty.code}
-          </h2>
-          <p className="mb-4 text-sm text-app-muted">
-            Transfiere en Testnet a otra public key. El asset por defecto es{' '}
-            {stellarConfig.loyalty.code}.
+          <p className="mb-1 text-xs font-medium uppercase tracking-wide text-app-accent">
+            Empresa
           </p>
-          <SendByPublicKey defaultAsset={stellarConfig.loyalty.code} />
+          <h2 className="mb-1 text-[17px] font-semibold">Cobrar / Factura QR</h2>
+          <p className="mb-4 text-sm text-app-muted">
+            Genera un QR para que el cliente pague en Testnet.
+          </p>
+          <CreateInvoiceQR
+            merchantPublicKey={user.publicKey}
+            loyaltyBalance={balances.loyalty}
+          />
         </section>
-      ) : null}
-
-      <section
-        ref={scanRef}
-        id="cobrar"
-        className="scroll-mt-4 rounded-[24px] bg-app-card p-5"
-      >
-        <p className="mb-1 text-xs font-medium uppercase tracking-wide text-app-accent">
-          Empresa
-        </p>
-        <h2 className="mb-1 text-[17px] font-semibold">Cobrar / Factura QR</h2>
-        <p className="mb-4 text-sm text-app-muted">
-          Genera un QR para que el cliente pague en Testnet.
-        </p>
-        <CreateInvoiceQR
-          merchantPublicKey={user.publicKey}
-          loyaltyBalance={balances.loyalty}
-        />
-      </section>
+      </div>
     </div>
   )
 }

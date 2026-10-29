@@ -24,7 +24,7 @@ export function GuestDemoBanner() {
 
   return (
     <>
-      <div className="pointer-events-none fixed inset-x-0 top-0 z-50 px-3 pt-[max(0.5rem,env(safe-area-inset-top))]">
+      <div className="pointer-events-none fixed inset-x-0 top-0 z-50 px-3 pt-[max(0.5rem,env(safe-area-inset-top))] lg:left-60">
         <div className="pointer-events-auto mx-auto flex max-w-md items-center justify-between gap-3 rounded-full border border-amber-200/40 bg-amber-400 px-4 py-2 text-black shadow-lg shadow-black/40">
           <p className="min-w-0 text-xs font-semibold leading-tight">
             Modo Demo Activo - Fondos de Testnet

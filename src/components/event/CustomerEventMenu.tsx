@@ -198,65 +198,67 @@ export function CustomerEventMenu({
         {products.length === 0 ? (
           <p className="text-sm text-app-muted">Aún no hay carta en esta barra.</p>
         ) : (
-          products.map((product) => {
-            const qty = cart[product.id] ?? 0
-            const soldOut = product.stock <= 0
-            return (
-              <article key={product.id} className="rounded-[28px] bg-app-card p-5">
-                <h3 className="text-xl font-semibold">{product.name}</h3>
-                <p className="mt-1 text-lg text-white/90">
-                  {formatAmount(product.price)} {product.asset}
-                </p>
-                {product.promo ? (
-                  <p className="mt-1 text-sm text-app-accent">{product.promo.label}</p>
-                ) : null}
-                <p className={`mt-1 text-sm ${stockCountClass(product.stock)}`}>
-                  {formatStockLabel(product.stock)}
-                  <span className="text-app-muted"> · {product.pickupLabel}</span>
-                </p>
-                <div className="mt-4 flex items-center justify-between">
-                  <button
-                    type="button"
-                    aria-label={`Quitar ${product.name}`}
-                    className="grid h-16 w-16 place-items-center rounded-full bg-app-chip disabled:opacity-40"
-                    disabled={busy || qty <= 0}
-                    onClick={() =>
-                      setCart((prev) => ({
-                        ...prev,
-                        [product.id]: Math.max(0, (prev[product.id] ?? 0) - 1),
-                      }))
-                    }
-                  >
-                    <Minus className="h-7 w-7" />
-                  </button>
-                  <span className="min-w-10 text-center text-3xl font-semibold tabular-nums">
-                    {qty}
-                  </span>
-                  <button
-                    type="button"
-                    aria-label={`Agregar ${product.name}`}
-                    className="grid h-16 w-16 place-items-center rounded-full bg-app-accent disabled:opacity-40"
-                    disabled={busy || soldOut || qty >= product.stock}
-                    onClick={() =>
-                      setCart((prev) => ({
-                        ...prev,
-                        [product.id]: Math.min(product.stock, (prev[product.id] ?? 0) + 1),
-                      }))
-                    }
-                  >
-                    <Plus className="h-7 w-7" />
-                  </button>
-                </div>
-              </article>
-            )
-          })
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {products.map((product) => {
+              const qty = cart[product.id] ?? 0
+              const soldOut = product.stock <= 0
+              return (
+                <article key={product.id} className="flex flex-col rounded-[28px] bg-app-card p-5">
+                  <h3 className="text-xl font-semibold">{product.name}</h3>
+                  <p className="mt-1 text-lg text-white/90">
+                    {formatAmount(product.price)} {product.asset}
+                  </p>
+                  {product.promo ? (
+                    <p className="mt-1 text-sm text-app-accent">{product.promo.label}</p>
+                  ) : null}
+                  <p className={`mt-1 text-sm ${stockCountClass(product.stock)}`}>
+                    {formatStockLabel(product.stock)}
+                    <span className="text-app-muted"> · {product.pickupLabel}</span>
+                  </p>
+                  <div className="mt-auto flex items-center justify-between pt-4">
+                    <button
+                      type="button"
+                      aria-label={`Quitar ${product.name}`}
+                      className="grid h-16 w-16 place-items-center rounded-full bg-app-chip disabled:opacity-40"
+                      disabled={busy || qty <= 0}
+                      onClick={() =>
+                        setCart((prev) => ({
+                          ...prev,
+                          [product.id]: Math.max(0, (prev[product.id] ?? 0) - 1),
+                        }))
+                      }
+                    >
+                      <Minus className="h-7 w-7" />
+                    </button>
+                    <span className="min-w-10 text-center text-3xl font-semibold tabular-nums">
+                      {qty}
+                    </span>
+                    <button
+                      type="button"
+                      aria-label={`Agregar ${product.name}`}
+                      className="grid h-16 w-16 place-items-center rounded-full bg-app-accent disabled:opacity-40"
+                      disabled={busy || soldOut || qty >= product.stock}
+                      onClick={() =>
+                        setCart((prev) => ({
+                          ...prev,
+                          [product.id]: Math.min(product.stock, (prev[product.id] ?? 0) + 1),
+                        }))
+                      }
+                    >
+                      <Plus className="h-7 w-7" />
+                    </button>
+                  </div>
+                </article>
+              )
+            })}
+          </div>
         )}
       </section>
 
       {lines.length > 0 ? (
         <button
           type="button"
-          className="sticky bottom-24 z-20 w-full rounded-[28px] bg-app-accent py-5 text-xl font-semibold text-white shadow-[0_8px_30px_rgba(0,0,0,0.45)] disabled:opacity-60"
+          className="sticky bottom-24 z-20 w-full lg:bottom-6 rounded-[28px] bg-app-accent py-5 text-xl font-semibold text-white shadow-[0_8px_30px_rgba(0,0,0,0.45)] disabled:opacity-60"
           disabled={busy}
           aria-busy={busy}
           onClick={() => void checkout()}
@@ -273,8 +275,8 @@ export function CustomerEventMenu({
       ) : null}
 
       {pendingOrders.length > 0 || placed?.status === 'preparing' || placed?.status === 'ready' ? (
-        <section className="space-y-3">
-          <h2 className="text-xl font-semibold">Pedidos</h2>
+        <section className="grid gap-3 sm:grid-cols-2 sm:items-start xl:grid-cols-3">
+          <h2 className="col-span-full text-xl font-semibold">Pedidos</h2>
           {placed && (placed.status === 'preparing' || placed.status === 'ready') ? (
             <CustomerOrderTicket order={placed} />
           ) : null}
@@ -287,8 +289,8 @@ export function CustomerEventMenu({
       ) : null}
 
       {paidOrders.length > 0 || placed?.status === 'completed' ? (
-        <section className="space-y-3">
-          <h2 className="text-xl font-semibold">Recogidos</h2>
+        <section className="grid gap-3 sm:grid-cols-2">
+          <h2 className="col-span-full text-xl font-semibold">Recogidos</h2>
           {placed?.status === 'completed' ? (
             <CustomerOrderTicket order={placed} compact />
           ) : null}
@@ -301,8 +303,8 @@ export function CustomerEventMenu({
       ) : null}
 
       {cancelledOrders.length > 0 ? (
-        <section className="space-y-3">
-          <h2 className="text-sm font-medium text-app-muted">Cancelados</h2>
+        <section className="grid gap-3 sm:grid-cols-2">
+          <h2 className="col-span-full text-sm font-medium text-app-muted">Cancelados</h2>
           {cancelledOrders.map((order) => (
             <CustomerOrderTicket key={order.id} order={order} compact />
           ))}

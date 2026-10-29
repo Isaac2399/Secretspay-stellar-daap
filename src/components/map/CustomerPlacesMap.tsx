@@ -219,7 +219,7 @@ export function CustomerPlacesMap() {
       ) : null}
 
       <div className="overflow-hidden rounded-[24px] bg-app-card">
-        <div className="h-72">
+        <div className="h-72 sm:h-96 lg:h-[28rem]">
           <DarkLeafletMap
             markers={filtered.map((place) => ({
               id: place.id,
@@ -277,7 +277,7 @@ export function CustomerPlacesMap() {
       ) : null}
 
       {filtered.length > 1 ? (
-        <ul className="space-y-2">
+        <ul className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
           {filtered.map((place) => (
             <li key={place.id}>
               <button

@@ -150,7 +150,7 @@ export function MerchantPlaceEditor({
   return (
     <div className="space-y-4">
       <div className="overflow-hidden rounded-[24px] bg-app-card">
-        <div className="h-72">
+        <div className="h-72 sm:h-96">
           <DarkLeafletMap
             markers={
               pinned

@@ -15,7 +15,7 @@ export function AuthLayout({
   return (
     <main className="min-h-dvh bg-transparent text-white">
       <div
-        className="mx-auto flex min-h-dvh max-w-md flex-col px-5 pb-10"
+        className="mx-auto flex min-h-dvh max-w-md flex-col px-4 pb-10 min-[380px]:px-5 sm:justify-center sm:py-12"
         style={{ paddingTop: 'max(1.25rem, env(safe-area-inset-top))' }}
       >
         <header className="mb-6 space-y-2">

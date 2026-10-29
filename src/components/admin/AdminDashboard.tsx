@@ -94,7 +94,7 @@ export function AdminDashboard() {
         </p>
       </div>
 
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
         <SummaryCard
           icon={Building2}
           label="Empresas"
@@ -124,7 +124,7 @@ export function AdminDashboard() {
         </section>
       ) : null}
 
-      <div className="flex gap-2 overflow-x-auto pb-1">
+      <div className="flex gap-2 overflow-x-auto pb-1 lg:flex-wrap lg:overflow-visible">
         <TabButton
           active={tab === 'send'}
           label="Enviar"
@@ -245,9 +245,9 @@ export function AdminDashboard() {
       ) : null}
 
       {tab === 'merchants' && overview ? (
-        <ul className="space-y-2">
+        <ul className="grid gap-2 sm:grid-cols-2">
           {overview.merchants.length === 0 ? (
-            <li className="rounded-[24px] bg-app-card px-4 py-6 text-center text-sm text-app-muted">
+            <li className="col-span-full rounded-[24px] bg-app-card px-4 py-6 text-center text-sm text-app-muted">
               No hay empresas registradas.
             </li>
           ) : null}
@@ -278,9 +278,9 @@ export function AdminDashboard() {
       ) : null}
 
       {tab === 'customers' && overview ? (
-        <ul className="space-y-2">
+        <ul className="grid gap-2 sm:grid-cols-2">
           {overview.customers.length === 0 ? (
-            <li className="rounded-[24px] bg-app-card px-4 py-6 text-center text-sm text-app-muted">
+            <li className="col-span-full rounded-[24px] bg-app-card px-4 py-6 text-center text-sm text-app-muted">
               No hay clientes registrados.
             </li>
           ) : null}

@@ -20,7 +20,7 @@ export default function RwaLearnPage() {
       ) : null}
 
       <RwaEducationView />
-      <div className="grid gap-2">
+      <div className="grid gap-2 sm:grid-cols-2">
         {canTokenize ? (
           <Link
             to="/rwa/tokenizar"

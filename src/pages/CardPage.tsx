@@ -195,46 +195,52 @@ export default function CardPage() {
       ) : null}
 
       {card ? (
-        <>
-          <VirtualCard
-            card={card}
-            revealed={revealed}
-            revealing={revealing}
-            onToggleReveal={() => void onToggleReveal()}
-          />
+        <div className="grid gap-6 xl:grid-cols-2 xl:items-start xl:gap-8">
+          <div className="min-w-0 space-y-6">
+            <div className="sm:mx-auto sm:max-w-md xl:max-w-none">
+              <VirtualCard
+                card={card}
+                revealed={revealed}
+                revealing={revealing}
+                onToggleReveal={() => void onToggleReveal()}
+              />
+            </div>
 
-          <section className="rounded-[24px] bg-app-card p-4">
-            <p className="text-xs text-app-muted">Saldo disponible</p>
-            <p className="mt-1 text-3xl font-semibold tabular-nums">
-              {formatAmount(available)}
-              <span className="ml-2 text-base font-medium text-white/50">
-                {card.balance.currency}
-              </span>
-            </p>
-            <p className="mt-1 text-xs text-app-muted">
-              Refleja el USDC de tu cuenta Stellar · Testnet
-            </p>
-          </section>
+            <section className="rounded-[24px] bg-app-card p-4">
+              <p className="text-xs text-app-muted">Saldo disponible</p>
+              <p className="mt-1 break-all text-3xl font-semibold tabular-nums">
+                {formatAmount(available)}
+                <span className="ml-2 text-base font-medium text-white/50">
+                  {card.balance.currency}
+                </span>
+              </p>
+              <p className="mt-1 text-xs text-app-muted">
+                Refleja el USDC de tu cuenta Stellar · Testnet
+              </p>
+            </section>
 
-          <CardControls
-            card={card}
-            busy={busy}
-            onToggleFreeze={() => void onToggleFreeze()}
-            onAddToWallet={() => setWalletOpen(true)}
-            onDepositUsdc={() => setDepositOpen(true)}
-          />
+            <CardControls
+              card={card}
+              busy={busy}
+              onToggleFreeze={() => void onToggleFreeze()}
+              onAddToWallet={() => setWalletOpen(true)}
+              onDepositUsdc={() => setDepositOpen(true)}
+            />
+          </div>
 
-          <PosSimulator cardId={card.id} onSettled={(tx) => void onSettled(tx)} />
+          <div className="min-w-0 space-y-6">
+            <PosSimulator cardId={card.id} onSettled={(tx) => void onSettled(tx)} />
 
-          <ActivityList
-            publicKey={user.publicKey}
-            items={activity.items}
-            loading={activity.loading}
-            error={activity.error}
-          />
+            <ActivityList
+              publicKey={user.publicKey}
+              items={activity.items}
+              loading={activity.loading}
+              error={activity.error}
+            />
 
-          <CardTransactions items={transactions} loading={false} />
-        </>
+            <CardTransactions items={transactions} loading={false} />
+          </div>
+        </div>
       ) : null}
 
       {walletOpen ? <WalletSheet onClose={() => setWalletOpen(false)} /> : null}

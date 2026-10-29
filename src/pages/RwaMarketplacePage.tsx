@@ -28,50 +28,50 @@ export default function RwaMarketplacePage() {
       {error ? <ErrorModal message={error} /> : null}
 
       {ranked.length > 0 ? (
-        <div className="rounded-[24px] bg-app-card p-4">
-          <BarList
-            title="Renta mensual estimada (inversión mínima)"
-            caption="Comparativo a APY anunciado · no incluye mora ni recortes de ocupación."
-            xLabel="USDC por mes"
-            yLabel="Activo"
-            formatValue={(value) => formatUsd(value)}
-            items={ranked.map((listing) => ({
-              label: `${listing.assetCode} · ${listing.apy}%`,
-              value: monthlyYieldUsd(Number(listing.minInvestmentUsd), Number(listing.apy)),
-            }))}
-          />
-        </div>
-      ) : null}
+        <div className="grid gap-5 xl:grid-cols-2 xl:items-start">
+          <div className="rounded-[24px] bg-app-card p-4">
+            <BarList
+              title="Renta mensual estimada (inversión mínima)"
+              caption="Comparativo a APY anunciado · no incluye mora ni recortes de ocupación."
+              xLabel="USDC por mes"
+              yLabel="Activo"
+              formatValue={(value) => formatUsd(value)}
+              items={ranked.map((listing) => ({
+                label: `${listing.assetCode} · ${listing.apy}%`,
+                value: monthlyYieldUsd(Number(listing.minInvestmentUsd), Number(listing.apy)),
+              }))}
+            />
+          </div>
 
-      {ranked.length > 0 ? (
-        <div className="overflow-x-auto rounded-[24px] bg-app-card p-4">
-          <p className="text-sm font-semibold">Tabla comparativa</p>
-          <table className="mt-3 w-full min-w-[28rem] text-left text-[11px]">
-            <thead className="text-app-muted">
-              <tr>
-                <th className="pb-2 font-medium">Activo</th>
-                <th className="pb-2 font-medium">APY</th>
-                <th className="pb-2 font-medium">Mínimo</th>
-                <th className="pb-2 font-medium">Fondeo</th>
-              </tr>
-            </thead>
-            <tbody>
-              {ranked.map((listing) => (
-                <tr key={listing.id} className="border-t border-white/5">
-                  <td className="py-2 pr-2">{listing.name}</td>
-                  <td className="py-2 tabular-nums">{listing.apy}%</td>
-                  <td className="py-2 tabular-nums">{formatUsd(listing.minInvestmentUsd)}</td>
-                  <td className="py-2 tabular-nums">
-                    {progressPercent(listing.raisedUsd, listing.targetUsd)}%
-                  </td>
+          <div className="overflow-x-auto rounded-[24px] bg-app-card p-4">
+            <p className="text-sm font-semibold">Tabla comparativa</p>
+            <table className="mt-3 w-full min-w-[28rem] text-left text-[11px]">
+              <thead className="text-app-muted">
+                <tr>
+                  <th className="pb-2 font-medium">Activo</th>
+                  <th className="pb-2 font-medium">APY</th>
+                  <th className="pb-2 font-medium">Mínimo</th>
+                  <th className="pb-2 font-medium">Fondeo</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {ranked.map((listing) => (
+                  <tr key={listing.id} className="border-t border-white/5">
+                    <td className="py-2 pr-2">{listing.name}</td>
+                    <td className="py-2 tabular-nums">{listing.apy}%</td>
+                    <td className="py-2 tabular-nums">{formatUsd(listing.minInvestmentUsd)}</td>
+                    <td className="py-2 tabular-nums">
+                      {progressPercent(listing.raisedUsd, listing.targetUsd)}%
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       ) : null}
 
-      <div className="space-y-3">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {listings.map((listing) => (
           <AssetCard key={listing.id} listing={listing} onOpen={setSelected} />
         ))}

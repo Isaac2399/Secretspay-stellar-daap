@@ -455,7 +455,7 @@ export default function PartyPayLandingPage() {
     <div className="pp-landing min-h-dvh overflow-x-clip">
       <div className="pp-grid pointer-events-none fixed inset-0" />
       <header className="sticky top-0 z-30 border-b border-white/10 bg-[#05060a]/75 backdrop-blur-md">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-5 py-3">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-4 py-3 min-[380px]:gap-3 min-[380px]:px-5">
           <a href="#top" className="pp-display shrink-0 text-lg font-bold text-white">
             PartyPay
           </a>
@@ -489,14 +489,14 @@ export default function PartyPayLandingPage() {
             {loading ? null : user ? (
               <Link
                 to="/"
-                className="rounded-full bg-[var(--pp-green)] px-3 py-2 text-sm font-semibold text-white sm:px-4"
+                className="whitespace-nowrap rounded-full bg-[var(--pp-green)] px-3 py-2 text-xs font-semibold text-white min-[380px]:text-sm sm:px-4"
               >
                 {text.openApp}
               </Link>
             ) : (
               <Link
                 to="/register"
-                className="rounded-full bg-[var(--pp-green)] px-3 py-2 text-sm font-semibold text-white sm:px-4"
+                className="whitespace-nowrap rounded-full bg-[var(--pp-green)] px-3 py-2 text-xs font-semibold text-white min-[380px]:text-sm sm:px-4"
               >
                 {text.createAccount}
               </Link>
@@ -506,10 +506,10 @@ export default function PartyPayLandingPage() {
       </header>
 
       <main id="top">
-        <section className="relative mx-auto grid max-w-6xl items-center gap-10 px-5 pb-20 pt-16 sm:pt-24 lg:grid-cols-[1.05fr_0.95fr]">
+        <section className="relative mx-auto grid max-w-6xl grid-cols-1 items-center gap-10 px-5 pb-20 pt-16 sm:pt-24 lg:grid-cols-[1.05fr_0.95fr]">
           <div className="pp-rise max-w-3xl">
             <p className="pp-kicker">{text.kicker}</p>
-            <h1 className="pp-display mt-4 text-5xl font-extrabold leading-[0.95] text-white sm:text-7xl">
+            <h1 className="pp-display mt-4 text-4xl font-extrabold leading-[0.95] text-white min-[420px]:text-5xl sm:text-7xl">
               PartyPay
             </h1>
             <p className="mt-5 max-w-xl text-lg leading-relaxed text-white/70 sm:text-xl">{text.hero}</p>
