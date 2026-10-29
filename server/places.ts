@@ -43,6 +43,10 @@ export type GeocodeHit = {
   lng: number
 }
 
+export function isPlaceCategory(value: string): boolean {
+  return PLACE_CATEGORIES.has(value)
+}
+
 export function parsePlaceBody(body: Record<string, unknown>): PlaceInput {
   const name = String(body.name ?? '').trim()
   const address = String(body.address ?? '').trim()

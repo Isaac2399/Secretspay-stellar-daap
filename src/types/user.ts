@@ -19,6 +19,17 @@ export type BusinessPlace = {
   promos?: PlacePromo[]
 }
 
+export type BusinessProfile = {
+  businessName: string
+  contactName: string
+  phone: string
+  taxId: string
+  category: string
+  address: string
+  description: string
+  acceptsRojos: boolean
+}
+
 export type AppUser = {
   id?: string
   email: string
@@ -28,6 +39,7 @@ export type AppUser = {
   /** Sesión temporal de jueces. No sustituye una cuenta real. */
   isGuestDemo?: boolean
   place?: BusinessPlace
+  business?: BusinessProfile
 }
 
 export type PublicPlace = BusinessPlace & {

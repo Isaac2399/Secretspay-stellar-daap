@@ -3,7 +3,33 @@ import { dirname, join } from 'node:path'
 import type { StoredUser } from './auth.js'
 import { AuthError } from './errors.js'
 
-export type UserStore = { users: StoredUser[] }
+export type MerchantApplicationStatus = 'pending' | 'approving' | 'approved' | 'rejected'
+
+export type MerchantApplication = {
+  id: string
+  status: MerchantApplicationStatus
+  createdAt: string
+  decidedAt?: string
+  reviewerId?: string
+  rejectionNote?: string
+  email: string
+  passwordHash?: string
+  salt?: string
+  businessName: string
+  contactName: string
+  phone: string
+  taxId: string
+  category: string
+  address: string
+  description: string
+  acceptsRojos: boolean
+  userId?: string
+}
+
+export type UserStore = {
+  users: StoredUser[]
+  merchantApplications?: MerchantApplication[]
+}
 
 const USERS_FILE = join('data', 'users.json')
 const KV_KEY = 'stellar-web-app:users'

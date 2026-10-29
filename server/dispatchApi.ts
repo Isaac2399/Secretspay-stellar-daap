@@ -44,6 +44,12 @@ import { handleSinpeRoutes } from './sinpe/sinpeApi.js'
 import { handleCashRoutes } from './cash/cashApi.js'
 import { handleEventRoutes } from './events/eventApi.js'
 import { claimGuestDemoUser, guestDemoStatus } from './guestDemo.js'
+import {
+  decideMerchantApplication,
+  listMerchantApplications,
+  submitMerchantApplication,
+  type MerchantApplicationInput,
+} from './merchantApplications.js'
 
 loadLocalEnv()
 
@@ -220,6 +226,36 @@ async function route(input: {
     return { status: 200, body: await getAdminOverview() }
   }
 
+  if (method === 'GET' && path === '/api/admin/merchant-applications') {
+    const session = await userFromCookieHeader(input.cookie)
+    await requireSuperAdmin(session)
+    return { status: 200, body: { applications: await listMerchantApplications() } }
+  }
+
+  if (method === 'POST' && path === '/api/admin/merchant-applications') {
+    const session = await userFromCookieHeader(input.cookie)
+    const admin = await requireSuperAdmin(session)
+    const action = input.body.action
+    if (action !== 'approve' && action !== 'reject') {
+      return {
+        status: 400,
+        body: { error: 'La decisión tiene que ser aceptar o rechazar' },
+      }
+    }
+    const application = await decideMerchantApplication({
+      id: String(input.body.id ?? ''),
+      action,
+      note: typeof input.body.note === 'string' ? input.body.note : undefined,
+      reviewerId: admin.id,
+    })
+    return { status: 200, body: { application } }
+  }
+
+  if (method === 'POST' && path === '/api/auth/merchant-application') {
+    const result = await submitMerchantApplication(applicationBody(input.body))
+    return { status: 201, body: result }
+  }
+
   if (method === 'POST' && path === '/api/auth/register') {
     const user = await createUser({
       email: String(input.body.email ?? ''),
@@ -379,6 +415,21 @@ async function route(input: {
   }
 
   return { status: 404, body: { error: 'Ruta no encontrada' } }
+}
+
+function applicationBody(body: Record<string, unknown>): MerchantApplicationInput {
+  return {
+    email: String(body.email ?? ''),
+    password: String(body.password ?? ''),
+    businessName: String(body.businessName ?? ''),
+    contactName: String(body.contactName ?? ''),
+    phone: String(body.phone ?? ''),
+    taxId: String(body.taxId ?? ''),
+    category: String(body.category ?? ''),
+    address: String(body.address ?? ''),
+    description: String(body.description ?? ''),
+    acceptsRojos: Boolean(body.acceptsRojos),
+  }
 }
 
 function isLoyaltyAssetCode(asset: string): boolean {

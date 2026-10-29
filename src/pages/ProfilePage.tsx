@@ -59,6 +59,23 @@ export default function ProfilePage() {
                   ? 'Mesa SINPE'
                   : 'Cliente'}
         </div>
+        {account.role === 'merchant' && account.business ? (
+          <div>
+            <p className="text-xs text-app-muted">Empresa</p>
+            <p className="mt-1 text-sm">{account.business.businessName}</p>
+            <p className="mt-1 text-xs text-white/70">
+              {account.business.contactName} · {account.business.phone}
+            </p>
+            <p className="mt-1 text-xs text-white/70">Cédula {account.business.taxId}</p>
+            <p className="mt-1 text-xs text-app-accent">
+              {categoryLabel(account.business.category)}
+            </p>
+            <p className="mt-1 text-xs text-white/70">{account.business.address}</p>
+            <p className="mt-1 text-xs leading-relaxed text-white/70">
+              {account.business.description}
+            </p>
+          </div>
+        ) : null}
         {account.role === 'merchant' && account.place ? (
           <div>
             <p className="text-xs text-app-muted">Local</p>

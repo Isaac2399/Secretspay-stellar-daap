@@ -30,15 +30,22 @@ export function MerchantPlaceEditor({
   onSaved: (next: AppUser) => void
 }) {
   const saved = user.place
+  const profile = user.business
   const savedStory = promoByKind(saved?.promos, 'story')
   const savedPurchase = promoByKind(saved?.promos, 'purchase')
   const savedUsdc = promoByKind(saved?.promos, 'usdc')
   const loyaltyCode = stellarConfig.loyalty.code
-  const [name, setName] = useState(saved?.name ?? '')
-  const [address, setAddress] = useState(saved?.address ?? '')
-  const [note, setNote] = useState(saved?.note ?? '')
-  const [category, setCategory] = useState(saved?.category ?? 'restaurant')
-  const [acceptsRojos, setAcceptsRojos] = useState(Boolean(saved?.acceptsRojos))
+  const [name, setName] = useState(saved?.name ?? profile?.businessName ?? '')
+  const [address, setAddress] = useState(saved?.address ?? profile?.address ?? '')
+  const [note, setNote] = useState(
+    saved?.note ?? profile?.description?.slice(0, 140) ?? '',
+  )
+  const [category, setCategory] = useState(
+    saved?.category ?? profile?.category ?? 'restaurant',
+  )
+  const [acceptsRojos, setAcceptsRojos] = useState(
+    Boolean(saved?.acceptsRojos ?? profile?.acceptsRojos),
+  )
   const [storyOn, setStoryOn] = useState(Boolean(savedStory))
   const [storyRojos, setStoryRojos] = useState(savedStory?.rojos ?? '')
   const [purchaseOn, setPurchaseOn] = useState(Boolean(savedPurchase))

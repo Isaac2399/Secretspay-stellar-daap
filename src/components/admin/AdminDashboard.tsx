@@ -7,10 +7,12 @@ import { AdminFinancePanel } from '@/components/admin/AdminFinancePanel'
 import { ClaimLookupPanel } from '@/components/admin/ClaimLookupPanel'
 import { StaffSendPanel } from '@/components/admin/StaffSendPanel'
 import { AdminEventsPanel } from '@/components/admin/AdminEventsPanel'
+import { MerchantApplicationsPanel } from '@/components/admin/MerchantApplicationsPanel'
 import { UnassignedDepositsPanel } from '@/components/admin/UnassignedDepositsPanel'
 import { CashierDashboard } from '@/components/cashier/CashierDashboard'
 import { StructuringDashboard } from '@/components/rwa/StructuringDashboard'
 import { fetchAdminOverview } from '@/lib/admin/api'
+import { fetchMerchantApplications } from '@/lib/merchantApplications'
 import { readableError } from '@/lib/auth/readableError'
 import { formatAmount } from '@/lib/stellar/useAccountBalances'
 import { shortenPublicKey } from '@/lib/userDisplay'
@@ -20,8 +22,17 @@ import type { AdminMerchantRow, TokenTotals } from '@/types/admin'
 
 export function AdminDashboard() {
   const [tab, setTab] = useState<
-    'send' | 'cash' | 'finance' | 'events' | 'merchants' | 'customers' | 'rwa' | 'sinpe'
+    | 'send'
+    | 'cash'
+    | 'finance'
+    | 'events'
+    | 'applications'
+    | 'merchants'
+    | 'customers'
+    | 'rwa'
+    | 'sinpe'
   >('send')
+  const [pendingApplications, setPendingApplications] = useState(0)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -31,6 +42,16 @@ export function AdminDashboard() {
 
   useEffect(() => {
     let cancelled = false
+    void fetchMerchantApplications()
+      .then((rows) => {
+        if (!cancelled) {
+          setPendingApplications(
+            rows.filter((row) => row.status === 'pending' || row.status === 'approving')
+              .length,
+          )
+        }
+      })
+      .catch(() => undefined)
     void fetchAdminOverview()
       .then((next) => {
         if (!cancelled) {
@@ -137,6 +158,18 @@ export function AdminDashboard() {
           }}
         />
         <TabButton
+          active={tab === 'applications'}
+          label={
+            pendingApplications > 0
+              ? `Solicitudes (${pendingApplications})`
+              : 'Solicitudes'
+          }
+          onClick={() => {
+            setTab('applications')
+            setSelectedId(null)
+          }}
+        />
+        <TabButton
           active={tab === 'merchants'}
           label="Empresas"
           onClick={() => {
@@ -180,6 +213,10 @@ export function AdminDashboard() {
       {tab === 'cash' ? <CashierDashboard /> : null}
 
       {tab === 'events' ? <AdminEventsPanel /> : null}
+
+      {tab === 'applications' ? (
+        <MerchantApplicationsPanel onPendingCount={setPendingApplications} />
+      ) : null}
 
       {tab === 'finance' && overview ? (
         <AdminFinancePanel finance={overview.finance} />

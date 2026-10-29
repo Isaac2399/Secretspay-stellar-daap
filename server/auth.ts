@@ -210,6 +210,17 @@ export function isAssignableAccount(user: { role: UserRole }): boolean {
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000
 const COOKIE_NAME = 'stellar_session'
 
+export type BusinessProfile = {
+  businessName: string
+  contactName: string
+  phone: string
+  taxId: string
+  category: string
+  address: string
+  description: string
+  acceptsRojos: boolean
+}
+
 export type StoredUser = {
   id: string
   email: string
@@ -221,6 +232,7 @@ export type StoredUser = {
   secretKeyEnc?: string
   createdAt: string
   sinpeCode?: string
+  business?: BusinessProfile
   /** ISO time when the optional signup gift of ROJOS was credited (off by default). */
   welcomeRegaliaAt?: string
   /** Ephemeral Testnet customer used by the judge / guest demo. */
@@ -251,6 +263,7 @@ export type PublicUser = {
   sinpeCode?: string
   isGuestDemo?: boolean
   place?: StoredUser['place']
+  business?: BusinessProfile
 }
 
 function sessionSecret(): string {
@@ -272,6 +285,7 @@ export function toPublicUser(user: StoredUser): PublicUser {
     sinpeCode: admin ? undefined : user.sinpeCode,
     isGuestDemo: user.guestDemo ? true : undefined,
     place: admin ? undefined : user.place,
+    business: admin ? undefined : user.business,
   }
 }
 
@@ -381,7 +395,13 @@ export async function createUser(input: {
   if (input.password.length < 8) {
     throw new AuthError('La contraseña debe tener al menos 8 caracteres', 400)
   }
-  if (input.role !== 'customer' && input.role !== 'merchant') {
+  if (input.role === 'merchant') {
+    throw new AuthError(
+      'Las cuentas de empresa no se crean al momento. Envía la solicitud y espera a que el super admin la acepte.',
+      400,
+    )
+  }
+  if (input.role !== 'customer') {
     throw new AuthError('El rol debe ser customer o merchant', 400)
   }
   if (await findUserByEmail(email)) {
@@ -438,13 +458,19 @@ export async function authenticateWithGoogle(input: {
 
   if (input.mode === 'login') {
     throw new AuthError(
-      'No hay una cuenta con ese Google. Regístrate y elige Cliente o Empresa.',
+      'No hay una cuenta con ese Google. Regístrate como cliente o envía la solicitud de empresa.',
       401,
     )
   }
 
   const role = input.role
-  if (role !== 'customer' && role !== 'merchant') {
+  if (role === 'merchant') {
+    throw new AuthError(
+      'Las empresas envían una solicitud. El super admin tiene que aceptarla antes de crear la cuenta.',
+      400,
+    )
+  }
+  if (role !== 'customer') {
     throw new AuthError('Elige si eres cliente o empresa antes de continuar con Google', 400)
   }
 
@@ -455,12 +481,47 @@ export async function authenticateWithGoogle(input: {
   })
 }
 
+export async function createApprovedMerchant(input: {
+  email: string
+  salt: string
+  passwordHash: string
+  business: BusinessProfile
+  place?: StoredUser['place']
+}): Promise<PublicUser> {
+  return persistNewUser({
+    email: input.email,
+    role: 'merchant',
+    salt: input.salt,
+    passwordHash: input.passwordHash,
+    business: input.business,
+    place: input.place,
+  })
+}
+
+export function sealPassword(password: string): { salt: string; passwordHash: string } {
+  if (password.length < 8) {
+    throw new AuthError('La contraseña debe tener al menos 8 caracteres', 400)
+  }
+  const salt = randomBytes(16).toString('hex')
+  return { salt, passwordHash: hashPassword(password, salt) }
+}
+
+export function passwordMatches(
+  password: string,
+  salt: string | undefined,
+  passwordHash: string | undefined,
+): boolean {
+  return verifyPassword(password, salt, passwordHash)
+}
+
 async function persistNewUser(input: {
   email: string
   role: UserRole
   salt?: string
   passwordHash?: string
   googleId?: string
+  business?: BusinessProfile
+  place?: StoredUser['place']
 }): Promise<PublicUser> {
   const adminSignup = Boolean(
     superAdminEmail() &&
@@ -501,6 +562,8 @@ async function persistNewUser(input: {
       secretKeyEnc: encryptSecret(keys.secretKey),
       createdAt: new Date().toISOString(),
       welcomeRegaliaAt,
+      business: input.business,
+      place: input.place,
     }
   }
 
@@ -540,6 +603,11 @@ export async function authenticate(
 ): Promise<PublicUser> {
   const user = await findUserByEmail(email)
   if (!user) {
+    const { explainMerchantApplicationLogin } = await import('./merchantApplications.js')
+    const blocked = await explainMerchantApplicationLogin(email, password)
+    if (blocked) {
+      throw new AuthError(blocked, 403)
+    }
     throw new AuthError(
       'Email o contraseña incorrectos. Las cuentas de tu PC no están en Vercel: usa Registro en este mismo enlace.',
       401,
