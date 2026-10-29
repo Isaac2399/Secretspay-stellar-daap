@@ -320,18 +320,30 @@ export async function placeOrder(
   try {
     const paid = await withMerchantLock(merchant.publicKey, async () => {
       const treasury = split.feeBps > 0 && split.feeAccount ? split.feeAccount : merchant.publicKey
-      await publishEventFee({
-        merchant: merchant.publicKey,
-        feeBps: split.feeBps,
-        treasury,
-      })
+      // Saved with the event. Reading it again is another testnet round trip.
+      if (!settings?.chainHash) {
+        const hash = await publishEventFee({
+          merchant: merchant.publicKey,
+          feeBps: split.feeBps,
+          treasury,
+        })
+        if (hash) {
+          const store = await loadEventStore()
+          const row = store.settings[merchantId]
+          if (row) {
+            row.chainHash = hash
+            await saveEventStore(store)
+          }
+        }
+      }
       const fresh = await loadEventStore()
+      let wroteCatalog = false
       for (const line of reserved.stockDelta) {
         const product = fresh.products.find((row) => row.id === line.productId)
         if (!product) {
           throw new AuthError('Un producto ya no está disponible', 400)
         }
-        if (await catalogProductExists(merchant.publicKey, product.id)) {
+        if (product.chainHash || (await catalogProductExists(merchant.publicKey, product.id))) {
           continue
         }
         product.chainHash = await registerCatalogProduct({
@@ -342,6 +354,9 @@ export async function placeOrder(
           active: true,
           promo: product.promo,
         })
+        wroteCatalog = true
+      }
+      if (wroteCatalog) {
         await saveEventStore(fresh)
       }
       return checkoutSale({

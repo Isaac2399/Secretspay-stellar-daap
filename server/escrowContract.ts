@@ -67,6 +67,8 @@ type EventFeeView = {
 }
 
 const tails = new Map<string, Promise<unknown>>()
+const publishedFees = new Set<string>()
+const knownProducts = new Set<string>()
 let clientPromise: Promise<EscrowClient> | null = null
 
 export function escrowContractId(): string {
@@ -94,10 +96,17 @@ export function withMerchantLock<T>(merchant: string, run: () => Promise<T>): Pr
 }
 
 export async function catalogProductExists(merchant: string, productId: string): Promise<boolean> {
+  const key = catalogKey(merchant, productId)
+  if (knownProducts.has(key)) {
+    return true
+  }
   const client = await adminClient()
   const tx = await client.get_product({ merchant, product_id: productId })
-  const found = tx.result
-  return found != null
+  const found = tx.result != null
+  if (found) {
+    knownProducts.add(key)
+  }
+  return found
 }
 
 export async function registerCatalogProduct(input: CatalogArgs): Promise<string> {
@@ -116,6 +125,7 @@ export async function registerCatalogProduct(input: CatalogArgs): Promise<string
       { timeoutInSeconds: 90 },
     ),
   )
+  knownProducts.add(catalogKey(input.merchant, input.productId))
   if (input.active) {
     return hash
   }
@@ -162,15 +172,20 @@ export async function publishEventFee(input: {
   feeBps: number
   treasury: string
 }): Promise<string> {
+  const cacheKey = `${input.merchant}:${input.feeBps}:${input.treasury}`
+  if (publishedFees.has(cacheKey)) {
+    return ''
+  }
   const current = await readEventFee(input.merchant)
   if (
     current &&
     current.feeBps === input.feeBps &&
     current.treasury === input.treasury
   ) {
+    publishedFees.add(cacheKey)
     return current.hash ?? ''
   }
-  return send((client) =>
+  const hash = await send((client) =>
     client.set_event_fee(
       {
         caller: adminKeypair().publicKey(),
@@ -181,6 +196,8 @@ export async function publishEventFee(input: {
       { timeoutInSeconds: 90 },
     ),
   )
+  publishedFees.add(cacheKey)
+  return hash
 }
 
 export async function checkoutSale(input: {
@@ -240,7 +257,7 @@ async function readEventFee(
   if (!fee) {
     return null
   }
-  const treasury = typeof fee.treasury === 'string' ? fee.treasury : ''
+  const treasury = readAddress(fee.treasury)
   const feeBps = Number(fee.fee_bps ?? fee.feeBps ?? 0)
   if (!treasury) {
     return null
@@ -319,6 +336,13 @@ async function ensureTokenContract(assetCode: string): Promise<void> {
     return
   }
   const server = new rpc.Server(rpcUrl())
+  try {
+    await server.getContractInstance(id)
+    readyTokens.add(id)
+    return
+  } catch {
+    // The asset contract is not on the ledger yet.
+  }
   const admin = adminKeypair()
   const account = await server.getAccount(admin.publicKey())
   let tx = new TransactionBuilder(account, {
@@ -357,6 +381,15 @@ async function ensureTokenContract(assetCode: string): Promise<void> {
     }
   }
   throw new AuthError('La red no confirmó el token del contrato', 504)
+}
+
+function catalogKey(merchant: string, productId: string): string {
+  return `${merchant}:${productId}`
+}
+
+function readAddress(value: unknown): string {
+  const text = typeof value === 'string' ? value : value == null ? '' : String(value)
+  return StrKey.isValidEd25519PublicKey(text) ? text : ''
 }
 
 function rpcUrl(): string {
