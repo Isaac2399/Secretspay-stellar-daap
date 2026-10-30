@@ -73,6 +73,11 @@ export async function enableOrderReadyPush(): Promise<'subscribed' | 'denied' | 
   return 'subscribed'
 }
 
+/** Aviso al confirmar la compra, si el cliente ya permitió notificaciones. */
+export function notifyOrderPlacedLocally(order: { id: string }): void {
+  showLocalAlert(order.id, 'order-placed', 'Gracias por tu compra', 'Te avisaremos cuando el pedido esté listo.')
+}
+
 /** Aviso local al detectar `ready` por poll (útil con la pestaña abierta). */
 export function notifyOrderReadyLocally(order: {
   id: string
@@ -85,17 +90,33 @@ export function notifyOrderReadyLocally(order: {
   if (Notification.permission !== 'granted') {
     return
   }
-  if (wasNotified(order.id)) {
+  showLocalAlert(
+    order.id,
+    'order-ready',
+    'Orden lista',
+    `Ve a ${order.pickupLabel} a retirar tu pedido.`,
+  )
+}
+
+function showLocalAlert(orderId: string, kind: string, title: string, body: string): void {
+  if (typeof window === 'undefined' || !('Notification' in window)) {
     return
   }
-  markNotified(order.id)
+  if (Notification.permission !== 'granted') {
+    return
+  }
+  const key = `${kind}:${orderId}`
+  if (wasNotified(key)) {
+    return
+  }
+  markNotified(key)
   const alertOptions: NotificationOptions & {
     renotify?: boolean
     vibrate?: number[]
   } = {
-    body: `#${order.orderNumber} · Retira en ${order.pickupLabel}`,
+    body,
     icon: '/favicon.svg',
-    tag: `order-ready-${order.id}`,
+    tag: `${kind}-${orderId}`,
     data: { url: '/event' },
     renotify: true,
     requireInteraction: true,
@@ -105,16 +126,13 @@ export function notifyOrderReadyLocally(order: {
   try {
     const registration = navigator.serviceWorker?.controller
     if (registration) {
-      // Preferir SW si ya está activo (mismo look que el push remoto).
-      void navigator.serviceWorker.ready.then((ready) =>
-        ready.showNotification('Pedido listo', alertOptions),
-      )
+      void navigator.serviceWorker.ready.then((ready) => ready.showNotification(title, alertOptions))
       return
     }
     navigator.vibrate?.([200, 100, 200, 100, 280])
-    new Notification('Pedido listo', alertOptions)
+    new Notification(title, alertOptions)
   } catch {
-    // silencioso: el ticket en pantalla sigue siendo la fuente de verdad
+    // silencioso: el aviso en pantalla sigue siendo la fuente de verdad
   }
 }
 

@@ -10,8 +10,8 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('push', (event) => {
   let data = {
-    title: 'Pedido listo',
-    body: 'Tu pedido ya se puede retirar en la barra.',
+    title: 'Orden lista',
+    body: 'Ve a la barra a retirar tu pedido.',
     url: '/event',
     orderId: '',
   }

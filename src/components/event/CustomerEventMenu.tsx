@@ -7,7 +7,11 @@ import {
   fetchMyEventOrders,
   placeEventOrder,
 } from '@/lib/events/api'
-import { enableOrderReadyPush, notifyOrderReadyLocally } from '@/lib/events/push'
+import {
+  enableOrderReadyPush,
+  notifyOrderPlacedLocally,
+  notifyOrderReadyLocally,
+} from '@/lib/events/push'
 import { formatStockLabel, stockCountClass } from '@/lib/events/stock'
 import { formatAmount } from '@/lib/stellar/useAccountBalances'
 import type { EventOrder, EventProduct, EventVenue } from '@/types/event'
@@ -30,7 +34,7 @@ export function CustomerEventMenu({
   const [confirmed, setConfirmed] = useState(false)
   const [readyAlert, setReadyAlert] = useState<EventOrder | null>(null)
   const statusByIdRef = useRef<Record<string, EventOrder['status']>>({})
-  const pushArmedRef = useRef(false)
+  const pushArmedRef = useRef<Promise<void> | null>(null)
 
   function applyOrders(nextOrders: EventOrder[]) {
     const prev = statusByIdRef.current
@@ -55,16 +59,17 @@ export function CustomerEventMenu({
     }
   }
 
-  async function ensurePush() {
+  function ensurePush(): Promise<void> {
     if (pushArmedRef.current) {
-      return
+      return pushArmedRef.current
     }
-    pushArmedRef.current = true
-    try {
-      await enableOrderReadyPush()
-    } catch {
-      pushArmedRef.current = false
-    }
+    const pending = enableOrderReadyPush()
+      .then(() => undefined)
+      .catch(() => {
+        pushArmedRef.current = null
+      })
+    pushArmedRef.current = pending
+    return pending
   }
 
   async function reload() {
@@ -158,7 +163,7 @@ export function CustomerEventMenu({
       statusByIdRef.current[result.order.id] = result.order.status
       setConfirmed(true)
       setCart({})
-      void ensurePush()
+      void ensurePush().then(() => notifyOrderPlacedLocally(result.order))
       void reload().catch(() => undefined)
     } catch (err) {
       setError(readableError(err))
@@ -203,7 +208,15 @@ export function CustomerEventMenu({
               const qty = cart[product.id] ?? 0
               const soldOut = product.stock <= 0
               return (
-                <article key={product.id} className="flex flex-col rounded-[28px] bg-app-card p-5">
+                <article key={product.id} className="flex flex-col rounded-[28px] bg-app-card">
+                  {product.image ? (
+                    <img
+                      src={product.image}
+                      alt={product.name}
+                      className="h-56 w-full bg-[#1c1c1e] object-contain"
+                    />
+                  ) : null}
+                  <div className="flex flex-1 flex-col p-5">
                   <h3 className="text-xl font-semibold">{product.name}</h3>
                   <p className="mt-1 text-lg text-white/90">
                     {formatAmount(product.price)} {product.asset}
@@ -247,6 +260,7 @@ export function CustomerEventMenu({
                     >
                       <Plus className="h-7 w-7" />
                     </button>
+                  </div>
                   </div>
                 </article>
               )
@@ -365,13 +379,13 @@ function OrderReadyNotice({
         onClick={(event) => event.stopPropagation()}
       >
         <p className="text-center text-xs font-medium uppercase tracking-wide text-app-accent">
-          Pedido listo
+          Orden lista
         </p>
         <h2 id="order-ready-title" className="mt-2 text-center text-3xl font-semibold">
           #{order.orderNumber}
         </h2>
         <p className="mt-3 text-center text-[15px] leading-relaxed">
-          Ya puedes retirarlo en {order.pickupLabel}. Muestra el QR en la barra.
+          Ve a {order.pickupLabel} a retirar tu pedido.
         </p>
         <button
           type="button"
@@ -398,13 +412,12 @@ function OrderConfirmedNotice({ onClose }: { onClose: () => void }) {
         className="w-full max-w-sm rounded-[28px] border border-app-accent/40 bg-app-card p-6 shadow-[0_0_40px_rgba(255,255,255,0.08)]"
         onClick={(event) => event.stopPropagation()}
       >
-        <h2
-          id="order-confirmed-title"
-          className="text-center text-[15px] font-medium leading-relaxed"
-        >
-          Pedido confirmado, ve a la barra y muestra el código QR para retirar el
-          producto
+        <h2 id="order-confirmed-title" className="text-center text-2xl font-semibold">
+          Gracias por tu compra
         </h2>
+        <p className="mt-3 text-center text-[15px] leading-relaxed text-app-muted">
+          Te avisaremos cuando el pedido esté listo.
+        </p>
         <button
           type="button"
           className="mt-6 w-full rounded-[28px] bg-app-accent py-5 text-xl font-semibold text-white"

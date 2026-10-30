@@ -16,6 +16,7 @@ import {
   updateAdminEventProduct,
   updateEventProduct,
 } from '@/lib/events/api'
+import { cutoutProductImage } from '@/lib/events/cutoutProductImage'
 import { formatStockLabel, stockCountClass } from '@/lib/events/stock'
 import { stellarConfig } from '@/lib/stellar/config'
 import { formatAmount } from '@/lib/stellar/useAccountBalances'
@@ -27,6 +28,7 @@ type ProductDraft = {
   stock: string
   asset: string
   pickupLabel: string
+  image: string
   promoLabel: string
   discountPct: string
   buyQty: string
@@ -47,6 +49,7 @@ function emptyDraft(pickupLabel: string): ProductDraft {
     stock: '10',
     asset: stellarConfig.loyalty.code,
     pickupLabel,
+    image: '',
     promoLabel: '',
     discountPct: '',
     buyQty: '',
@@ -61,6 +64,7 @@ function draftFromProduct(product: EventProduct): ProductDraft {
     stock: String(product.stock),
     asset: product.asset,
     pickupLabel: product.pickupLabel,
+    image: product.image ?? '',
     promoLabel: product.promo?.label ?? '',
     discountPct:
       product.promo?.discountPct != null ? String(product.promo.discountPct) : '',
@@ -210,6 +214,7 @@ export function MerchantEventCatalog({
         stock: Number(createDraft.stock),
         asset: createDraft.asset,
         pickupLabel: createDraft.pickupLabel || pickupLabel,
+        image: createDraft.image || null,
         promo: promoFromDraft(createDraft),
       }
       if (asAdmin) {
@@ -242,6 +247,7 @@ export function MerchantEventCatalog({
         stock: Number(editDraft.stock),
         asset: editDraft.asset,
         pickupLabel: editDraft.pickupLabel || pickupLabel,
+        image: editDraft.image || null,
         promo: promoFromDraft(editDraft),
       }
       if (asAdmin) {
@@ -441,6 +447,13 @@ export function MerchantEventCatalog({
                 <>
                   <div className="flex items-start justify-between gap-3">
                     <div>
+                      {product.image ? (
+                        <img
+                          src={product.image}
+                          alt=""
+                          className="mb-2 h-36 w-full rounded-2xl bg-[#1c1c1e] object-contain"
+                        />
+                      ) : null}
                       <h3 className="font-medium">{product.name}</h3>
                       <p className="text-sm text-white/80">
                         {formatAmount(product.price)} {product.asset}
@@ -514,12 +527,50 @@ function ProductFields({
   draft: ProductDraft
   onChange: (next: ProductDraft) => void
 }) {
+  const [imageError, setImageError] = useState<string | null>(null)
+
   function patch(partial: Partial<ProductDraft>) {
     onChange({ ...draft, ...partial })
   }
 
   return (
     <div className="space-y-3">
+      <label className="grid gap-1 text-sm">
+        Foto
+        <input
+          className={fieldClass}
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          onChange={(e) => {
+            const file = e.target.files?.[0]
+            e.target.value = ''
+            if (!file) {
+              return
+            }
+            setImageError(null)
+            void cutoutProductImage(file)
+              .then((image) => patch({ image }))
+              .catch(() => setImageError('No se pudo leer la foto'))
+          }}
+        />
+      </label>
+      {imageError ? <p className="text-xs text-red-300">{imageError}</p> : null}
+      {draft.image ? (
+        <div className="space-y-2">
+          <img
+            src={draft.image}
+            alt=""
+            className="h-40 w-full rounded-2xl bg-[#1c1c1e] object-contain"
+          />
+          <button
+            type="button"
+            className="rounded-xl bg-app-chip px-3 py-2 text-xs"
+            onClick={() => patch({ image: '' })}
+          >
+            Quitar foto
+          </button>
+        </div>
+      ) : null}
       <label className="grid gap-1 text-sm">
         Nombre
         <input

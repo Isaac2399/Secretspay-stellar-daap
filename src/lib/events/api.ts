@@ -63,6 +63,7 @@ export async function createEventProduct(input: {
   asset?: string
   pickupLabel?: string
   active?: boolean
+  image?: string | null
   promo?: EventProductPromo | null
 }) {
   return request<{ product: EventProduct }>('/api/events/products', {
@@ -79,6 +80,7 @@ export async function updateEventProduct(input: {
   asset?: string
   pickupLabel?: string
   active?: boolean
+  image?: string | null
   promo?: EventProductPromo | null
 }) {
   return request<{ product: EventProduct }>('/api/events/products', {
@@ -146,6 +148,7 @@ export async function createAdminEventProduct(
     asset?: string
     pickupLabel?: string
     active?: boolean
+    image?: string | null
     promo?: EventProductPromo | null
   },
 ) {
@@ -165,6 +168,7 @@ export async function updateAdminEventProduct(
     asset?: string
     pickupLabel?: string
     active?: boolean
+    image?: string | null
     promo?: EventProductPromo | null
   },
 ) {

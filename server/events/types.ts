@@ -14,6 +14,8 @@ export type EventProduct = {
   stock: number
   active: boolean
   pickupLabel: string
+  /** Foto comprimida (data URL) para la carta del cliente. */
+  image?: string
   promo?: EventProductPromo
   /** Transacción en la que el producto quedó escrito en el contrato. */
   chainHash?: string

@@ -39,8 +39,8 @@ export async function notifyOrderReady(order: EventOrder): Promise<void> {
   }
 
   const payload = JSON.stringify({
-    title: 'Pedido listo',
-    body: `#${order.orderNumber} · Retira en ${order.pickupLabel}`,
+    title: 'Orden lista',
+    body: `Ve a ${order.pickupLabel} a retirar tu pedido.`,
     url: `/event?merchant=${encodeURIComponent(order.merchantId)}`,
     orderId: order.id,
     orderNumber: order.orderNumber,

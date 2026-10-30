@@ -201,6 +201,7 @@ export async function createProduct(
     stock: requireStock(input.stock),
     active: input.active === false ? false : true,
     pickupLabel: String(input.pickupLabel ?? '').trim() || 'Barra',
+    image: parseImage(input.image),
     promo: parsePromo(input.promo),
     createdAt: now,
     updatedAt: now,
@@ -249,6 +250,14 @@ export async function updateProduct(
   }
   if (input.pickupLabel !== undefined) {
     product.pickupLabel = String(input.pickupLabel).trim() || 'Barra'
+  }
+  if (input.image !== undefined) {
+    const image = parseImage(input.image)
+    if (image) {
+      product.image = image
+    } else {
+      delete product.image
+    }
   }
   if (input.promo !== undefined) {
     product.promo = parsePromo(input.promo)
@@ -706,6 +715,22 @@ function resolveAsset(value: unknown): string {
     return requested
   }
   throw new AuthError('Asset no soportado', 400)
+}
+
+const MAX_IMAGE_CHARS = 400_000
+
+function parseImage(value: unknown): string | undefined {
+  if (value == null || value === '') {
+    return undefined
+  }
+  const raw = String(value).trim()
+  if (!/^data:image\/(jpeg|png|webp);base64,[a-z0-9+/=\s]+$/i.test(raw)) {
+    throw new AuthError('La foto tiene que ser JPEG, PNG o WebP', 400)
+  }
+  if (raw.length > MAX_IMAGE_CHARS) {
+    throw new AuthError('La foto es demasiado grande', 400)
+  }
+  return raw.replace(/\s/g, '')
 }
 
 function parsePromo(value: unknown): EventProductPromo | undefined {
