@@ -56,8 +56,10 @@ async function handleApi(
     const path = parsedUrl.pathname
     const query = Object.fromEntries(parsedUrl.searchParams.entries())
     const posted =
-      req.method === 'GET' || req.method === 'HEAD' ? {} : await readJson(req)
-    const body = { ...query, ...posted }
+      req.method === 'GET' || req.method === 'HEAD'
+        ? { body: {}, rawBody: undefined }
+        : await readJson(req)
+    const body = { ...query, ...posted.body }
     const authorization = headerValue(req.headers.authorization)
     const result = await dispatchApi({
       method: req.method ?? 'GET',
@@ -66,6 +68,14 @@ async function handleApi(
       authorization,
       apiKey: headerValue(req.headers['x-api-key']),
       body,
+      rawBody: posted.rawBody,
+      webhookId: headerValue(req.headers['svix-id']) ?? headerValue(req.headers['webhook-id']),
+      webhookTimestamp:
+        headerValue(req.headers['svix-timestamp']) ??
+        headerValue(req.headers['webhook-timestamp']),
+      webhookSignature:
+        headerValue(req.headers['svix-signature']) ??
+        headerValue(req.headers['webhook-signature']),
     })
     const payload = JSON.stringify(result.body)
     res.statusCode = result.status
@@ -81,16 +91,18 @@ async function handleApi(
   }
 }
 
-async function readJson(req: IncomingMessage): Promise<Record<string, unknown>> {
+async function readJson(
+  req: IncomingMessage,
+): Promise<{ body: Record<string, unknown>; rawBody?: string }> {
   const chunks: Buffer[] = []
   for await (const chunk of req) {
     chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
   }
   const raw = Buffer.concat(chunks).toString('utf8')
   if (!raw) {
-    return {}
+    return { body: {} }
   }
-  return decodeHttpBody(raw)
+  return { body: decodeHttpBody(raw), rawBody: raw }
 }
 
 function headerValue(value: string | string[] | undefined): string | undefined {

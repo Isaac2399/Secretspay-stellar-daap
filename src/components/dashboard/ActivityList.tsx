@@ -134,10 +134,10 @@ export function ActivityList({
   )
 
   return (
-    <section className="space-y-3">
+    <section className="w-full min-w-0 max-w-full space-y-3">
       <h2 className="text-[17px] font-semibold">Transacciones</h2>
       {includeSinpe ? (
-        <div className="flex gap-2 overflow-x-auto pb-1">
+        <div className="flex min-w-0 max-w-full gap-2 overflow-x-auto pb-1">
           {FILTERS.map((item) => (
             <button
               key={item.id}
@@ -157,7 +157,7 @@ export function ActivityList({
           ))}
         </div>
       ) : null}
-      <div className="overflow-hidden rounded-[24px] bg-app-card">
+      <div className="w-full max-w-full overflow-hidden rounded-[24px] bg-app-card">
         {loading && merged.length === 0 ? (
           <p className="px-4 py-8 text-center text-sm text-app-muted">
             Cargando actividad…
@@ -236,7 +236,11 @@ export function ActivityList({
             >
               {retrying ? 'Reintentando…' : 'Reintentar acreditación'}
             </button>
-            {notice ? <p className="mt-2 text-xs text-app-muted">{notice}</p> : null}
+            {notice ? (
+              <p className="mt-2 truncate text-xs text-app-muted" title={notice}>
+                {notice}
+              </p>
+            ) : null}
           </div>
         ) : null}
       </div>
@@ -459,7 +463,7 @@ function ActivityRow({ item }: { item: AccountActivity }) {
     (item.status === 'failed' ? 'Fallido' : item.status === 'pending' ? 'Pendiente' : 'Confirmado')
 
   return (
-    <li className="flex items-center gap-3 px-4 py-3.5">
+    <li className="flex min-w-0 items-center gap-3 overflow-hidden px-4 py-3.5">
       <div
             className={`grid h-10 w-10 shrink-0 place-items-center rounded-full ${
           outgoing ? 'bg-white/10 text-white/80' : 'bg-app-accent/15 text-app-accent'
@@ -473,18 +477,22 @@ function ActivityRow({ item }: { item: AccountActivity }) {
           <ArrowDownLeft className="h-4 w-4" />
         )}
       </div>
-      <div className="min-w-0 flex-1">
+      <div className="min-w-0 flex-1 overflow-hidden">
         <p className="truncate text-sm font-medium">{title}</p>
-        <p className="truncate text-xs text-app-muted">{detail}</p>
-        <p className="mt-0.5 text-[11px] text-app-muted">
+        <p className="truncate text-xs text-app-muted" title={detail}>
+          {detail}
+        </p>
+        <p className="mt-0.5 truncate text-[11px] text-app-muted">
           {formatWhen(item.createdAt)} · {statusLabel}
         </p>
         {item.detailError ? (
-          <p className="mt-0.5 truncate text-[11px] text-red-400">{item.detailError}</p>
+          <p className="mt-0.5 truncate text-[11px] text-red-400" title={item.detailError}>
+            {item.detailError}
+          </p>
         ) : null}
       </div>
       <p
-        className={`shrink-0 text-sm font-medium tabular-nums ${
+        className={`max-w-[46%] shrink-0 truncate text-right text-sm font-medium tabular-nums ${
           outgoing ? 'text-white/80' : 'text-app-accent'
         }`}
       >

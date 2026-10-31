@@ -87,7 +87,7 @@ export function DashboardHero({
   }
 
   return (
-    <section className="space-y-6">
+    <section className="min-w-0 space-y-6">
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
           <div className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-app-chip text-sm font-semibold">

@@ -43,3 +43,4 @@ target/
 # One-off application decks. Not part of the app.
 docs/build_stronghold_deck.py
 docs/stronghold-edp-application.pdf
+.env*

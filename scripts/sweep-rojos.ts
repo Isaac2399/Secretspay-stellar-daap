@@ -4,6 +4,7 @@
  * Uso:
  *   npx tsx scripts/sweep-rojos.ts           # dry-run (solo lista)
  *   npx tsx scripts/sweep-rojos.ts --apply   # ejecuta las transferencias
+ *   npx tsx scripts/sweep-rojos.ts --to G... # destino explícito
  *
  * Lee .env / .env.local (SESSION_SECRET, LOYALTY_*, SINPE_TREASURY_SECRET_KEY
  * o ROJOS_DISTRIBUTOR_SECRET_KEY, y KV_* si los usuarios están en Vercel).
@@ -23,6 +24,14 @@ loadLocalEnv()
 const apply = process.argv.includes('--apply')
 
 function treasuryPublicKey(): string {
+  const toIndex = process.argv.indexOf('--to')
+  if (toIndex !== -1) {
+    const to = (process.argv[toIndex + 1] ?? '').trim()
+    if (!StrKey.isValidEd25519PublicKey(to)) {
+      throw new Error(`--to no es una llave pública válida: ${to}`)
+    }
+    return to
+  }
   const names = [
     'SINPE_TREASURY_SECRET_KEY',
     'ROJOS_DISTRIBUTOR_SECRET_KEY',

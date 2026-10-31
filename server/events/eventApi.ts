@@ -26,6 +26,16 @@ import {
   saveMerchantSettings,
   updateProduct,
 } from './service.js'
+import {
+  addScreenClip,
+  addScreenSponsor,
+  getScreenAsset,
+  getScreenLibrary,
+  playScreenClip,
+  removeScreenClip,
+  removeScreenSponsor,
+  stopScreenClip,
+} from './screen.js'
 
 type ApiInput = {
   method: string
@@ -65,6 +75,15 @@ export async function handleEventRoutes(
     return { status: 200, body: await getBoard(merchantId) }
   }
 
+  if (method === 'GET' && path === '/api/events/screen-asset') {
+    const merchantId = String(input.body.merchantId ?? '').trim()
+    const id = String(input.body.id ?? '').trim()
+    if (!merchantId || !id) {
+      throw new AuthError('Falta la pieza de la pantalla', 400)
+    }
+    return { status: 200, body: await getScreenAsset(merchantId, id) }
+  }
+
   const session = await userFromCookieHeader(input.cookie)
   if (!session) {
     throw new AuthError('No hay sesión', 401)
@@ -97,6 +116,52 @@ export async function handleEventRoutes(
   }
 
   // Vercel solo enruta un segmento bajo /api/events/[action].
+  if (method === 'GET' && path === '/api/events/admin-screen') {
+    requirePlatformAdmin(session)
+    const merchantId = String(input.body.merchantId ?? '').trim()
+    if (!merchantId) {
+      throw new AuthError('Elige la empresa del evento', 400)
+    }
+    return { status: 200, body: await getScreenLibrary(merchantId) }
+  }
+
+  if (method === 'POST' && path === '/api/events/admin-screen') {
+    requirePlatformAdmin(session)
+    const merchantId = String(input.body.merchantId ?? '').trim()
+    if (!merchantId) {
+      throw new AuthError('Elige la empresa del evento', 400)
+    }
+    const action = String(input.body.action ?? '').trim()
+    if (action === 'add-sponsor') {
+      return { status: 200, body: await addScreenSponsor(merchantId, input.body) }
+    }
+    if (action === 'remove-sponsor') {
+      return {
+        status: 200,
+        body: await removeScreenSponsor(merchantId, String(input.body.id ?? '')),
+      }
+    }
+    if (action === 'add-clip') {
+      return { status: 201, body: await addScreenClip(merchantId, input.body) }
+    }
+    if (action === 'remove-clip') {
+      return {
+        status: 200,
+        body: await removeScreenClip(merchantId, String(input.body.id ?? '')),
+      }
+    }
+    if (action === 'play') {
+      return {
+        status: 200,
+        body: await playScreenClip(merchantId, String(input.body.id ?? ''), input.body.seconds),
+      }
+    }
+    if (action === 'stop') {
+      return { status: 200, body: await stopScreenClip(merchantId) }
+    }
+    throw new AuthError('Acción de pantalla no válida', 400)
+  }
+
   if (method === 'GET' && path === '/api/events/admin-detail') {
     requirePlatformAdmin(session)
     const merchantId = String(input.body.merchantId ?? '').trim()

@@ -15,6 +15,7 @@ import { loyaltyAssetFromEnv } from '../provisionAccount.js'
 import { loadStore } from '../userStore.js'
 import { notifyOrderReady } from './push.js'
 import { parsePickupQr, serializePickupQr } from './qr.js'
+import { emptyBoardScreen, publicBoardScreen, type EventBoardScreen } from './screen.js'
 import { loadEventStore, saveEventStore } from './store.js'
 import type {
   EventBoardOrder,
@@ -112,6 +113,7 @@ export async function getBoard(merchantId: string): Promise<{
   venue: EventVenue
   preparing: EventBoardOrder[]
   ready: EventBoardOrder[]
+  screen: EventBoardScreen
 }> {
   const catalog = await getCatalog(merchantId)
   const store = await loadEventStore()
@@ -122,10 +124,17 @@ export async function getBoard(merchantId: string): Promise<{
         (order.status === 'preparing' || order.status === 'ready'),
     )
     .map(toBoardOrder)
+  let screen = emptyBoardScreen()
+  try {
+    screen = await publicBoardScreen(merchantId)
+  } catch (error) {
+    console.error('[board-screen]', error)
+  }
   return {
     venue: catalog.venue,
     preparing: open.filter((order) => order.status === 'preparing'),
     ready: open.filter((order) => order.status === 'ready'),
+    screen,
   }
 }
 

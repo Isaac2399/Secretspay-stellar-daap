@@ -105,3 +105,33 @@ export type EventBoardOrder = {
   createdAt: string
   readyAt?: string
 }
+
+export type EventSponsorLogo = {
+  id: string
+  name: string
+  logo: string
+}
+
+export type EventScreenClip = {
+  id: string
+  title: string
+  kind: 'image' | 'video'
+}
+
+export type EventScreenPlayback = {
+  id: string
+  title: string
+  kind: 'image' | 'video'
+  until: string | null
+}
+
+export type EventBoardScreen = {
+  sponsors: EventSponsorLogo[]
+  playback: EventScreenPlayback | null
+}
+
+export type EventScreenLibrary = {
+  sponsors: EventSponsorLogo[]
+  clips: EventScreenClip[]
+  playback: EventScreenPlayback | null
+}

@@ -1,7 +1,9 @@
 import { AuthApiError } from '@/lib/auth/api'
 import type {
   EventBoardOrder,
+  EventBoardScreen,
   EventOrder,
+  EventScreenLibrary,
   EventAdminRow,
   EventProduct,
   EventProductPromo,
@@ -49,7 +51,42 @@ export async function fetchEventBoard(merchantId: string) {
     venue: EventVenue
     preparing: EventBoardOrder[]
     ready: EventBoardOrder[]
+    screen?: EventBoardScreen
   }>(`/api/events/board?merchantId=${encodeURIComponent(merchantId)}`)
+}
+
+export async function fetchScreenAsset(merchantId: string, id: string) {
+  return request<{
+    id: string
+    title: string
+    kind: 'image' | 'video'
+    src: string
+  }>(
+    `/api/events/screen-asset?merchantId=${encodeURIComponent(merchantId)}&id=${encodeURIComponent(id)}`,
+  )
+}
+
+export async function fetchAdminScreen(merchantId: string) {
+  return request<EventScreenLibrary>(
+    `/api/events/admin-screen?merchantId=${encodeURIComponent(merchantId)}`,
+  )
+}
+
+export async function mutateAdminScreen(input: {
+  merchantId: string
+  action: 'add-sponsor' | 'remove-sponsor' | 'add-clip' | 'remove-clip' | 'play' | 'stop'
+  id?: string
+  name?: string
+  title?: string
+  kind?: 'image' | 'video'
+  src?: string
+  logo?: string
+  seconds?: number | null
+}) {
+  return request<EventScreenLibrary>('/api/events/admin-screen', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })
 }
 
 export async function fetchMerchantProducts() {

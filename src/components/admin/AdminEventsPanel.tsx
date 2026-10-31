@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ErrorModal } from '@/components/feedback/ErrorModal'
+import { EventScreenPanel } from '@/components/admin/EventScreenPanel'
 import { MerchantEventCatalog } from '@/components/event/MerchantEventCatalog'
 import { MerchantOrderQueue } from '@/components/event/MerchantOrderQueue'
 import { fetchAdminEvents } from '@/lib/events/api'
@@ -10,7 +11,7 @@ import type { EventAdminRow } from '@/types/event'
 export function AdminEventsPanel() {
   const [events, setEvents] = useState<EventAdminRow[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [adminTab, setAdminTab] = useState<'carta' | 'pedidos'>('carta')
+  const [adminTab, setAdminTab] = useState<'carta' | 'pedidos' | 'pantalla'>('carta')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -111,7 +112,7 @@ export function AdminEventsPanel() {
 
       {selected ? (
         <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-3 gap-2">
             <button
               type="button"
               className={`rounded-2xl py-2.5 text-sm ${
@@ -130,6 +131,15 @@ export function AdminEventsPanel() {
             >
               Entregar QR
             </button>
+            <button
+              type="button"
+              className={`rounded-2xl py-2.5 text-sm ${
+                adminTab === 'pantalla' ? 'bg-app-accent' : 'bg-app-chip'
+              }`}
+              onClick={() => setAdminTab('pantalla')}
+            >
+              Pantalla
+            </button>
           </div>
           {adminTab === 'carta' ? (
             <MerchantEventCatalog
@@ -141,11 +151,16 @@ export function AdminEventsPanel() {
                 void reload().catch((err) => setError(readableError(err)))
               }}
             />
-          ) : (
+          ) : adminTab === 'pedidos' ? (
             <MerchantOrderQueue
               key={`${selected.merchantId}-pedidos`}
               merchantId={selected.merchantId}
               asAdmin
+            />
+          ) : (
+            <EventScreenPanel
+              key={`${selected.merchantId}-pantalla`}
+              merchantId={selected.merchantId}
             />
           )}
         </div>
