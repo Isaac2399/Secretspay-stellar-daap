@@ -13,7 +13,7 @@ import {
   withParsedAmounts,
 } from './service.js'
 import { listSinpeForUser } from './store.js'
-import { handleInboundSinpeEmail } from './inboundEmail.js'
+import { handleInboundSinpeEmail, syncRecentSinpeEmails } from './inboundEmail.js'
 import { extractSinpeWebhookFields } from './webhookPayload.js'
 
 type ApiInput = {
@@ -59,6 +59,12 @@ export async function handleSinpeRoutes(
   if (method === 'POST' && path === '/api/payments/sinpe-email-webhook') {
     const result = await handleInboundSinpeEmail(input)
     return { status: 200, body: result }
+  }
+
+  if (method === 'POST' && path === '/api/payments/sinpe-email-sweep') {
+    assertSinpeWebhookAuth(input)
+    const result = await syncRecentSinpeEmails()
+    return { status: 200, body: { ok: true, results: result } }
   }
 
   if (method === 'POST' && path === '/api/payments/sinpe-retry') {

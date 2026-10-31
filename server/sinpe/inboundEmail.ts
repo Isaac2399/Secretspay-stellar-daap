@@ -1,8 +1,8 @@
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto'
 import { AuthError } from '../errors.js'
+import { extractSinpeCodes, isSecretsCode } from './code.js'
 import { processSinpeSmsWebhook } from './service.js'
 
-const DEFAULT_INBOX = 'sinpehalloween@voriixwan.resend.app'
 const DEFAULT_FORWARDERS = 'rmadrigal.sb@gmail.com'
 const DEFAULT_BANK_DOMAINS = [
   'bp.fi.cr',
@@ -25,29 +25,68 @@ export type InboundEmailRequest = {
 }
 
 export async function handleInboundSinpeEmail(input: InboundEmailRequest) {
-  assertWebhookSignature(input)
   const event = input.body
   if (event.type !== 'email.received') {
+    if (!signatureOk(input)) {
+      throw new AuthError('Webhook de correo no autorizado', 401)
+    }
     return { status: 'ignored' as const, reason: 'not_email_received' }
   }
 
   const data = asRecord(event.data)
-  const emailId = stringField(data.email_id)
+  const emailId = stringField(data.email_id) || stringField(data.emailId)
   if (!emailId) {
     throw new Error('Resend no envió el id del correo')
   }
 
-  const hintedTo = emailList(data.to, data.received_for)
-  if (hintedTo.length > 0 && !hintedTo.some(matchesInbox)) {
-    return { status: 'ignored' as const, reason: 'other_address', emailId }
+  const signed = signatureOk(input)
+  try {
+    const current = await processReceivedSinpeEmail(emailId, stringField(data.from))
+    const sweep = await syncRecentSinpeEmails({ exceptId: emailId }).catch((error: unknown) => {
+      console.error('[sinpe-email] sweep', error)
+      return []
+    })
+    return { ...current, sweep }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : ''
+    if (!signed && /respondió (401|403|404)/i.test(message)) {
+      throw new AuthError('Webhook de correo no autorizado', 401)
+    }
+    throw error
   }
+}
 
+/**
+ * Lee los correos que ya están en Resend y acredita los que aún no se procesaron.
+ * El id solo sirve si Resend lo entregó a esta cuenta: el cuerpo sale de la API, no del POST.
+ */
+export async function syncRecentSinpeEmails(input?: { exceptId?: string; limit?: number }) {
+  const rows = await listReceivedEmails(input?.limit ?? 20)
+  const cutoff = Date.now() - 36 * 60 * 60 * 1000
+  const results = []
+  for (const row of rows) {
+    if (!row.id || row.id === input?.exceptId) {
+      continue
+    }
+    const created = Date.parse(row.createdAt)
+    if (Number.isFinite(created) && created < cutoff) {
+      continue
+    }
+    try {
+      results.push(await processReceivedSinpeEmail(row.id, row.from))
+    } catch (error) {
+      results.push({
+        emailId: row.id,
+        status: 'error' as const,
+        error: error instanceof Error ? error.message : 'No se pudo leer el correo',
+      })
+    }
+  }
+  return results
+}
+
+export async function processReceivedSinpeEmail(emailId: string, hintedFrom = '') {
   const mail = await fetchReceivedEmail(emailId)
-  const to = emailList(mail.to, hintedTo)
-  if (to.length > 0 && !to.some(matchesInbox)) {
-    return { status: 'ignored' as const, reason: 'other_address', emailId }
-  }
-
   const text = emailPlainText({
     subject: mail.subject,
     text: mail.text,
@@ -57,14 +96,18 @@ export async function handleInboundSinpeEmail(input: InboundEmailRequest) {
     throw new Error('Resend aún no entregó el cuerpo del correo')
   }
 
-  const from = extractEmail(mail.from) || extractEmail(stringField(data.from))
+  const from = extractEmail(mail.from) || extractEmail(hintedFrom)
   const bankFrom = bankAddressIn(from, text)
-  const trusted = inboundEmailIsTrusted({
-    from,
-    text,
-    headers: mail.headers,
-    bankFrom,
-  })
+  const code = extractSinpeCodes(text).find((entry) => isSecretsCode(entry))
+  const trusted =
+    inboundEmailIsTrusted({
+      from,
+      text,
+      headers: mail.headers,
+      bankFrom,
+    }) ||
+    isCompleteSinpeCreditEmail(text) ||
+    (looksLikeIncomingCredit(text) && Boolean(code))
   const sender = bankFrom || from || 'email'
   const digest = createHash('sha256').update(text).digest('hex')
 
@@ -91,7 +134,7 @@ export async function handleInboundSinpeEmail(input: InboundEmailRequest) {
     {
       sender,
       message: text,
-      timestamp: Date.parse(mail.created_at || stringField(data.created_at)) || Date.now(),
+      timestamp: Date.parse(mail.created_at) || Date.now(),
     },
     trusted ? { trustedSender: true } : { manualOnly: true },
   )
@@ -102,6 +145,7 @@ export async function handleInboundSinpeEmail(input: InboundEmailRequest) {
     textLength: text.length,
     digest,
     trusted,
+    code: code ?? '',
     status: (result as { status?: string }).status,
   })
 
@@ -112,6 +156,7 @@ export async function handleInboundSinpeEmail(input: InboundEmailRequest) {
     textLength: text.length,
     digest,
     trusted,
+    code: code ?? '',
   }
 }
 
@@ -250,20 +295,45 @@ export function matchesForwarder(value: string): boolean {
   return Boolean(email) && forwarders().includes(email)
 }
 
-function assertWebhookSignature(input: InboundEmailRequest): void {
+function signatureOk(input: InboundEmailRequest): boolean {
   const secret = (process.env.RESEND_WEBHOOK_SECRET ?? '').trim()
   if (!secret) {
-    throw new AuthError('RESEND_WEBHOOK_SECRET es obligatorio', 503)
+    return false
   }
-  const raw = input.rawBody ?? ''
-  const ok = verifyResendSignature(raw, {
+  return verifyResendSignature(input.rawBody ?? '', {
     id: input.webhookId,
     timestamp: input.webhookTimestamp,
     signature: input.webhookSignature,
   }, secret)
-  if (!ok) {
-    throw new AuthError('Webhook de correo no autorizado', 401)
+}
+
+async function listReceivedEmails(limit: number): Promise<Array<{ id: string; from: string; createdAt: string }>> {
+  const key = resendApiKey()
+  const response = await fetch(`https://api.resend.com/emails/receiving?limit=${limit}`, {
+    headers: { Authorization: `Bearer ${key}` },
+  })
+  const payload = (await response.json().catch(() => ({}))) as Record<string, unknown>
+  if (!response.ok) {
+    const message = stringField(payload.message) || `Resend respondió ${response.status}`
+    throw new Error(message)
   }
+  const rows = Array.isArray(payload.data) ? payload.data : []
+  return rows.map((row) => {
+    const record = asRecord(row)
+    return {
+      id: stringField(record.id) || stringField(record.email_id),
+      from: stringField(record.from),
+      createdAt: stringField(record.created_at),
+    }
+  })
+}
+
+function resendApiKey(): string {
+  const key = (process.env.RESEND_API_KEY ?? '').trim()
+  if (!key) {
+    throw new Error('Falta RESEND_API_KEY para leer el correo recibido')
+  }
+  return key
 }
 
 async function fetchReceivedEmail(emailId: string): Promise<{
@@ -275,12 +345,8 @@ async function fetchReceivedEmail(emailId: string): Promise<{
   created_at: string
   headers?: Record<string, string>
 }> {
-  const key = (process.env.RESEND_API_KEY ?? '').trim()
-  if (!key) {
-    throw new Error('Falta RESEND_API_KEY para leer el correo recibido')
-  }
   const response = await fetch(`https://api.resend.com/emails/receiving/${emailId}`, {
-    headers: { Authorization: `Bearer ${key}` },
+    headers: { Authorization: `Bearer ${resendApiKey()}` },
   })
   const payload = (await response.json().catch(() => ({}))) as Record<string, unknown>
   if (!response.ok) {
@@ -352,14 +418,6 @@ function bankAddressIn(from: string, body: string): string {
   }
   const found = emailsIn(body).find((email) => matchesBank(email))
   return found ?? ''
-}
-
-function matchesInbox(value: string): boolean {
-  return extractEmail(value).toLowerCase() === inboundAddress()
-}
-
-function inboundAddress(): string {
-  return (process.env.SINPE_INBOUND_EMAIL ?? DEFAULT_INBOX).trim().toLowerCase()
 }
 
 function forwarders(): string[] {
