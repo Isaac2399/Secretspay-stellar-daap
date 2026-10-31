@@ -40,16 +40,26 @@ export async function handleInboundSinpeEmail(input: InboundEmailRequest) {
   }
 
   const signed = signatureOk(input)
+  const sweep = await syncRecentSinpeEmails({ exceptId: emailId }).catch((error: unknown) => {
+    console.error('[sinpe-email] sweep', error)
+    return []
+  })
   try {
-    const current = await processReceivedSinpeEmail(emailId, stringField(data.from))
-    const sweep = await syncRecentSinpeEmails({ exceptId: emailId }).catch((error: unknown) => {
-      console.error('[sinpe-email] sweep', error)
-      return []
-    })
+    const current = compactCredit(
+      await processReceivedSinpeEmail(emailId, stringField(data.from)),
+    )
     return { ...current, sweep }
   } catch (error) {
     const message = error instanceof Error ? error.message : ''
-    if (!signed && /respondió (401|403|404)/i.test(message)) {
+    if (sweep.length > 0) {
+      return {
+        status: 'sweep' as const,
+        emailId,
+        error: message,
+        sweep,
+      }
+    }
+    if (!signed && /not found|respondió (401|403|404)/i.test(message)) {
       throw new AuthError('Webhook de correo no autorizado', 401)
     }
     throw error
@@ -73,7 +83,7 @@ export async function syncRecentSinpeEmails(input?: { exceptId?: string; limit?:
       continue
     }
     try {
-      results.push(await processReceivedSinpeEmail(row.id, row.from))
+      results.push(compactCredit(await processReceivedSinpeEmail(row.id, row.from)))
     } catch (error) {
       results.push({
         emailId: row.id,
@@ -293,6 +303,29 @@ export function matchesBank(value: string): boolean {
 export function matchesForwarder(value: string): boolean {
   const email = extractEmail(value).toLowerCase()
   return Boolean(email) && forwarders().includes(email)
+}
+
+function compactCredit(result: {
+  status?: string
+  reason?: string
+  emailId?: string
+  code?: string
+  error?: string
+  referenceId?: string
+  transaction?: { referenceId?: string; crcAmount?: number; calculatedRojos?: number }
+  deposit?: { referenceId?: string; crcAmount?: number; calculatedRojos?: number; lastError?: string }
+}): Record<string, unknown> {
+  return {
+    status: result.status,
+    reason: result.reason,
+    emailId: result.emailId,
+    code: result.code ?? '',
+    referenceId:
+      result.referenceId ?? result.transaction?.referenceId ?? result.deposit?.referenceId,
+    crcAmount: result.transaction?.crcAmount ?? result.deposit?.crcAmount,
+    rojos: result.transaction?.calculatedRojos ?? result.deposit?.calculatedRojos,
+    error: result.error ?? result.deposit?.lastError,
+  }
 }
 
 function signatureOk(input: InboundEmailRequest): boolean {
