@@ -7,6 +7,7 @@
     "dev": "vite",
     "seed:super-admin": "node scripts/seed-super-admin.mjs",
     "seed:event-staff": "node scripts/seed-event-staff.mjs",
+    "sinpe:sample": "tsx scripts/sample-sinpe-email.ts",
     "sweep:rojos": "tsx scripts/sweep-rojos.ts",
     "sweep:rojos:apply": "tsx scripts/sweep-rojos.ts --apply",
     "build": "tsc -b && vite build",

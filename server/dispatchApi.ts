@@ -72,6 +72,10 @@ export async function dispatchApi(input: {
   authorization?: string
   apiKey?: string
   body: Record<string, unknown>
+  rawBody?: string
+  webhookId?: string
+  webhookTimestamp?: string
+  webhookSignature?: string
 }): Promise<{ status: number; body: unknown; setCookie?: string }> {
   try {
     return await route(input)
@@ -100,6 +104,10 @@ async function route(input: {
   authorization?: string
   apiKey?: string
   body: Record<string, unknown>
+  rawBody?: string
+  webhookId?: string
+  webhookTimestamp?: string
+  webhookSignature?: string
 }): Promise<{ status: number; body: unknown; setCookie?: string }> {
   await ensureDevSuperAdmin()
   await ensureDevEventStaff()

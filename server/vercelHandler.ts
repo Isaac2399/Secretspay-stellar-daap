@@ -22,13 +22,20 @@ export default async function handler(
   res: ServerResponse,
 ) {
   try {
+    const received = await readRequestBody(req)
     const result = await dispatchApi({
       method: req.method ?? 'GET',
       path: requestPath(req),
       cookie: req.headers.cookie,
       authorization: headerAuth(req),
       apiKey: headerApiKey(req),
-      body: await readRequestBody(req),
+      body: received.body,
+      rawBody: received.rawBody,
+      webhookId: headerValue(req, 'svix-id') ?? headerValue(req, 'webhook-id'),
+      webhookTimestamp:
+        headerValue(req, 'svix-timestamp') ?? headerValue(req, 'webhook-timestamp'),
+      webhookSignature:
+        headerValue(req, 'svix-signature') ?? headerValue(req, 'webhook-signature'),
     })
 
     res.statusCode = result.status
@@ -154,16 +161,19 @@ function parseBody(body: unknown): Record<string, unknown> {
   return {}
 }
 
-async function readRequestBody(req: VercelRequest): Promise<Record<string, unknown>> {
+async function readRequestBody(
+  req: VercelRequest,
+): Promise<{ body: Record<string, unknown>; rawBody?: string }> {
   const query = Object.fromEntries(
     new URLSearchParams((req.url ?? '').split('?')[1] ?? '').entries(),
   )
   const parsed = parseBody(req.body)
   if (Object.keys(parsed).length > 0) {
-    return { ...query, ...parsed }
+    const rawBody = rawFromPreparsed(req.body)
+    return { body: { ...query, ...parsed }, rawBody }
   }
   if (req.method === 'GET' || req.method === 'HEAD') {
-    return query
+    return { body: query }
   }
   const chunks: Buffer[] = []
   for await (const chunk of req) {
@@ -171,9 +181,19 @@ async function readRequestBody(req: VercelRequest): Promise<Record<string, unkno
   }
   const raw = Buffer.concat(chunks).toString('utf8')
   if (!raw.trim()) {
-    return query
+    return { body: query }
   }
-  return { ...query, ...decodeHttpBody(raw) }
+  return { body: { ...query, ...decodeHttpBody(raw) }, rawBody: raw }
+}
+
+function rawFromPreparsed(body: unknown): string | undefined {
+  if (typeof body === 'string' && body.trim()) {
+    return body
+  }
+  if (typeof Buffer !== 'undefined' && Buffer.isBuffer(body)) {
+    return body.toString('utf8')
+  }
+  return undefined
 }
 
 function headerAuth(req: IncomingMessage): string | undefined {
@@ -183,7 +203,11 @@ function headerAuth(req: IncomingMessage): string | undefined {
 }
 
 function headerApiKey(req: IncomingMessage): string | undefined {
-  const value = req.headers['x-api-key']
+  return headerValue(req, 'x-api-key')
+}
+
+function headerValue(req: IncomingMessage, name: string): string | undefined {
+  const value = req.headers[name]
   const raw = Array.isArray(value) ? value[0] : value
   return raw?.trim() || undefined
 }

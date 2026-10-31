@@ -17,6 +17,7 @@ const REFERENCE_PATTERNS = [
 ]
 
 const AMOUNT_PATTERNS = [
+  /monto\s+neto\s*[:.]?\s*([\d][\d.,]*)/i,
   /(?:ha\s+recibido|recibid[oa]|recibiste|recibio|recibió)\s+[₡¢]?\s*([\d][\d.\s,]*)\s*(?:colones|crc)?/i,
   /([\d][\d.\s,]*)\s*(?:colones|crc)\b/i,
   /[₡¢]\s*([\d][\d.\s,]*)/,
@@ -29,13 +30,18 @@ const COMMENT_PATTERNS = [
   /por\s+sinpe\s+m[oó]vil\s*,\s*([A-Za-z0-9]{6,16})(?:\s|$|[.,])/i,
   /por\s+sinpe\s+m[oó]vil\s*,\s*(.+?)(?:\s+transf\w*\.?)?\s*referencia\b/i,
   /detalle\s*[:.]?\s*(.+)$/i,
-  /(?:nota|comentario|concept[oa]|descripci[oó]n)\s*[:.]?\s*(.+)$/i,
+  /(?:nota|comentario|concept[oa]|descripci[oó]n)\s*[:.]?\s*(\S+)/i,
 ]
 
 export function parseSinpeSms(message: string): ParsedSinpeSms | null {
   const text = message.replace(/\s+/g, ' ').trim()
   if (!text) {
     return null
+  }
+
+  const voucher = parseBankVoucher(text)
+  if (voucher) {
+    return voucher
   }
 
   const crcAmount = extractAmount(text)
@@ -63,6 +69,34 @@ export function extractPhoneFromSms(message: string): string | undefined {
     /(?:desde|de)\s*:?\s*(\+?\d[\d\s-]{7,18})/i,
   )
   return match?.[1]?.replace(/\s+/g, '')
+}
+
+/** Comprobante de correo (Banco Popular): Monto Neto, Referencia SINPE y Descripción. */
+function parseBankVoucher(text: string): ParsedSinpeSms | null {
+  const neto = text.match(/monto\s+neto\s*[:.]?\s*([\d][\d.,]*)/i)
+  const reference =
+    text.match(/referencia\s+sinpe\s*[:.]?\s*(\d{8,40})/i) ??
+    text.match(/\breferencia\s*[:.]?\s*(\d{8,40})/i)
+  if (!neto?.[1] || !reference?.[1]) {
+    return null
+  }
+  const crcAmount = parseCrcNumber(neto[1])
+  if (crcAmount === null) {
+    return null
+  }
+  const described =
+    text.match(/descripci[oó]n\s*[:.]?\s*(.+?)(?:\s+tipo\s+de\s+movimiento\b|$)/i)?.[1] ??
+    ''
+  const cleaned = described.replace(/\btransf\w*\b/gi, ' ').replace(/\s+/g, ' ').trim()
+  const comment =
+    extractSinpeCodes(cleaned)[0] ??
+    cleaned.split(/\s+/).find((token) => /^sc[a-z0-9]{8}ts$/i.test(token)) ??
+    ''
+  return {
+    crcAmount,
+    referenceId: reference[1],
+    comment,
+  }
 }
 
 function extractReference(text: string): string | undefined {
@@ -127,8 +161,9 @@ function extractLooseCrcAmount(text: string): number | null {
 function extractComment(text: string): string {
   for (const pattern of COMMENT_PATTERNS) {
     const match = text.match(pattern)
-    if (match?.[1]?.trim()) {
-      return match[1].replace(/\s+/g, ' ').trim()
+    const value = match?.[1]?.replace(/\s+/g, ' ').trim()
+    if (value && !isMasked(value)) {
+      return value
     }
   }
   return extractSinpeCodes(text)[0] ?? ''
@@ -159,6 +194,11 @@ export function parseCrcNumber(raw: string): number | null {
   }
   const value = Number(cleaned)
   return Number.isFinite(value) && value > 0 ? value : null
+}
+
+function isMasked(value: string): boolean {
+  const marks = value.replace(/[^*]/g, '')
+  return marks.length >= 4 && marks.length >= value.length / 2
 }
 
 function hashText(text: string): number {

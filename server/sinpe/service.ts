@@ -133,9 +133,16 @@ function buildSinpeIntentResponse(input: {
   }
 }
 
-export async function processSinpeSmsWebhook(payload: WebhookPayload) {
+export async function processSinpeSmsWebhook(
+  payload: WebhookPayload,
+  options?: { trustedSender?: boolean; manualOnly?: boolean },
+) {
   const sender = resolveSender(payload.sender, payload.message)
-  const senderGate = assertAllowedSender(payload.sender, sender)
+  const senderGate = options?.manualOnly
+    ? 'Correo recibido completo, pero el remitente no está autorizado para acreditar solo. Quedó en la mesa SINPE.'
+    : options?.trustedSender
+      ? undefined
+      : assertAllowedSender(payload.sender, sender)
   if (senderGate) {
     const now = new Date().toISOString()
     const codes = extractSinpeCodes(payload.message)
@@ -231,7 +238,8 @@ export async function processSinpeSmsWebhook(payload: WebhookPayload) {
   if (
     isPendingDepositStatus(existing.deposit?.status ?? '') &&
     !existing.transaction &&
-    !isRicherSms(payload.message, existing.deposit?.rawMessage ?? '')
+    !isRicherSms(payload.message, existing.deposit?.rawMessage ?? '') &&
+    !parkedForUntrustedSender(existing.deposit)
   ) {
     return { status: 'duplicate_ignored' as const, reason: 'same_sms' }
   }
@@ -971,6 +979,14 @@ function destinationError(comment: string, message: string): string {
     return `No hay cuenta con el código de la nota (${comment}). Si el cliente usó un código inventado o muy antiguo, pedile el número de comprobante y acreditalo desde la mesa.`
   }
   return 'La nota del SINPE no trajo el código sc…ts'
+}
+
+/** El correo completo quedó en mesa solo porque el remitente se evaluó como SMS. */
+function parkedForUntrustedSender(deposit?: UnassignedDeposit): boolean {
+  const error = deposit?.lastError ?? ''
+  return /no está autorizado para acreditar|Remitente no autorizado|Falta el número de origen/i.test(
+    error,
+  )
 }
 
 function isRicherSms(next: string, prev: string): boolean {
