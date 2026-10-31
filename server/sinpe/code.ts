@@ -14,7 +14,7 @@ export const SINPE_CODE_RETENTION_MS = 30 * 24 * 60 * 60 * 1000
 
 export function sinpeReceivePhone(): string {
   const digits = (process.env.SINPE_RECEIVE_PHONE ?? '').replace(/\D/g, '')
-  return digits || '62951541'
+  return digits || '86266696'
 }
 
 /**

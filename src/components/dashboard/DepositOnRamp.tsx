@@ -1,6 +1,6 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { ErrorModal } from '@/components/feedback/ErrorModal'
-import { AlertTriangle, ArrowLeft, Banknote, Check, Copy, QrCode, Smartphone } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, Banknote, Check, Copy, ImageUp, QrCode, Smartphone } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
 // MoneyGram (cash) y tarjeta quedan fuera de la vista cliente.
 // import { CreditCard } from 'lucide-react'
@@ -11,6 +11,7 @@ import {
   fetchSinpeIntent,
   type SinpeIntent,
 } from '@/lib/sinpe/api'
+import { readReceiptImage } from '@/lib/sinpe/readReceipt'
 import { AuthApiError } from '@/lib/auth/api'
 import { readableError } from '@/lib/auth/readableError'
 import { stellarConfig } from '@/lib/stellar/config'
@@ -81,7 +82,7 @@ export function AddFundsSheet({
             <MethodCard
               icon={<Smartphone className="h-5 w-5" />}
               title="SINPE Móvil"
-              subtitle="Código válido 5 min al copiarlo"
+              subtitle="Pagá desde tu banco"
               onClick={() => setView('sinpe')}
             />
             <MethodCard
@@ -255,60 +256,72 @@ function SinpeRecarga({
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-app-muted">
-        Enviá el SINPE Móvil a nuestro número y pegá el código en el comentario.
-        El código dura 5 minutos desde que lo copiás; después hay que generar uno
-        nuevo.
-      </p>
-      {loading ? <p className="text-sm text-app-muted">Preparando SINPE…</p> : null}
+      {loading ? <p className="text-sm text-app-muted">Cargando…</p> : null}
       {error ? <ErrorModal message={error} onClose={() => setError(null)} /> : null}
-      <CopyRow
-        label="Número SINPE"
-        value={intent?.phoneDisplay ?? '……'}
-        copied={copiedPhone}
-        disabled={!intent?.phone}
-        onCopy={() => void copyPhone()}
-        copyLabel="Copiar número"
-        copiedLabel="Número copiado"
-      />
-      <CopyRow
-        label="Código"
-        value={codeActive ? (intent?.code ?? 'sc••••ts') : 'sc••••ts'}
-        copied={copiedCode}
-        disabled={activating || loading || !intent}
-        onCopy={() => void copyOrActivateCode()}
-        copyLabel={codeActive ? 'Copiar código' : 'Copiar y activar (5 min)'}
-        copiedLabel="Código copiado"
-        mono
-      />
-      {codeActive ? (
-        <SinpeCountdown remainingMs={remainingMs} ttlMs={intent?.ttlMs ?? 5 * 60 * 1000} />
-      ) : null}
-      {!codeActive && !loading ? (
-        <p className="rounded-2xl bg-app-chip px-3 py-3 text-sm text-app-muted">
-          {codeExpired
-            ? 'El código anterior ya venció. Tocá copiar para obtener uno nuevo válido por 5 minutos.'
-            : 'Tocá el ícono de copiar para obtener tu código. El contador de 5 minutos empieza en ese momento.'}
-        </p>
-      ) : null}
-      <div className="space-y-2 text-sm text-app-muted">
-        <p>
-          Si el tiempo se acabó antes de enviar, copiá un código nuevo y usalo en
-          la nota del SINPE.
-        </p>
-        <p>
-          Si ya enviaste con un código vencido o sin código, usá Ayuda con el
-          número de comprobante: la mesa puede acreditarlo o el sistema lo
-          empareja si reconoce tu código anterior.
-        </p>
-      </div>
-      <button
-        type="button"
-        onClick={onClaim}
-        className="w-full rounded-2xl bg-app-accent py-3 text-sm font-medium text-white"
+      <SinpeStep number={1} text="Copiá el número">
+        <CopyRow
+          label="Número SINPE"
+          value={intent?.phoneDisplay ?? '……'}
+          copied={copiedPhone}
+          disabled={!intent?.phone}
+          onCopy={() => void copyPhone()}
+          copyLabel="Copiar número"
+          copiedLabel="Número copiado"
+        />
+      </SinpeStep>
+      <SinpeStep
+        number={2}
+        text={codeExpired ? 'Tu código venció. Copiá uno nuevo' : 'Copiá tu código'}
       >
-        Ayuda · reclamar con comprobante
-      </button>
+        <CopyRow
+          label="Código"
+          value={codeActive ? (intent?.code ?? 'sc••••ts') : 'sc••••ts'}
+          copied={copiedCode}
+          disabled={activating || loading || !intent}
+          onCopy={() => void copyOrActivateCode()}
+          copyLabel={codeActive ? 'Copiar código' : 'Obtener y copiar código'}
+          copiedLabel="Código copiado"
+          mono
+        />
+        {codeActive ? (
+          <SinpeCountdown remainingMs={remainingMs} ttlMs={intent?.ttlMs ?? 5 * 60 * 1000} />
+        ) : (
+          <p className="text-xs text-app-muted">Dura 5 minutos.</p>
+        )}
+      </SinpeStep>
+      <SinpeStep number={3} text="Hacé el SINPE y pegá el código en el detalle" />
+      <div className="border-t border-white/10 pt-4 text-center">
+        <p className="mb-2 text-sm text-app-muted">¿Ya pagaste y no te llegó?</p>
+        <button
+          type="button"
+          onClick={onClaim}
+          className="w-full rounded-2xl bg-app-accent py-3 text-sm font-medium text-white"
+        >
+          Reclamar con comprobante
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function SinpeStep({
+  number,
+  text,
+  children,
+}: {
+  number: number
+  text: string
+  children?: ReactNode
+}) {
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-3 text-sm font-medium">
+        <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-app-accent text-xs font-semibold text-white">
+          {number}
+        </span>
+        <span>{text}</span>
+      </div>
+      {children}
     </div>
   )
 }
@@ -327,7 +340,7 @@ function SinpeCountdown({
   return (
     <div className="space-y-2 rounded-2xl bg-app-chip px-3 py-3">
       <div className="flex items-center justify-between gap-3 text-sm">
-        <span className="text-app-muted">Tiempo para usar este código</span>
+        <span className="text-app-muted">Tiempo restante</span>
         <span
           className={`font-mono text-base font-semibold tabular-nums ${urgent ? 'text-amber-300' : 'text-white'}`}
         >
@@ -340,9 +353,6 @@ function SinpeCountdown({
           style={{ width: `${ratio * 100}%` }}
         />
       </div>
-      <p className="text-xs text-app-muted">
-        Pegalo en el comentario del SINPE Móvil antes de que llegue a 00:00.
-      </p>
     </div>
   )
 }
@@ -371,6 +381,18 @@ function ClaimSinpeModal({
   const [referenceId, setReferenceId] = useState('')
   const [notice, setNotice] = useState<ClaimNotice | null>(null)
   const [busy, setBusy] = useState(false)
+  const [reading, setReading] = useState(false)
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [readNote, setReadNote] = useState<string | null>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    return () => {
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl)
+      }
+    }
+  }, [previewUrl])
 
   function dismissNotice() {
     const credited = notice?.credited
@@ -382,7 +404,7 @@ function ClaimSinpeModal({
 
   return (
     <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/70 p-4 sm:items-center">
-      <div className="w-full max-w-lg rounded-[28px] bg-app-card p-5">
+      <div className="max-h-[92dvh] w-full max-w-lg overflow-y-auto rounded-[28px] bg-app-card p-5">
         <div className="mb-3 flex items-center justify-between">
           <h3 className="text-base font-semibold">Reclamar recarga</h3>
           <button type="button" className="text-sm text-app-muted" onClick={onClose}>
@@ -390,8 +412,8 @@ function ClaimSinpeModal({
           </button>
         </div>
         <p className="mb-3 text-sm text-app-muted">
-          Si enviaste sin código, con un código vencido o el SMS no se acreditó,
-          ingresá el número de comprobante SINPE (ej. 12345678).
+          Escribí el número de comprobante o subí el screenshot. Lo leemos y
+          completamos el número.
         </p>
         <input
           value={referenceId}
@@ -399,9 +421,64 @@ function ClaimSinpeModal({
           placeholder="12345678"
           className="w-full rounded-2xl bg-app-chip px-3 py-3 text-sm outline-none"
         />
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(event) => {
+            const file = event.target.files?.[0]
+            event.target.value = ''
+            if (!file) {
+              return
+            }
+            setPreviewUrl((current) => {
+              if (current) {
+                URL.revokeObjectURL(current)
+              }
+              return URL.createObjectURL(file)
+            })
+            setReading(true)
+            setReadNote(null)
+            void readReceiptImage(file)
+              .then(({ referenceId: found }) => {
+                if (found) {
+                  setReferenceId(found)
+                  setReadNote(
+                    'Leímos este número en el comprobante. Corregilo si no coincide.',
+                  )
+                  return
+                }
+                setReadNote(
+                  'No pudimos leer el número. Escribilo a mano o probá otra foto.',
+                )
+              })
+              .catch(() => {
+                setReadNote('No se pudo leer la imagen. Escribí el número a mano.')
+              })
+              .finally(() => setReading(false))
+          }}
+        />
         <button
           type="button"
-          disabled={busy}
+          disabled={reading}
+          className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl bg-app-chip py-3 text-sm font-medium disabled:opacity-40"
+          onClick={() => fileRef.current?.click()}
+        >
+          <ImageUp className="h-4 w-4" />
+          {reading ? 'Leyendo comprobante…' : 'Subir screenshot del comprobante'}
+        </button>
+        {previewUrl ? (
+          <img
+            src={previewUrl}
+            alt="Comprobante subido"
+            className="mt-3 max-h-40 w-full rounded-2xl object-contain bg-black/30"
+          />
+        ) : null}
+        {readNote ? <p className="mt-2 text-sm text-app-muted">{readNote}</p> : null}
+        <button
+          type="button"
+          disabled={busy || reading}
           className="mt-4 w-full rounded-2xl bg-app-accent py-3 text-sm font-medium disabled:opacity-40"
           onClick={() => {
             const reference = referenceId.trim()
