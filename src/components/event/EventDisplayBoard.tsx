@@ -23,10 +23,17 @@ export function EventDisplayBoard({ merchantId }: { merchantId: string }) {
     src: string
   } | null>(null)
   const [sound, setSound] = useState(false)
+  const [fullscreen, setFullscreen] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     setSound(window.localStorage.getItem('event-display-sound') === '1')
+  }, [])
+
+  useEffect(() => {
+    const sync = () => setFullscreen(document.fullscreenElement != null)
+    document.addEventListener('fullscreenchange', sync)
+    return () => document.removeEventListener('fullscreenchange', sync)
   }, [])
 
   useEffect(() => {
@@ -100,6 +107,19 @@ export function EventDisplayBoard({ merchantId }: { merchantId: string }) {
           <p className="text-base text-neutral-500 sm:text-lg 2xl:text-2xl">
             {venue?.pickupLabel ?? 'Barra'}
           </p>
+          <button
+            type="button"
+            className="rounded-full bg-neutral-900/5 px-3 py-1.5 text-xs text-neutral-700 2xl:text-sm"
+            onClick={() => {
+              if (document.fullscreenElement) {
+                void document.exitFullscreen()
+                return
+              }
+              void document.documentElement.requestFullscreen()
+            }}
+          >
+            {fullscreen ? 'Salir de pantalla completa' : 'Pantalla completa'}
+          </button>
           <button
             type="button"
             className="rounded-full bg-neutral-900/5 px-3 py-1.5 text-xs text-neutral-700 2xl:text-sm"
