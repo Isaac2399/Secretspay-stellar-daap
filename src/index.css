@@ -221,6 +221,18 @@ body::before {
   }
 }
 
+.event-board {
+  color-scheme: light;
+}
+
+.event-column {
+  scrollbar-width: none;
+}
+
+.event-column::-webkit-scrollbar {
+  display: none;
+}
+
 .halloween-scene {
   pointer-events: none;
   position: absolute;

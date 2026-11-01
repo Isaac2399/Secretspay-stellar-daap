@@ -186,21 +186,18 @@ function SponsorBand({ sponsors }: { sponsors: EventSponsorLogo[] }) {
       <p className="text-xs uppercase tracking-[0.22em] text-neutral-500 2xl:text-sm">
         Patrocinadores
       </p>
-      <div className="relative mt-3 h-28 sm:h-36 2xl:h-48">
+      <div className="relative mt-3 h-40 sm:h-52 2xl:h-64">
         {sponsors.map((sponsor) => (
           <img
             key={sponsor.id}
             src={sponsor.logo}
             alt={sponsor.name}
-            className={`absolute inset-0 m-auto max-h-full max-w-[min(70%,28rem)] object-contain transition-opacity duration-700 ${
+            className={`absolute inset-0 m-auto max-h-full max-w-[min(80%,36rem)] bg-white object-contain transition-opacity duration-700 ${
               sponsor.id === featured?.id ? 'opacity-100' : 'opacity-0'
             }`}
           />
         ))}
       </div>
-      {featured ? (
-        <p className="mt-2 text-center text-sm text-neutral-600 2xl:text-lg">{featured.name}</p>
-      ) : null}
       <SponsorMarquee sponsors={sponsors} />
     </section>
   )
@@ -268,7 +265,7 @@ function SponsorTile({ sponsor }: { sponsor: EventSponsorLogo }) {
     <img
       src={sponsor.logo}
       alt=""
-      className="mx-6 h-14 w-40 shrink-0 object-contain 2xl:mx-8 2xl:h-20 2xl:w-52"
+      className="mx-8 h-24 w-64 shrink-0 bg-white object-contain 2xl:mx-10 2xl:h-32 2xl:w-80"
     />
   )
 }
@@ -519,7 +516,7 @@ function BoardColumn({
   tone: 'muted' | 'ready'
 }) {
   return (
-    <section className="min-h-0 min-w-0 overflow-x-hidden overflow-y-auto">
+    <section className="event-column relative z-10 min-h-0 min-w-0 overflow-x-hidden overflow-y-auto">
       <h2
         className={`mb-4 text-2xl font-semibold 2xl:text-4xl ${
           tone === 'ready' ? 'text-app-accent' : 'text-neutral-700'
@@ -534,10 +531,10 @@ function BoardColumn({
           {orders.map((order) => (
             <div
               key={`${order.status}-${order.orderNumber}-${order.createdAt}`}
-              className={`rounded-3xl border px-3 py-5 text-center sm:px-4 sm:py-6 ${
+              className={`relative z-10 rounded-3xl border px-3 py-5 text-center sm:px-4 sm:py-6 ${
                 tone === 'ready'
-                  ? 'border-app-accent/30 bg-app-accent/10'
-                  : 'border-neutral-200 bg-neutral-50'
+                  ? 'border-app-accent/30 bg-[#e7f6ef]'
+                  : 'border-neutral-200 bg-white'
               }`}
             >
               <p className="text-4xl font-semibold tracking-tight tabular-nums sm:text-5xl 2xl:text-6xl">
