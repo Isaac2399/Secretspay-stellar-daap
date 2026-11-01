@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { QRCodeSVG } from 'qrcode.react'
 import { ErrorModal } from '@/components/feedback/ErrorModal'
 import { fetchEventBoard, fetchScreenAsset } from '@/lib/events/api'
 import type {
@@ -10,6 +11,7 @@ import type {
 } from '@/types/event'
 
 const EMPTY_SCREEN: EventBoardScreen = { sponsors: [], playback: null }
+const APP_SHARE_URL = 'https://partypay-stellar-daap.vercel.app/'
 
 export function EventDisplayBoard({ merchantId }: { merchantId: string }) {
   const [venue, setVenue] = useState<EventVenue | null>(null)
@@ -104,6 +106,7 @@ export function EventDisplayBoard({ merchantId }: { merchantId: string }) {
           </h1>
         </div>
         <div className="flex items-center gap-4">
+          <AppShareQr />
           <p className="text-base text-neutral-500 sm:text-lg 2xl:text-2xl">
             {venue?.pickupLabel ?? 'Barra'}
           </p>
@@ -503,6 +506,20 @@ function FlyingBat({ className }: { className: string }) {
     <div ref={ref} className={`vampire ${className}`}>
       <Bat />
     </div>
+  )
+}
+
+function AppShareQr() {
+  return (
+    <aside className="relative z-10 flex w-fit items-center gap-3 rounded-2xl border border-neutral-200 bg-white px-3 py-2">
+      <QRCodeSVG value={APP_SHARE_URL} size={72} level="M" />
+      <div>
+        <p className="text-xs font-medium uppercase tracking-[0.16em] text-app-accent">
+          Pide aquí
+        </p>
+        <p className="text-sm text-neutral-600">Escanea y abre la app</p>
+      </div>
+    </aside>
   )
 }
 
