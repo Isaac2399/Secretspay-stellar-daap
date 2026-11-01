@@ -1,7 +1,8 @@
 const MAX_SIDE = 560
 const MAX_DATA_URL = 340_000
+const WHITE_LIMIT = 18
 
-/** Separa la cerveza del fondo y la deja sobre un fondo suave, sin borde pixelado. */
+/** Quita el fondo blanco y deja el producto en PNG transparente, sin óvalo. */
 export function cutoutProductImage(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
@@ -35,13 +36,209 @@ function exportCutout(img: HTMLImageElement): string {
   }
   ctx.drawImage(img, 0, 0, width, height)
   const image = ctx.getImageData(0, 0, width, height)
-  const mask = backgroundMask(image.data, width, height)
-  const separated = mask.some((value) => value === 1)
-  const alpha = separated
-    ? blurAlpha(alphaFromMask(mask), width, height, 14)
-    : centerFalloff(width, height)
-  paintStudio(canvas, image, alpha, width, height)
-  return fitDataUrl(canvas)
+  const white = whiteBackground(image.data, width, height)
+  const whiteKeep = foregroundRatio(white)
+  let alpha: Float32Array
+  if (whiteKeep >= 0.02 && whiteKeep <= 0.82) {
+    alpha = alphaFromMask(white)
+    featherAgainstBackground(alpha, image.data, width, height)
+  } else {
+    const mask = backgroundMask(image.data, width, height)
+    const keep = foregroundRatio(mask)
+    alpha =
+      mask.some((value) => value === 1) && keep >= 0.12 && keep <= 0.88
+        ? blurAlpha(alphaFromMask(mask), width, height, 2)
+        : opaque(width, height)
+  }
+  applyAlpha(image.data, alpha)
+  return fitDataUrl(trimToSubject(image, 16))
+}
+
+function whiteBackground(
+  data: Uint8ClampedArray,
+  width: number,
+  height: number,
+): Uint8Array {
+  const count = width * height
+  const dist = new Int16Array(count)
+  const chroma = new Uint8Array(count)
+  for (let index = 0; index < count; index += 1) {
+    const offset = index * 4
+    const r = data[offset]
+    const g = data[offset + 1]
+    const b = data[offset + 2]
+    dist[index] = data[offset + 3] < 16 ? 0 : Math.max(255 - r, 255 - g, 255 - b)
+    chroma[index] = Math.max(r, g, b) - Math.min(r, g, b)
+  }
+
+  const mask = new Uint8Array(count)
+  const queue: number[] = []
+  let head = 0
+  const tryPixel = (index: number) => {
+    if (index < 0 || index >= count || mask[index] || dist[index] > WHITE_LIMIT) {
+      return
+    }
+    mask[index] = 1
+    queue.push(index)
+  }
+  for (let x = 0; x < width; x += 1) {
+    tryPixel(x)
+    tryPixel((height - 1) * width + x)
+  }
+  for (let y = 0; y < height; y += 1) {
+    tryPixel(y * width)
+    tryPixel(y * width + width - 1)
+  }
+  while (head < queue.length) {
+    const index = queue[head]
+    head += 1
+    const x = index % width
+    if (x > 0) {
+      tryPixel(index - 1)
+    }
+    if (x < width - 1) {
+      tryPixel(index + 1)
+    }
+    if (index >= width) {
+      tryPixel(index - width)
+    }
+    if (index < count - width) {
+      tryPixel(index + width)
+    }
+  }
+
+  const colored = new Uint8Array(count)
+  for (let index = 0; index < count; index += 1) {
+    colored[index] = chroma[index] > 40 ? 1 : 0
+  }
+  const protect = dilate(colored, width, height, 2)
+  for (let index = 0; index < count; index += 1) {
+    if (!mask[index] && dist[index] <= WHITE_LIMIT && !protect[index]) {
+      mask[index] = 1
+    }
+  }
+  return mask
+}
+
+function featherAgainstBackground(
+  alpha: Float32Array,
+  data: Uint8ClampedArray,
+  width: number,
+  height: number,
+): void {
+  const next = new Float32Array(alpha)
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const index = y * width + x
+      if (alpha[index] === 0) {
+        continue
+      }
+      let touches = false
+      if (x > 0 && alpha[index - 1] === 0) touches = true
+      if (x < width - 1 && alpha[index + 1] === 0) touches = true
+      if (y > 0 && alpha[index - width] === 0) touches = true
+      if (y < height - 1 && alpha[index + width] === 0) touches = true
+      if (!touches) {
+        continue
+      }
+      const offset = index * 4
+      const distance = Math.max(
+        255 - data[offset],
+        255 - data[offset + 1],
+        255 - data[offset + 2],
+      )
+      if (distance < WHITE_LIMIT + 28) {
+        next[index] = Math.max(0, Math.min(255, ((distance - WHITE_LIMIT) / 28) * 255))
+      }
+    }
+  }
+  alpha.set(next)
+}
+
+function applyAlpha(data: Uint8ClampedArray, alpha: Float32Array): void {
+  for (let index = 0; index < alpha.length; index += 1) {
+    data[index * 4 + 3] = Math.max(0, Math.min(255, Math.round(alpha[index])))
+  }
+}
+
+function trimToSubject(source: ImageData, pad: number): HTMLCanvasElement {
+  const { width, height, data } = source
+  let minX = width
+  let minY = height
+  let maxX = -1
+  let maxY = -1
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      if (data[(y * width + x) * 4 + 3] < 16) {
+        continue
+      }
+      if (x < minX) minX = x
+      if (y < minY) minY = y
+      if (x > maxX) maxX = x
+      if (y > maxY) maxY = y
+    }
+  }
+  const canvas = document.createElement('canvas')
+  if (maxX < minX || maxY < minY) {
+    canvas.width = width
+    canvas.height = height
+    const ctx = canvas.getContext('2d')
+    if (!ctx) {
+      throw new Error('No se pudo leer la foto')
+    }
+    ctx.putImageData(source, 0, 0)
+    return canvas
+  }
+  const x0 = Math.max(0, minX - pad)
+  const y0 = Math.max(0, minY - pad)
+  const x1 = Math.min(width, maxX + pad + 1)
+  const y1 = Math.min(height, maxY + pad + 1)
+  canvas.width = x1 - x0
+  canvas.height = y1 - y0
+  const ctx = canvas.getContext('2d')
+  if (!ctx) {
+    throw new Error('No se pudo leer la foto')
+  }
+  ctx.putImageData(source, -x0, -y0)
+  return canvas
+}
+
+function opaque(width: number, height: number): Float32Array {
+  const alpha = new Float32Array(width * height)
+  alpha.fill(255)
+  return alpha
+}
+
+function dilate(
+  mask: Uint8Array,
+  width: number,
+  height: number,
+  radius: number,
+): Uint8Array {
+  const out = new Uint8Array(mask.length)
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      let on = 0
+      for (let dy = -radius; dy <= radius && !on; dy += 1) {
+        const ny = y + dy
+        if (ny < 0 || ny >= height) {
+          continue
+        }
+        for (let dx = -radius; dx <= radius; dx += 1) {
+          const nx = x + dx
+          if (nx < 0 || nx >= width) {
+            continue
+          }
+          if (mask[ny * width + nx]) {
+            on = 1
+            break
+          }
+        }
+      }
+      out[y * width + x] = on
+    }
+  }
+  return out
 }
 
 function backgroundMask(data: Uint8ClampedArray, width: number, height: number): Uint8Array {
@@ -157,24 +354,6 @@ function alphaFromMask(mask: Uint8Array): Float32Array {
   return alpha
 }
 
-function centerFalloff(width: number, height: number): Float32Array {
-  const alpha = new Float32Array(width * height)
-  const cx = width / 2
-  const cy = height * 0.46
-  const rx = width * 0.36
-  const ry = height * 0.42
-  for (let y = 0; y < height; y += 1) {
-    for (let x = 0; x < width; x += 1) {
-      const nx = (x - cx) / rx
-      const ny = (y - cy) / ry
-      const distance = Math.sqrt(nx * nx + ny * ny)
-      const fade = smoothstep(0.55, 1.2, distance)
-      alpha[y * width + x] = (1 - fade) * 255
-    }
-  }
-  return alpha
-}
-
 function blurAlpha(
   alpha: Float32Array,
   width: number,
@@ -219,88 +398,9 @@ function boxBlur(
   return dst
 }
 
-function paintStudio(
-  canvas: HTMLCanvasElement,
-  source: ImageData,
-  alpha: Float32Array,
-  width: number,
-  height: number,
-): void {
-  const ctx = canvas.getContext('2d')
-  if (!ctx) {
-    throw new Error('No se pudo leer la foto')
-  }
-  ctx.clearRect(0, 0, width, height)
-  const backdrop = ctx.createLinearGradient(0, 0, 0, height)
-  backdrop.addColorStop(0, '#2a2a2e')
-  backdrop.addColorStop(1, '#1c1c1e')
-  ctx.fillStyle = backdrop
-  ctx.fillRect(0, 0, width, height)
-
-  const glow = subjectColor(source.data, alpha, width, height)
-  const light = ctx.createRadialGradient(
-    width / 2,
-    height * 0.42,
-    width * 0.04,
-    width / 2,
-    height * 0.46,
-    width * 0.62,
-  )
-  light.addColorStop(0, `rgba(${glow.r}, ${glow.g}, ${glow.b}, 0.5)`)
-  light.addColorStop(1, 'rgba(28, 28, 30, 0)')
-  ctx.fillStyle = light
-  ctx.fillRect(0, 0, width, height)
-
-  const plate = ctx.getImageData(0, 0, width, height)
-  const src = source.data
-  const dst = plate.data
-  for (let index = 0; index < alpha.length; index += 1) {
-    const cover = alpha[index] / 255
-    const offset = index * 4
-    dst[offset] = src[offset] * cover + dst[offset] * (1 - cover)
-    dst[offset + 1] = src[offset + 1] * cover + dst[offset + 1] * (1 - cover)
-    dst[offset + 2] = src[offset + 2] * cover + dst[offset + 2] * (1 - cover)
-    dst[offset + 3] = 255
-  }
-  ctx.putImageData(plate, 0, 0)
-}
-
-function subjectColor(
-  data: Uint8ClampedArray,
-  alpha: Float32Array,
-  width: number,
-  height: number,
-): { r: number; g: number; b: number } {
-  let r = 0
-  let g = 0
-  let b = 0
-  let n = 0
-  const x0 = Math.round(width * 0.35)
-  const x1 = Math.round(width * 0.65)
-  const y0 = Math.round(height * 0.3)
-  const y1 = Math.round(height * 0.7)
-  for (let y = y0; y < y1; y += 2) {
-    for (let x = x0; x < x1; x += 2) {
-      const index = y * width + x
-      if (alpha[index] < 180) {
-        continue
-      }
-      const offset = index * 4
-      r += data[offset]
-      g += data[offset + 1]
-      b += data[offset + 2]
-      n += 1
-    }
-  }
-  if (n === 0) {
-    return { r: 212, g: 164, b: 76 }
-  }
-  return { r: Math.round(r / n), g: Math.round(g / n), b: Math.round(b / n) }
-}
-
 function fitDataUrl(canvas: HTMLCanvasElement): string {
   let current = canvas
-  let url = current.toDataURL('image/jpeg', 0.86)
+  let url = current.toDataURL('image/png')
   while (url.length > MAX_DATA_URL && current.width > 180) {
     const next = document.createElement('canvas')
     next.width = Math.max(1, Math.round(current.width * 0.82))
@@ -311,14 +411,9 @@ function fitDataUrl(canvas: HTMLCanvasElement): string {
     }
     ctx.drawImage(current, 0, 0, next.width, next.height)
     current = next
-    url = current.toDataURL('image/jpeg', 0.86)
+    url = current.toDataURL('image/png')
   }
   return url
-}
-
-function smoothstep(edge0: number, edge1: number, value: number): number {
-  const t = Math.min(1, Math.max(0, (value - edge0) / (edge1 - edge0)))
-  return t * t * (3 - 2 * t)
 }
 
 function clamp(value: number, min: number, max: number): number {

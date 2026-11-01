@@ -221,6 +221,160 @@ body::before {
   }
 }
 
+.halloween-scene {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  color: #1a1024;
+}
+
+.halloween-scene .web {
+  position: absolute;
+  width: 18rem;
+  height: 18rem;
+  opacity: 0.9;
+  animation: web-sway 7s ease-in-out infinite;
+}
+
+.halloween-scene .web-tl {
+  top: -12rem;
+  left: -12rem;
+  transform-origin: 38% 38%;
+}
+
+.halloween-scene .web-tr {
+  top: -12rem;
+  right: -12rem;
+  transform-origin: 62% 38%;
+  animation-delay: -2.4s;
+}
+
+.spider-line {
+  position: absolute;
+  top: 0;
+  left: 46%;
+  width: 2px;
+  height: 6.5rem;
+  background: #1a1024;
+  transform-origin: top center;
+  animation: thread-swing 5.5s ease-in-out infinite;
+}
+
+.spider-bug {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  width: 2.4rem;
+  height: 2.15rem;
+  margin-left: -1.2rem;
+}
+
+.vampire {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 7rem;
+  height: auto;
+  aspect-ratio: 494 / 242;
+  filter: drop-shadow(0 10px 8px rgba(26, 16, 36, 0.12));
+  will-change: transform;
+}
+
+.vampire img {
+  transform-origin: center;
+  animation: bat-flap 0.38s ease-in-out infinite alternate;
+}
+
+@keyframes bat-flap {
+  from {
+    transform: scaleY(1);
+  }
+  to {
+    transform: scaleY(0.68);
+  }
+}
+
+.vampire-1 {
+  width: 8.5rem;
+}
+
+.vampire-2 {
+  width: 5.5rem;
+}
+
+.vampire-3 {
+  width: 7rem;
+}
+
+@keyframes web-sway {
+  0%,
+  100% {
+    transform: rotate(-3deg);
+  }
+  50% {
+    transform: rotate(4deg);
+  }
+}
+
+@keyframes thread-swing {
+  0%,
+  100% {
+    transform: rotate(-8deg);
+  }
+  50% {
+    transform: rotate(10deg);
+  }
+}
+
+@media (min-width: 1536px) {
+  .halloween-scene .web {
+    width: 24rem;
+    height: 24rem;
+  }
+
+  .halloween-scene .web-tl,
+  .halloween-scene .web-tr {
+    top: -16rem;
+  }
+
+  .halloween-scene .web-tl {
+    left: -16rem;
+  }
+
+  .halloween-scene .web-tr {
+    right: -16rem;
+  }
+
+  .vampire-1 {
+    width: 12rem;
+  }
+
+  .vampire-2 {
+    width: 8rem;
+  }
+
+  .vampire-3 {
+    width: 10rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .halloween-scene .web,
+  .spider-line {
+    animation: none;
+  }
+
+  .vampire img {
+    animation: none;
+  }
+
+  .vampire {
+    opacity: 0.35;
+  }
+}
+
 @keyframes visa-sheen {
   0%,
   28% {
