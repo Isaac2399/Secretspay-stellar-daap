@@ -117,9 +117,16 @@ export function DashboardHero({
           <span className="min-w-0 break-all text-4xl font-semibold tracking-tight tabular-nums min-[380px]:text-5xl">
             {formatAmount(selected.value)}
           </span>
-          <span className="text-lg font-medium text-white/55">{selected.code}</span>
+          {loyaltyOnly ? null : (
+            <span className="text-lg font-medium text-white/55">{selected.code}</span>
+          )}
         </p>
-        {loyaltyOnly ? null : (
+        {loyaltyOnly ? (
+          <div className="mt-2 space-y-1">
+            <p className="text-sm text-app-muted">Saldo del evento</p>
+            <p className="text-xs text-app-muted">Sin comisión de red. PartyPay la cubre.</p>
+          </div>
+        ) : (
           <>
             <p className="mt-3 text-xs text-app-muted">Toca un token para verlo en grande</p>
             <div className="mt-2 flex flex-wrap gap-2">
@@ -184,6 +191,7 @@ export function DashboardHero({
           publicKey={user.publicKey}
           copied={copied}
           hasUsdcTrustline={hasUsdcTrustline(balances)}
+          customer={loyaltyOnly}
           onCopy={() => void copyPublicKey()}
           onClose={() => setReceiveOpen(false)}
           onDepositCompleted={onDepositCompleted}

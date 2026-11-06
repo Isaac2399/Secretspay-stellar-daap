@@ -1,21 +1,13 @@
-import type { ReactNode } from 'react'
 import { Navigate, Outlet } from 'react-router-dom'
+import { EntrySplash } from '@/components/guestDemo/EntrySplash'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { isEventStaffRole } from '@/lib/auth/roles'
-
-function SessionGate({ children }: { children: ReactNode }) {
-  return (
-    <main className="grid min-h-dvh place-items-center bg-transparent text-app-muted">
-      {children}
-    </main>
-  )
-}
 
 export function ProtectedRoute() {
   const { user, loading } = useAuth()
 
   if (loading) {
-    return <SessionGate>Cargando sesión…</SessionGate>
+    return <EntrySplash />
   }
 
   if (!user) {
@@ -28,11 +20,7 @@ export function ProtectedRoute() {
 export function GuestRoute() {
   const { user, loading } = useAuth()
 
-  if (loading) {
-    return <SessionGate>Cargando sesión…</SessionGate>
-  }
-
-  if (user) {
+  if (!loading && user) {
     return <Navigate to="/" replace />
   }
 
@@ -43,7 +31,7 @@ export function ConsumerRoute() {
   const { user, loading } = useAuth()
 
   if (loading) {
-    return <SessionGate>Cargando sesión…</SessionGate>
+    return <EntrySplash />
   }
 
   if (!user) {

@@ -64,7 +64,10 @@ export async function handleEventRoutes(
     if (!merchantId) {
       throw new AuthError('Falta la empresa de la barra', 400)
     }
-    return { status: 200, body: await getCatalog(merchantId) }
+    return {
+      status: 200,
+      body: await getCatalog(merchantId),
+    }
   }
 
   if (method === 'GET' && path === '/api/events/board') {

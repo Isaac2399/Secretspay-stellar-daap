@@ -43,6 +43,40 @@ export async function fetchCashCredits() {
   return request<{ credits: CashCredit[] }>('/api/admin/cash-credits')
 }
 
+export type CashRefund = {
+  id: string
+  userId: string
+  email: string
+  publicKey: string
+  rojos: string
+  crcAmount: number
+  phone?: string
+  phoneDisplay?: string
+  stellarHash: string
+  status: 'pending_cash' | 'paid'
+  createdAt: string
+  paidAt?: string
+  cashierEmail?: string
+}
+
+export async function fetchCashRefunds() {
+  return request<{ refunds: CashRefund[] }>('/api/admin/cash-refunds')
+}
+
+export async function requestBalanceRefund(phone: string) {
+  return request<{ refund: CashRefund; message: string }>('/api/payments/refund', {
+    method: 'POST',
+    body: JSON.stringify({ phone }),
+  })
+}
+
+export async function markRefundPaid(id: string) {
+  return request<{ refund: CashRefund }>('/api/admin/cash-refund-paid', {
+    method: 'POST',
+    body: JSON.stringify({ id }),
+  })
+}
+
 export async function creditCash(input: { userId: string; crcAmount: number }) {
   return request<{ credit: CashCredit; message: string }>(
     '/api/admin/cash-credit',

@@ -3,7 +3,7 @@ import { decodeHttpBody } from './httpBody.js'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { Plugin } from 'vite'
 import { ensureDevSuperAdmin, ensureDevEventStaff } from './auth.js'
-import { scheduleGuestDemoWarm } from './guestDemo.js'
+import { guestDemoStatus, scheduleGuestDemoWarm } from './guestDemo.js'
 import { dispatchApi } from './dispatchApi.js'
 
 loadLocalEnv()
@@ -16,12 +16,14 @@ export function authApiPlugin(): Plugin {
       void ensureDevSuperAdmin()
       void ensureDevEventStaff()
       scheduleGuestDemoWarm()
+      void guestDemoStatus()
       server.middlewares.use(handleApi)
     },
     configurePreviewServer(server) {
       void ensureDevSuperAdmin()
       void ensureDevEventStaff()
       scheduleGuestDemoWarm()
+      void guestDemoStatus()
       server.middlewares.use(handleApi)
     },
   }
@@ -44,6 +46,7 @@ async function handleApi(
     !pathOnly.startsWith('/api/rwa') &&
     !pathOnly.startsWith('/api/invoices') &&
     !pathOnly.startsWith('/api/events') &&
+    !pathOnly.startsWith('/api/traction') &&
     !pathOnly.startsWith('/api/v1/') &&
     !pathOnly.includes('sinpe-sms-webhook')
   ) {

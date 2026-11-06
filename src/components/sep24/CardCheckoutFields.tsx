@@ -23,7 +23,7 @@ export function CardCheckoutFields({
     <div className="space-y-3 rounded-[22px] border border-white/10 bg-gradient-to-br from-[#1a2744] to-[#0d1220] p-4">
       <div className="flex items-center justify-between text-[11px] uppercase tracking-wide text-white/55">
         <span>Visa / Mastercard</span>
-        <span>Testnet</span>
+        <span>Prueba</span>
       </div>
       <label className="grid gap-1 text-sm">
         Nombre en la tarjeta
@@ -81,7 +81,7 @@ export function CardCheckoutFields({
         </label>
       </div>
       <p className="text-xs text-white/50">
-        En Testnet usa {formatPan(TEST_PAN)}. El PAN no se envía al servidor.
+        Tarjeta de prueba: {formatPan(TEST_PAN)}. El número no sale de este teléfono.
       </p>
       {error ? <ErrorModal message={error} /> : null}
     </div>
@@ -97,7 +97,7 @@ export function validateCardCheckout(value: CardCheckoutValues): string | null {
     return 'Escribe el nombre de la tarjeta.'
   }
   if (!isTestPan(value.pan)) {
-    return `En Testnet solo se acepta la tarjeta de prueba ${formatPan(TEST_PAN)}.`
+    return `Usa la tarjeta de prueba ${formatPan(TEST_PAN)}.`
   }
   if (value.expiry.length !== 4) {
     return 'La fecha debe ser MM/AA.'

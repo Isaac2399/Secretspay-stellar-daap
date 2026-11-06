@@ -99,20 +99,29 @@ export default function ProfilePage() {
             ) : null}
           </div>
         ) : null}
-        <div>
-          <p className="text-xs text-app-muted">Public key</p>
-          <p className="mt-1 break-all font-mono text-xs text-white/80">
-            {account.publicKey}
-          </p>
-          <button
-            type="button"
-            onClick={() => void copyKey()}
-            className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-app-chip px-3 py-1.5 text-xs text-white/80"
-          >
-            {copied ? <Check className="h-3.5 w-3.5 text-green-400" /> : <Copy className="h-3.5 w-3.5" />}
-            {copied ? 'Copiada' : 'Copiar'}
-          </button>
-        </div>
+        {account.role === 'customer' ? (
+          <div>
+            <p className="text-xs text-app-muted">Cuenta del evento</p>
+            <p className="mt-1 text-sm text-white/80">
+              Tu saldo vive en la app. No necesitas copiar una clave para pedir.
+            </p>
+          </div>
+        ) : (
+          <div>
+            <p className="text-xs text-app-muted">Public key</p>
+            <p className="mt-1 break-all font-mono text-xs text-white/80">
+              {account.publicKey}
+            </p>
+            <button
+              type="button"
+              onClick={() => void copyKey()}
+              className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-app-chip px-3 py-1.5 text-xs text-white/80"
+            >
+              {copied ? <Check className="h-3.5 w-3.5 text-green-400" /> : <Copy className="h-3.5 w-3.5" />}
+              {copied ? 'Copiada' : 'Copiar'}
+            </button>
+          </div>
+        )}
       </div>
 
       {account.role === 'customer' ? <CustomerFaq /> : null}

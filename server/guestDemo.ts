@@ -17,7 +17,9 @@ import {
   usdcAssetFromEnv,
 } from './provisionAccount.js'
 import { creditFromTreasury, creditLoyaltyFromTreasury } from './submitPayment.js'
-import { loadStore, saveStore } from './userStore.js'
+import { loadEventStore } from './events/store.js'
+import type { EventStoreData } from './events/types.js'
+import { loadStore, saveStore, type UserStore } from './userStore.js'
 
 /**
  * Judge demo sessions.
@@ -35,15 +37,24 @@ const ROJOS_CREDIT = '250'
 const USDC_FLOOR = 5
 const USDC_CREDIT = '25'
 
-/** Apagada por defecto (piloto). Solo con GUEST_DEMO=1. */
+/** Encendida en el hackathon. GUEST_DEMO=0 la apaga. */
 function guestDemoEnabled(): boolean {
-  const flag = (process.env.GUEST_DEMO ?? '').trim().toLowerCase()
-  return flag === '1' || flag === 'true' || flag === 'on'
+  return flagEnabled('GUEST_DEMO', true)
 }
 
-/** Pilot default: no free ROJOS on guest demo. Opt in with GUEST_DEMO_ROJOS=1. */
+/** Saldo de prueba para poder pedir. GUEST_DEMO_ROJOS=0 lo apaga. */
 function guestDemoRojosEnabled(): boolean {
-  const flag = (process.env.GUEST_DEMO_ROJOS ?? '').trim().toLowerCase()
+  return flagEnabled('GUEST_DEMO_ROJOS', true)
+}
+
+function flagEnabled(name: string, fallback: boolean): boolean {
+  const flag = (process.env[name] ?? '').trim().toLowerCase()
+  if (!flag) {
+    return fallback
+  }
+  if (flag === '0' || flag === 'false' || flag === 'off') {
+    return false
+  }
   return flag === '1' || flag === 'true' || flag === 'on'
 }
 const WARM_RETRY_MS = 5_000
@@ -92,13 +103,93 @@ export function scheduleGuestDemoWarm(): void {
   })
 }
 
-export async function guestDemoStatus(): Promise<{ ready: boolean; available: boolean }> {
+const STATUS_TTL_MS = 4_000
+
+type GuestDemoStatus = {
+  ready: boolean
+  available: boolean
+  merchantReady: boolean
+  merchantName: string
+}
+
+let statusCache: { at: number; value: GuestDemoStatus } | null = null
+let statusInflight: Promise<GuestDemoStatus> | null = null
+
+export function guestDemoStatus(): Promise<GuestDemoStatus> {
   if (!guestDemoEnabled() || !isTestnet()) {
-    return { ready: false, available: false }
+    return Promise.resolve({
+      ready: false,
+      available: false,
+      merchantReady: false,
+      merchantName: '',
+    })
   }
+  if (statusCache && Date.now() - statusCache.at < STATUS_TTL_MS) {
+    return Promise.resolve(statusCache.value)
+  }
+  if (!statusInflight) {
+    statusInflight = readGuestDemoStatus().finally(() => {
+      statusInflight = null
+    })
+  }
+  return statusInflight
+}
+
+async function readGuestDemoStatus(): Promise<GuestDemoStatus> {
   scheduleGuestDemoWarm()
-  const store = await loadStore()
-  return { ready: store.users.some(isFundedGuest), available: true }
+  const [store, events] = await Promise.all([loadStore(), loadEventStore()])
+  const merchant = pickDemoMerchant(store, events)
+  const value = {
+    ready: store.users.some(isFundedGuest),
+    available: true,
+    merchantReady: Boolean(merchant),
+    merchantName: merchant?.title ?? '',
+  }
+  statusCache = { at: Date.now(), value }
+  return value
+}
+
+/** Sesión de la barra que ya tiene carta. No crea otra empresa ni marca la cuenta como demo. */
+export async function claimGuestMerchant(): Promise<PublicUser> {
+  if (!guestDemoEnabled() || !isTestnet()) {
+    throw new AuthError('La demo instantánea no está disponible.', 403)
+  }
+  const seat = await demoMerchant()
+  if (!seat) {
+    throw new AuthError('No hay una barra publicada para entrar como empresa.', 404)
+  }
+  return { ...toPublicUser(seat.user), isGuestDemo: true }
+}
+
+async function demoMerchant(): Promise<{ user: StoredUser; title: string } | null> {
+  const [store, events] = await Promise.all([loadStore(), loadEventStore()])
+  return pickDemoMerchant(store, events)
+}
+
+function pickDemoMerchant(
+  store: UserStore,
+  events: EventStoreData,
+): { user: StoredUser; title: string } | null {
+  const counts = new Map<string, number>()
+  for (const product of events.products) {
+    if (!product.active) {
+      continue
+    }
+    counts.set(product.merchantId, (counts.get(product.merchantId) ?? 0) + 1)
+  }
+  const ranked = [...counts.entries()].sort((a, b) => b[1] - a[1])
+  for (const [id] of ranked) {
+    const user = store.users.find((entry) => entry.id === id && entry.role === 'merchant')
+    if (!user) {
+      continue
+    }
+    const settings = events.settings[id]
+    if (settings && settings.active === false) {
+      continue
+    }
+    return { user, title: settings?.title || 'Barra' }
+  }
+  return null
 }
 
 export function claimGuestDemoUser(): Promise<PublicUser> {

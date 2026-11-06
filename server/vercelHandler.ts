@@ -11,7 +11,7 @@ type VercelRequest = IncomingMessage & {
 }
 
 const DYNAMIC_SEGMENT = /\/\[(?:\.\.\.)?[^\]]+\]/g
-const API_PREFIX = /^\/(v1\/)?(auth|payments|sep24|places|cards|admin|rwa|invoices|events)(\/|$)/
+const API_PREFIX = /^\/(v1\/)?(auth|payments|sep24|places|cards|admin|rwa|invoices|events|traction)(\/|$)/
 
 export const config = {
   maxDuration: 30,

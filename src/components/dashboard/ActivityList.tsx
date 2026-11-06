@@ -193,7 +193,7 @@ export function ActivityList({
           <>
             <ul className="divide-y divide-white/10">
               {shown.map((item) => (
-                <ActivityRow key={item.id} item={item} />
+                <ActivityRow key={item.id} item={item} plain={Boolean(onlyAsset)} />
               ))}
             </ul>
             {hasMore ? (
@@ -435,7 +435,7 @@ function sameSinpeCredit(horizon: AccountActivity, sinpe: AccountActivity): bool
   return sameAmount && closeInTime && sinpe.status !== 'pending'
 }
 
-function ActivityRow({ item }: { item: AccountActivity }) {
+function ActivityRow({ item, plain }: { item: AccountActivity; plain?: boolean }) {
   const outgoing = item.kind === 'sent'
   const regalia = isRegalia(item)
   const title = regalia
@@ -497,7 +497,7 @@ function ActivityRow({ item }: { item: AccountActivity }) {
         }`}
       >
         {outgoing ? '−' : '+'}
-        {formatAmount(item.amount)} {item.asset}
+        {formatAmount(item.amount)} {plain ? 'saldo' : item.asset}
       </p>
     </li>
   )

@@ -17,6 +17,7 @@ import {
   updateStoredPublicKey,
 } from '@/lib/auth/api'
 import { clearGuestDemo, syncGuestFlag, writeGuestDemo } from '@/lib/auth/guestDemo'
+import { loadGuestDemoStatus } from '@/lib/auth/guestDemoStatus'
 
 type AuthContextValue = {
   user: AppUser | null
@@ -29,7 +30,7 @@ type AuthContextValue = {
     role: AppUser['role']
   }) => Promise<void>
   logout: () => Promise<void>
-  startGuestDemo: () => Promise<void>
+  startGuestDemo: (role?: 'customer' | 'merchant') => Promise<void>
   resetGuestDemo: () => Promise<void>
   syncPublicKey: (publicKey: string) => Promise<void>
   setUser: (user: AppUser | null) => void
@@ -44,6 +45,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let cancelled = false
+    void loadGuestDemoStatus().catch(() => undefined)
     void fetchSession()
       .then((next) => {
         if (cancelled) {
@@ -98,8 +100,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null)
   }, [])
 
-  const startGuestDemo = useCallback(async () => {
-    const next = await startGuestDemoSession()
+  const startGuestDemo = useCallback(async (role: 'customer' | 'merchant' = 'customer') => {
+    const next = await startGuestDemoSession(role)
     writeGuestDemo(next.publicKey)
     setIsGuestDemo(true)
     setUser({ ...next, isGuestDemo: true })

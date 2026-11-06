@@ -1,5 +1,6 @@
 import { Smartphone } from 'lucide-react'
 import { ClaimLookupPanel } from '@/components/admin/ClaimLookupPanel'
+import { SinpeRefundQueue } from '@/components/admin/SinpeRefundQueue'
 import { UnassignedDepositsPanel } from '@/components/admin/UnassignedDepositsPanel'
 
 export function SinpeOpsDashboard() {
@@ -20,6 +21,7 @@ export function SinpeOpsDashboard() {
         <Smartphone className="h-4 w-4 text-app-accent" />
         Paridad ₡1,000 = 1 ROJO, sin promo.
       </p>
+      <SinpeRefundQueue />
       <UnassignedDepositsPanel />
       <ClaimLookupPanel />
     </div>

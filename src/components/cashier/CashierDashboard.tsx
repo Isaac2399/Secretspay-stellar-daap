@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ErrorModal } from '@/components/feedback/ErrorModal'
 import { Banknote } from 'lucide-react'
+import { SinpeRefundQueue } from '@/components/admin/SinpeRefundQueue'
 import { UnassignedDepositsPanel } from '@/components/admin/UnassignedDepositsPanel'
 import {
   searchAdminUsers,
@@ -31,8 +32,8 @@ export function CashierDashboard() {
   const preview = previewRojos(crcAmount)
 
   async function reloadCredits() {
-    const result = await fetchCashCredits()
-    setCredits(result.credits)
+    const creditsResult = await fetchCashCredits()
+    setCredits(creditsResult.credits)
   }
 
   useEffect(() => {
@@ -75,6 +76,8 @@ export function CashierDashboard() {
           ROJO. Sin promo: lo que pagan es lo que reciben.
         </p>
       </div>
+
+      <SinpeRefundQueue />
 
       <div className="grid gap-5 lg:grid-cols-2 lg:items-start">
         <section className="space-y-3 rounded-[24px] bg-app-card p-4">

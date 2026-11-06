@@ -8,6 +8,7 @@ import { ClaimLookupPanel } from '@/components/admin/ClaimLookupPanel'
 import { StaffSendPanel } from '@/components/admin/StaffSendPanel'
 import { AdminEventsPanel } from '@/components/admin/AdminEventsPanel'
 import { MerchantApplicationsPanel } from '@/components/admin/MerchantApplicationsPanel'
+import { SinpeRefundQueue } from '@/components/admin/SinpeRefundQueue'
 import { UnassignedDepositsPanel } from '@/components/admin/UnassignedDepositsPanel'
 import { CashierDashboard } from '@/components/cashier/CashierDashboard'
 import { StructuringDashboard } from '@/components/rwa/StructuringDashboard'
@@ -239,6 +240,7 @@ export function AdminDashboard() {
               /admin/claim-lookup
             </Link>
           </p>
+          <SinpeRefundQueue />
           <UnassignedDepositsPanel />
           <ClaimLookupPanel />
         </div>

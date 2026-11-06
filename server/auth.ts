@@ -235,6 +235,13 @@ export type StoredUser = {
   business?: BusinessProfile
   /** ISO time when the optional signup gift of ROJOS was credited (off by default). */
   welcomeRegaliaAt?: string
+  /** Bumped on password reset so cookies issued before the change stop working. */
+  sessionEpoch?: number
+  passwordReset?: {
+    tokenHash: string
+    expiresAt: string
+    requestedAt: string
+  }
   /** Ephemeral Testnet customer used by the judge / guest demo. */
   guestDemo?: boolean
   guestDemoClaimedAt?: string
@@ -712,9 +719,11 @@ export async function listPublicPlaces(): Promise<
   })
 }
 
-export function createSessionCookie(userId: string): string {
+export async function createSessionCookie(userId: string): Promise<string> {
+  const user = await findUserById(userId)
+  const epoch = user?.sessionEpoch ?? 0
   const exp = Date.now() + SESSION_TTL_MS
-  const payload = `${userId}.${exp}`
+  const payload = `${userId}.${exp}.${epoch}`
   const sig = createHmac('sha256', sessionSecret()).update(payload).digest('hex')
   const token = `${payload}.${sig}`
   return `${COOKIE_NAME}=${token}; ${cookieAttrs()}; Max-Age=${Math.floor(SESSION_TTL_MS / 1000)}`
@@ -732,17 +741,34 @@ export async function userFromCookieHeader(
     return null
   }
   const parts = token.split('.')
-  if (parts.length !== 3) {
+  let userId = ''
+  let exp = ''
+  let epoch = '0'
+  let sig = ''
+  let payload = ''
+  if (parts.length === 4) {
+    userId = parts[0] ?? ''
+    exp = parts[1] ?? ''
+    epoch = parts[2] ?? '0'
+    sig = parts[3] ?? ''
+    payload = `${userId}.${exp}.${epoch}`
+  } else if (parts.length === 3) {
+    userId = parts[0] ?? ''
+    exp = parts[1] ?? ''
+    sig = parts[2] ?? ''
+    payload = `${userId}.${exp}`
+  } else {
     return null
   }
-  const [userId, exp, sig] = parts
-  const payload = `${userId}.${exp}`
+  if (!userId || !exp || !sig) {
+    return null
+  }
   const expected = createHmac('sha256', sessionSecret()).update(payload).digest('hex')
   if (!safeEqual(sig, expected) || Number(exp) < Date.now()) {
     return null
   }
   const user = await findUserById(userId)
-  if (!user) {
+  if (!user || String(user.sessionEpoch ?? 0) !== epoch) {
     return null
   }
   const withCode = (await ensureUserSinpeCode(user.id)) ?? user

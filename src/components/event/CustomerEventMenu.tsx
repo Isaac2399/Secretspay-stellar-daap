@@ -13,6 +13,8 @@ import {
   notifyOrderReadyLocally,
 } from '@/lib/events/push'
 import { formatStockLabel, stockCountClass } from '@/lib/events/stock'
+import { Networks } from '@stellar/stellar-sdk'
+import { stellarConfig } from '@/lib/stellar/config'
 import { formatAmount } from '@/lib/stellar/useAccountBalances'
 import type { EventOrder, EventProduct, EventVenue } from '@/types/event'
 import { CustomerOrderTicket } from './CustomerOrderTicket'
@@ -31,7 +33,7 @@ export function CustomerEventMenu({
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [placed, setPlaced] = useState<EventOrder | null>(null)
-  const [confirmed, setConfirmed] = useState(false)
+  const [receipt, setReceipt] = useState<{ order: EventOrder; hash: string } | null>(null)
   const [readyAlert, setReadyAlert] = useState<EventOrder | null>(null)
   const statusByIdRef = useRef<Record<string, EventOrder['status']>>({})
   const pushArmedRef = useRef<Promise<void> | null>(null)
@@ -161,7 +163,7 @@ export function CustomerEventMenu({
       })
       setPlaced(result.order)
       statusByIdRef.current[result.order.id] = result.order.status
-      setConfirmed(true)
+      setReceipt({ order: result.order, hash: result.hash || result.order.stellarHash || '' })
       setCart({})
       void ensurePush().then(() => notifyOrderPlacedLocally(result.order))
       void reload().catch(() => undefined)
@@ -194,7 +196,7 @@ export function CustomerEventMenu({
         <h1 className="mt-3 text-2xl font-semibold">{venue?.title ?? 'Evento'}</h1>
         <p className="mt-1 text-base text-app-muted">
           Suma lo que quieres, paga y retira en {venue?.pickupLabel ?? 'la barra'}{' '}
-          con tu número y QR.
+          con tu número y QR. Sin comisión de red.
         </p>
       </div>
 
@@ -219,7 +221,10 @@ export function CustomerEventMenu({
                   <div className="flex flex-1 flex-col p-5">
                   <h3 className="text-xl font-semibold">{product.name}</h3>
                   <p className="mt-1 text-lg text-white/90">
-                    {formatAmount(product.price)} {product.asset}
+                    {formatAmount(product.price)}
+                    {product.asset.toUpperCase() === stellarConfig.loyalty.code
+                      ? ''
+                      : ` ${product.asset}`}
                   </p>
                   {product.promo ? (
                     <p className="mt-1 text-sm text-app-accent">{product.promo.label}</p>
@@ -327,8 +332,12 @@ export function CustomerEventMenu({
 
       <ErrorModal message={error} onClose={() => setError(null)} />
       {busy ? <PaymentPendingNotice /> : null}
-      {confirmed ? (
-        <OrderConfirmedNotice onClose={() => setConfirmed(false)} />
+      {receipt ? (
+        <OrderReceipt
+          order={receipt.order}
+          hash={receipt.hash}
+          onClose={() => setReceipt(null)}
+        />
       ) : null}
       {readyAlert ? (
         <OrderReadyNotice order={readyAlert} onClose={() => setReadyAlert(null)} />
@@ -352,7 +361,8 @@ function PaymentPendingNotice() {
           Procesando el pago
         </h2>
         <p className="mt-2 text-sm leading-relaxed text-app-muted">
-          Estamos confirmando la transacción. No cierres esta pantalla.
+          Estamos confirmando el pedido. No cierres esta pantalla. La comisión de
+          red la cubre PartyPay.
         </p>
       </div>
     </div>
@@ -399,7 +409,19 @@ function OrderReadyNotice({
   )
 }
 
-function OrderConfirmedNotice({ onClose }: { onClose: () => void }) {
+function OrderReceipt({
+  order,
+  hash,
+  onClose,
+}: {
+  order: EventOrder
+  hash: string
+  onClose: () => void
+}) {
+  const feeBps = order.feeBps ?? 0
+  const percent = feeBps > 0 ? `${(feeBps / 100).toLocaleString('es-CR')} %` : ''
+  const expert = hash ? stellarExpertTx(hash) : ''
+
   return (
     <div
       className="fixed inset-0 z-[80] flex items-center justify-center bg-black/80 p-5 backdrop-blur-sm"
@@ -413,8 +435,27 @@ function OrderConfirmedNotice({ onClose }: { onClose: () => void }) {
         onClick={(event) => event.stopPropagation()}
       >
         <h2 id="order-confirmed-title" className="text-center text-2xl font-semibold">
-          Gracias por tu compra
+          Pedido pagado
         </h2>
+        <dl className="mt-4 space-y-2 text-sm">
+          <Row label="Pagaste" value={formatAmount(order.total)} />
+          <Row label="La barra recibió" value={formatAmount(order.net ?? order.total)} />
+          <Row
+            label={percent ? `PartyPay ${percent}` : 'PartyPay'}
+            value={formatAmount(order.fee ?? '0')}
+          />
+        </dl>
+        <p className="mt-3 text-center text-sm text-app-muted">Sin comisión de red.</p>
+        {expert ? (
+          <a
+            href={expert}
+            target="_blank"
+            rel="noreferrer"
+            className="mt-3 block text-center text-sm font-medium text-app-accent"
+          >
+            Ver el pago
+          </a>
+        ) : null}
         <p className="mt-3 text-center text-[15px] leading-relaxed text-app-muted">
           Te avisaremos cuando el pedido esté listo.
         </p>
@@ -428,4 +469,18 @@ function OrderConfirmedNotice({ onClose }: { onClose: () => void }) {
       </div>
     </div>
   )
+}
+
+function Row({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-baseline justify-between gap-3">
+      <dt className="text-app-muted">{label}</dt>
+      <dd className="font-medium tabular-nums">{value}</dd>
+    </div>
+  )
+}
+
+function stellarExpertTx(hash: string): string {
+  const network = stellarConfig.networkPassphrase === Networks.PUBLIC ? 'public' : 'testnet'
+  return `https://stellar.expert/explorer/${network}/tx/${hash}`
 }

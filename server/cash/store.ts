@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { AuthError } from '../errors.js'
-import type { CashCredit, CashStoreData } from './types.js'
+import type { CashCredit, CashRefund, CashStoreData } from './types.js'
 
 const CASH_FILE = join('data', 'cash-credits.json')
 const KV_KEY = 'stellar-web-app:cash-credits'
@@ -18,16 +18,50 @@ export async function insertCashCredit(record: CashCredit): Promise<CashCredit> 
   return record
 }
 
+export async function listCashRefunds(limit = 80): Promise<CashRefund[]> {
+  const store = await loadCashStore()
+  return store.refunds.slice(0, Math.min(Math.max(limit, 1), 200))
+}
+
+export async function insertCashRefund(record: CashRefund): Promise<CashRefund> {
+  const store = await loadCashStore()
+  store.refunds.unshift(record)
+  await saveCashStore(store)
+  return record
+}
+
+export async function markCashRefundPaid(
+  id: string,
+  cashierEmail: string,
+): Promise<CashRefund> {
+  const store = await loadCashStore()
+  const refund = store.refunds.find((row) => row.id === id)
+  if (!refund) {
+    throw new AuthError('Ese reembolso no existe', 404)
+  }
+  if (refund.status === 'paid') {
+    return refund
+  }
+  refund.status = 'paid'
+  refund.paidAt = new Date().toISOString()
+  refund.cashierEmail = cashierEmail
+  await saveCashStore(store)
+  return refund
+}
+
 async function loadCashStore(): Promise<CashStoreData> {
   if (kvConfigured()) {
     const raw = await kvCommand<string | CashStoreData | null>(['GET', KV_KEY])
     if (!raw) {
-      return { credits: [] }
+      return { credits: [], refunds: [] }
     }
     if (typeof raw === 'string') {
       return parseStore(raw)
     }
-    return { credits: Array.isArray(raw.credits) ? raw.credits : [] }
+    return {
+      credits: Array.isArray(raw.credits) ? raw.credits : [],
+      refunds: Array.isArray(raw.refunds) ? raw.refunds : [],
+    }
   }
 
   if (process.env.VERCEL) {
@@ -38,7 +72,7 @@ async function loadCashStore(): Promise<CashStoreData> {
   }
 
   if (!existsSync(CASH_FILE)) {
-    return { credits: [] }
+    return { credits: [], refunds: [] }
   }
   return parseStore(readFileSync(CASH_FILE, 'utf8'))
 }
@@ -60,9 +94,12 @@ async function saveCashStore(store: CashStoreData): Promise<void> {
 function parseStore(raw: string): CashStoreData {
   try {
     const parsed = JSON.parse(raw) as CashStoreData
-    return { credits: Array.isArray(parsed.credits) ? parsed.credits : [] }
+    return {
+      credits: Array.isArray(parsed.credits) ? parsed.credits : [],
+      refunds: Array.isArray(parsed.refunds) ? parsed.refunds : [],
+    }
   } catch {
-    return { credits: [] }
+    return { credits: [], refunds: [] }
   }
 }
 

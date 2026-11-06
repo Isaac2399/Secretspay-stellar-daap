@@ -2,7 +2,10 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import { GuestRoute, ProtectedRoute, ConsumerRoute } from '@/routes/AuthGates'
 import { AppShell } from '@/layouts/AppShell'
 import HomePage from '@/pages/HomePage'
+import ForgotPasswordPage from '@/pages/ForgotPasswordPage'
 import LoginPage from '@/pages/LoginPage'
+import SignInPage from '@/pages/SignInPage'
+import ResetPasswordPage from '@/pages/ResetPasswordPage'
 import MapPage from '@/pages/MapPage'
 import ProfilePage from '@/pages/ProfilePage'
 import RegisterPage from '@/pages/RegisterPage'
@@ -17,6 +20,7 @@ import RwaStructuringPage from '@/pages/RwaStructuringPage'
 import EventPage from '@/pages/EventPage'
 import EventDisplayPage from '@/pages/EventDisplayPage'
 import PartyPayLandingPage from '@/pages/PartyPayLandingPage'
+import TractionPage from '@/pages/TractionPage'
 import { useAuth } from '@/lib/auth/AuthContext'
 
 export function AppRoutes() {
@@ -25,11 +29,15 @@ export function AppRoutes() {
   return (
     <Routes>
       <Route path="/partypay" element={<PartyPayLandingPage />} />
+      <Route path="/traccion" element={<TractionPage />} />
 
       <Route element={<GuestRoute />}>
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/iniciar" element={<SignInPage />} />
         <Route path="/register" element={<RegisterPage />} />
       </Route>
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
 
       <Route element={<ProtectedRoute />}>
         <Route element={<AppShell />}>

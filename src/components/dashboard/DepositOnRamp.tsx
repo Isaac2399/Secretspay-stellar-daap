@@ -1,10 +1,8 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { ErrorModal } from '@/components/feedback/ErrorModal'
-import { AlertTriangle, ArrowLeft, Banknote, Check, Copy, ImageUp, QrCode, Smartphone } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, Banknote, Check, Copy, CreditCard, ImageUp, QrCode, Smartphone } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
-// MoneyGram (cash) y tarjeta quedan fuera de la vista cliente.
-// import { CreditCard } from 'lucide-react'
-// import { Sep24DepositPanel } from '@/components/sep24/Sep24DepositPanel'
+import { Sep24DepositPanel } from '@/components/sep24/Sep24DepositPanel'
 import {
   activateSinpeIntent,
   claimSinpe,
@@ -21,6 +19,8 @@ type AddFundsSheetProps = {
   publicKey: string
   copied: boolean
   hasUsdcTrustline: boolean
+  /** Invitado: sin clave y sin jerga. El comercio sigue viendo la cuenta. */
+  customer?: boolean
   onCopy: () => void
   onClose: () => void
   onDepositCompleted?: (tx: Sep24Transaction) => void
@@ -32,8 +32,11 @@ type FundsView = 'pick' | 'cash' | 'card' | 'efectivo' | 'receive' | 'sinpe'
 export function AddFundsSheet({
   publicKey,
   copied,
+  hasUsdcTrustline,
+  customer = false,
   onCopy,
   onClose,
+  onDepositCompleted,
   onRojosCredited,
 }: AddFundsSheetProps) {
   const [view, setView] = useState<FundsView>('pick')
@@ -42,11 +45,13 @@ export function AddFundsSheet({
   const title =
     view === 'efectivo'
       ? 'Efectivo'
-      : view === 'receive'
-        ? 'Recibir on-chain'
-        : view === 'sinpe'
-          ? 'SINPE Móvil'
-          : 'Agregar'
+      : view === 'card'
+        ? 'Agregar dólares'
+        : view === 'receive'
+          ? 'Recibir on-chain'
+          : view === 'sinpe'
+            ? 'SINPE Móvil'
+            : 'Agregar'
 
   return (
     <div
@@ -88,39 +93,24 @@ export function AddFundsSheet({
             <MethodCard
               icon={<Banknote className="h-5 w-5" />}
               title="Efectivo"
-              subtitle="Depósito en los stands de Stellar"
+              subtitle="En el stand del evento"
               onClick={() => setView('efectivo')}
             />
             <MethodCard
-              icon={<QrCode className="h-5 w-5" />}
-              title="Recibir on-chain"
-              subtitle="Public key Stellar"
-              onClick={() => setView('receive')}
-            />
-            {/*
-            <MethodCard
-              icon={<Banknote className="h-5 w-5" />}
-              title="MoneyGram"
-              subtitle="Efectivo en agente · SEP-24"
-              onClick={() => setView('cash')}
-            />
-            <MethodCard
               icon={<CreditCard className="h-5 w-5" />}
-              title="Tarjeta"
-              subtitle="Visa / Mastercard · SEP-24"
+              title="Agregar dólares"
+              subtitle="Tarjeta de prueba"
               onClick={() => setView('card')}
             />
-            */}
+            {customer ? null : (
+              <MethodCard
+                icon={<QrCode className="h-5 w-5" />}
+                title="Recibir on-chain"
+                subtitle="Public key Stellar"
+                onClick={() => setView('receive')}
+              />
+            )}
           </div>
-        ) : null}
-
-        {/*
-        {view === 'cash' ? (
-          <Sep24DepositPanel
-            rail="cash"
-            hasUsdcTrustline={hasUsdcTrustline}
-            onCompleted={onDepositCompleted}
-          />
         ) : null}
 
         {view === 'card' ? (
@@ -130,7 +120,6 @@ export function AddFundsSheet({
             onCompleted={onDepositCompleted}
           />
         ) : null}
-        */}
 
         {view === 'efectivo' ? <CashAtStand publicKey={publicKey} /> : null}
 

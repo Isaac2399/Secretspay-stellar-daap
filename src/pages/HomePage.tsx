@@ -9,7 +9,8 @@ import { customerActionClass, DashboardHero } from '@/components/dashboard/Dashb
 import { CreateInvoiceQR } from '@/components/merchant/CreateInvoiceQR'
 import { ScanAndPay } from '@/components/customer/ScanAndPay'
 import { SendByPublicKey } from '@/components/customer/SendByPublicKey'
-import { GlassWater } from 'lucide-react'
+import { ArrowUpRight, GlassWater } from 'lucide-react'
+import { RefundSheet } from '@/components/dashboard/RefundSheet'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { stellarConfig } from '@/lib/stellar/config'
 import { useAccountBalances } from '@/lib/stellar/useAccountBalances'
@@ -21,6 +22,7 @@ export default function HomePage() {
   const activity = useRecentActivity(user?.publicKey ?? '')
   const [sendOpen, setSendOpen] = useState(false)
   const [payOpen, setPayOpen] = useState(false)
+  const [refundOpen, setRefundOpen] = useState(false)
   const sendRef = useRef<HTMLElement>(null)
   const scanRef = useRef<HTMLElement>(null)
 
@@ -51,7 +53,8 @@ export default function HomePage() {
 
   if (isCustomer) {
     return (
-      <div className="grid min-w-0 gap-6 xl:grid-cols-2 xl:items-start xl:gap-8">
+      <div className="min-w-0 space-y-6">
+        <div className="grid min-w-0 gap-6 xl:grid-cols-2 xl:items-start xl:gap-8">
         <DashboardHero
           user={user}
           balances={balances}
@@ -76,6 +79,14 @@ export default function HomePage() {
                 <GlassWater className="h-7 w-7 shrink-0" />
                 Ordenar
               </Link>
+              <button
+                type="button"
+                onClick={() => setRefundOpen(true)}
+                className={`${customerActionClass} bg-app-card text-white`}
+              >
+                <ArrowUpRight className="h-7 w-7 shrink-0" />
+                Reembolsar por SINPE
+              </button>
             </>
           }
         />
@@ -88,6 +99,17 @@ export default function HomePage() {
           includeSinpe
           onlyAsset={stellarConfig.loyalty.code}
         />
+
+        {refundOpen ? (
+          <RefundSheet
+            loyaltyBalance={balances.loyalty}
+            onClose={() => setRefundOpen(false)}
+            onRefunded={() => {
+              void reload()
+              void activity.reload()
+            }}
+          />
+        ) : null}
 
         {payOpen ? (
           <div
@@ -113,6 +135,7 @@ export default function HomePage() {
             </div>
           </div>
         ) : null}
+        </div>
       </div>
     )
   }

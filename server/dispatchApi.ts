@@ -43,7 +43,13 @@ import { handleInvoiceRoutes } from './invoicing/invoiceApi.js'
 import { handleSinpeRoutes } from './sinpe/sinpeApi.js'
 import { handleCashRoutes } from './cash/cashApi.js'
 import { handleEventRoutes } from './events/eventApi.js'
-import { claimGuestDemoUser, guestDemoStatus } from './guestDemo.js'
+import { claimGuestDemoUser, claimGuestMerchant, guestDemoStatus } from './guestDemo.js'
+import { joinWaitlist, tractionSnapshot } from './traction.js'
+import {
+  completePasswordReset,
+  PASSWORD_RESET_MESSAGE,
+  requestPasswordReset,
+} from './passwordReset.js'
 import {
   decideMerchantApplication,
   listMerchantApplications,
@@ -270,16 +276,30 @@ async function route(input: {
       password: String(input.body.password ?? ''),
       role: input.body.role as UserRole,
     })
-    return { status: 201, body: user, setCookie: createSessionCookie(user.id) }
+    return { status: 201, body: user, setCookie: await createSessionCookie(user.id) }
   }
 
   if (method === 'GET' && path === '/api/auth/guest-demo') {
     return { status: 200, body: await guestDemoStatus() }
   }
 
+  if (method === 'GET' && path === '/api/traction') {
+    return { status: 200, body: await tractionSnapshot() }
+  }
+
+  if (method === 'POST' && path === '/api/traction/waitlist') {
+    const result = await joinWaitlist({
+      name: input.body.name,
+      contact: input.body.contact,
+      event: input.body.event,
+    })
+    return { status: 201, body: result }
+  }
+
   if (method === 'POST' && path === '/api/auth/guest-demo') {
-    const user = await claimGuestDemoUser()
-    return { status: 200, body: user, setCookie: createSessionCookie(user.id) }
+    const role = String(input.body.role ?? 'customer')
+    const user = role === 'merchant' ? await claimGuestMerchant() : await claimGuestDemoUser()
+    return { status: 200, body: user, setCookie: await createSessionCookie(user.id) }
   }
 
   if (method === 'POST' && path === '/api/auth/login') {
@@ -287,7 +307,34 @@ async function route(input: {
       String(input.body.email ?? ''),
       String(input.body.password ?? ''),
     )
-    return { status: 200, body: user, setCookie: createSessionCookie(user.id) }
+    return { status: 200, body: user, setCookie: await createSessionCookie(user.id) }
+  }
+
+  if (method === 'POST' && path === '/api/auth/forgot-password') {
+    const result = await requestPasswordReset(String(input.body.email ?? ''))
+    return {
+      status: 200,
+      body: {
+        ok: true,
+        message: PASSWORD_RESET_MESSAGE,
+        ...result,
+      },
+    }
+  }
+
+  if (method === 'POST' && path === '/api/auth/reset-password') {
+    await completePasswordReset(
+      String(input.body.token ?? ''),
+      String(input.body.password ?? ''),
+    )
+    return {
+      status: 200,
+      body: {
+        ok: true,
+        message: 'Contraseña actualizada. Ya puedes iniciar sesión.',
+      },
+      setCookie: clearSessionCookie(),
+    }
   }
 
   if (method === 'GET' && path === '/api/auth/google-config') {
@@ -309,7 +356,7 @@ async function route(input: {
     return {
       status: mode === 'register' ? 201 : 200,
       body: user,
-      setCookie: createSessionCookie(user.id),
+      setCookie: await createSessionCookie(user.id),
     }
   }
 
@@ -322,11 +369,9 @@ async function route(input: {
     if (!user) {
       return { status: 401, body: { error: 'No hay sesión' } }
     }
-    try {
-      await ensureUserLoyaltyTrustline(user.id)
-    } catch {
-      // Keep the session even if Horizon is slow; register/login still require the trustline.
-    }
+    void ensureUserLoyaltyTrustline(user.id).catch(() => {
+      // Register and login still require the trustline. A reload should not wait on Horizon.
+    })
     return { status: 200, body: user }
   }
 

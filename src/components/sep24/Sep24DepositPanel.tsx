@@ -22,20 +22,19 @@ const COPY: Record<
   }
 > = {
   cash: {
-    intro:
-      'En Testnet el ancla de SDF (testanchor.stellar.org) simula un depósito en efectivo tipo MoneyGram. Completa el flujo SEP-24 en la ventana del ancla; si falta la trustline de USDC, se crea sola.',
-    cta: 'Continuar con efectivo',
-    iframeTitle: 'Depósito en efectivo (SEP-24)',
-    pendingTransfer: 'Confirma el pago de prueba en el ancla',
-    done: 'El ancla acreditó USDC en tu cuenta Stellar de Testnet.',
+    intro: 'Completa el depósito en la ventana que se abre. Los dólares quedan en tu cuenta del evento.',
+    cta: 'Continuar',
+    iframeTitle: 'Depósito',
+    pendingTransfer: 'Confirma el pago en la ventana',
+    done: 'Los dólares ya están en tu cuenta del evento.',
   },
   card: {
     intro:
-      'En Testnet el ancla de SDF simula un cargo con tarjeta. Valida la tarjeta de prueba aquí y completa el SEP-24 en la ventana del ancla; el USDC llega a tu cuenta.',
+      'Agrega dólares de prueba con tarjeta. Completa el pago en la ventana que se abre. El saldo queda en tu cuenta del evento.',
     cta: 'Pagar con tarjeta',
-    iframeTitle: 'Confirmación del ancla (tarjeta)',
-    pendingTransfer: 'Autorizando el cargo de prueba',
-    done: 'El cargo de prueba se completó y el USDC ya está en tu cuenta.',
+    iframeTitle: 'Pago con tarjeta',
+    pendingTransfer: 'Confirmando el pago',
+    done: 'El pago se completó. Los dólares ya están en tu cuenta del evento.',
   },
 }
 
@@ -58,7 +57,6 @@ export function Sep24DepositPanel({
     minAmount: 1,
     maxAmount: 10,
   })
-  const [anchorHost, setAnchorHost] = useState('testanchor.stellar.org')
 
   useEffect(() => {
     let cancelled = false
@@ -69,9 +67,6 @@ export function Sep24DepositPanel({
             minAmount: next.minAmount ?? 1,
             maxAmount: next.maxAmount ?? 10,
           })
-        }
-        if (!cancelled && next.homeDomain) {
-          setAnchorHost(next.homeDomain)
         }
       })
       .catch(() => {
@@ -133,18 +128,17 @@ export function Sep24DepositPanel({
   return (
     <div className="space-y-4">
       <p className="text-sm text-app-muted">{copy.intro}</p>
-      <p className="text-xs text-app-muted">Ancla: {anchorHost}</p>
 
       {!hasUsdcTrustline && deposit.phase === 'idle' ? (
         <p className="rounded-2xl bg-app-chip px-3 py-2 text-xs text-app-muted">
-          Esta cuenta aún no confía USDC. Se creará la trustline al depositar.
+          La primera vez activamos los dólares en tu cuenta. No tienes que hacer nada más.
         </p>
       ) : null}
 
       {showStartForm ? (
         <form className="space-y-3" onSubmit={(event) => void onStart(event)}>
           <label className="grid gap-1 text-sm">
-            Monto USDC (opcional, {min}–{max} en este ancla)
+            Monto en dólares (opcional, {min}–{max})
             <input
               className="rounded-2xl border border-app-line bg-app-chip px-3 py-2 text-sm"
               inputMode="decimal"
@@ -155,7 +149,7 @@ export function Sep24DepositPanel({
           </label>
           {amountOutOfRange ? (
             <p className="text-sm text-red-400">
-              El ancla de prueba acepta entre {min} y {max} USDC.
+              Este depósito de prueba acepta entre {min} y {max} dólares.
             </p>
           ) : null}
 
@@ -183,9 +177,9 @@ export function Sep24DepositPanel({
               <Banknote className="h-4 w-4" />
             )}
             {deposit.phase === 'trustline'
-              ? 'Abriendo trustline USDC…'
+              ? 'Preparando dólares…'
               : deposit.phase === 'starting'
-                ? 'Autenticando SEP-10…'
+                ? 'Conectando…'
                 : copy.cta}
           </button>
         </form>
@@ -193,7 +187,7 @@ export function Sep24DepositPanel({
 
       {deposit.phase === 'starting' ? (
         <p className="text-sm text-app-muted">
-          Autenticando SEP-10 y pidiendo la URL interactiva SEP-24…
+          Autenticando y abriendo el pago…
         </p>
       ) : null}
 
@@ -262,7 +256,7 @@ function InteractiveFrame({
       <p className="rounded-2xl bg-app-chip p-3 text-sm text-app-muted">
         {popupBlocked
           ? 'El navegador bloqueó la ventana. Toca Abrir en ventana; el estado se sigue consultando aquí.'
-          : 'Completa el depósito en la ventana del ancla. Si no se abrió, usa Abrir en ventana.'}
+          : 'Completa el pago en la ventana. Si no se abrió, usa Abrir en ventana.'}
       </p>
       {popupBlocked ? (
         <iframe
@@ -286,7 +280,7 @@ function TransactionStatus({
   pendingTransferLabel: string
 }) {
   if (!tx) {
-    return <p className="text-xs text-app-muted">Esperando estado del ancla…</p>
+    return <p className="text-xs text-app-muted">Esperando la confirmación…</p>
   }
 
   return (
@@ -295,7 +289,7 @@ function TransactionStatus({
       {tx.message ? <p className="mt-1 text-app-muted">{tx.message}</p> : null}
       {tx.amount_out ? (
         <p className="mt-1 tabular-nums">
-          {tx.amount_out} {tx.amount_out_asset ? 'USDC' : ''}
+          {tx.amount_out} dólares
         </p>
       ) : null}
       {tx.external_transaction_id ? (
@@ -312,11 +306,11 @@ function statusLabel(status: string, pendingTransferLabel: string): string {
     incomplete: 'Pendiente de datos',
     pending_user_transfer_start: pendingTransferLabel,
     pending_user_transfer_complete: 'Esperando confirmación del pago',
-    pending_anchor: 'El ancla está procesando',
-    pending_stellar: 'Enviando USDC en Stellar',
-    pending_external: 'Procesando fuera de Stellar',
-    pending_trust: 'Falta trustline de USDC',
-    pending_user: 'Acción pendiente en el ancla',
+    pending_anchor: 'Procesando el depósito',
+    pending_stellar: 'Acreditando los dólares',
+    pending_external: 'Procesando el pago',
+    pending_trust: 'Falta activar dólares en la cuenta',
+    pending_user: 'Falta un paso en la ventana de pago',
     completed: 'Completado',
     error: 'Error',
     expired: 'Expirado',

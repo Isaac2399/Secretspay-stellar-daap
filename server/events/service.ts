@@ -34,6 +34,7 @@ type PublicUserLike = {
   email: string
   role: string
   publicKey: string
+  isGuestDemo?: boolean
   place?: { name?: string }
 }
 
@@ -60,7 +61,9 @@ export function publicOrder(order: EventOrder, includeSecret: boolean) {
   }
 }
 
-export async function listVenues(): Promise<EventVenue[]> {
+export async function listVenues(options?: {
+  includeInactive?: boolean
+}): Promise<EventVenue[]> {
   const [store, users] = await Promise.all([loadEventStore(), loadStore()])
   const counts = new Map<string, number>()
   for (const product of store.products) {
@@ -68,7 +71,7 @@ export async function listVenues(): Promise<EventVenue[]> {
       continue
     }
     const settings = store.settings[product.merchantId]
-    if (settings && !normalizeSettings(settings).active) {
+    if (settings && !normalizeSettings(settings).active && !options?.includeInactive) {
       continue
     }
     // Sin settings aún: visible si tiene productos (compatibilidad).
@@ -86,7 +89,10 @@ export async function listVenues(): Promise<EventVenue[]> {
   })
 }
 
-export async function getCatalog(merchantId: string) {
+export async function getCatalog(
+  merchantId: string,
+  options?: { allowInactive?: boolean },
+) {
   const store = await loadEventStore()
   const users = await loadStore()
   const user = users.users.find((row) => row.id === merchantId)
@@ -94,7 +100,7 @@ export async function getCatalog(merchantId: string) {
     throw new AuthError('No hay barra para esa empresa', 404)
   }
   const settings = store.settings[merchantId]
-  if (settings && !normalizeSettings(settings).active) {
+  if (settings && !normalizeSettings(settings).active && !options?.allowInactive) {
     throw new AuthError('Este evento no está activo ahora', 404)
   }
   return {

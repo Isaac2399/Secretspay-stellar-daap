@@ -3,16 +3,20 @@ import { ChevronDown } from 'lucide-react'
 
 const FAQS = [
   {
-    q: '¿Qué son los ROJOS?',
-    a: 'Son el saldo del evento. Con ellos ordenas en la barra y pagas con QR. En esta pantalla solo ves ROJOS.',
+    q: '¿Qué es el saldo del evento?',
+    a: 'Es el dinero con el que pides en la barra. No hace falta una billetera ni una clave.',
   },
   {
-    q: '¿Cómo cargo ROJOS?',
-    a: 'En Inicio pulsa Agregar dinero. Puedes usar SINPE Móvil, efectivo en un stand o recibirlos en tu cuenta.',
+    q: '¿Cómo agrego dinero?',
+    a: 'En Inicio pulsa Agregar dinero. Puedes usar SINPE Móvil, efectivo en un stand o agregar dólares.',
+  },
+  {
+    q: '¿Cómo recupero el dinero que no gasté?',
+    a: 'En Inicio pulsa Reembolsar por SINPE, escribe el teléfono de 8 dígitos donde quieres recibir el dinero y confirma. La paridad es ₡1,000 por cada unidad de saldo.',
   },
   {
     q: '¿Cómo ordeno?',
-    a: 'En Evento eliges la barra, sumas lo que quieres y pulsas Pagar y ordenar. El pago sale de tus ROJOS.',
+    a: 'En Evento eliges la barra, sumas lo que quieres y pulsas Pagar y ordenar. El pago sale de tu saldo. PartyPay cubre la comisión de red.',
   },
   {
     q: '¿Cómo sé si mi pedido está listo?',

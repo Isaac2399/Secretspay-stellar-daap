@@ -1,6 +1,13 @@
-import { userFromCookieHeader } from '../auth.js'
+import { userFromCookieHeader, type PublicUser } from '../auth.js'
+import { AuthError } from '../errors.js'
 import { requireCashier } from '../superAdmin.js'
-import { creditCashAtEvent, listRecentCashCredits } from './service.js'
+import {
+  creditCashAtEvent,
+  listRecentCashCredits,
+  listRecentCashRefunds,
+  refundCustomerBalance,
+  settleCashRefund,
+} from './service.js'
 
 type ApiInput = {
   method: string
@@ -10,6 +17,21 @@ type ApiInput = {
 }
 
 type ApiResult = { status: number; body: unknown; setCookie?: string }
+
+async function requireRefundStaff(cookie: string | undefined): Promise<PublicUser> {
+  const session = await userFromCookieHeader(cookie)
+  if (!session) {
+    throw new AuthError('No hay sesión', 401)
+  }
+  if (
+    session.role !== 'admin' &&
+    session.role !== 'cashier' &&
+    session.role !== 'sinpe_ops'
+  ) {
+    throw new AuthError('No puedes ver los reembolsos SINPE', 403)
+  }
+  return session
+}
 
 export async function handleCashRoutes(
   input: ApiInput,
@@ -21,6 +43,32 @@ export async function handleCashRoutes(
     const session = await userFromCookieHeader(input.cookie)
     await requireCashier(session)
     return { status: 200, body: { credits: await listRecentCashCredits() } }
+  }
+
+  if (method === 'GET' && path === '/api/admin/cash-refunds') {
+    await requireRefundStaff(input.cookie)
+    return { status: 200, body: { refunds: await listRecentCashRefunds() } }
+  }
+
+  if (method === 'POST' && path === '/api/admin/cash-refund-paid') {
+    const cashier = await requireRefundStaff(input.cookie)
+    const refund = await settleCashRefund({
+      id: String(input.body.id ?? ''),
+      cashier,
+    })
+    return { status: 200, body: { refund } }
+  }
+
+  if (method === 'POST' && path === '/api/payments/refund') {
+    const session = await userFromCookieHeader(input.cookie)
+    if (!session) {
+      return { status: 401, body: { error: 'No hay sesión' } }
+    }
+    const result = await refundCustomerBalance(
+      session,
+      String(input.body.phone ?? ''),
+    )
+    return { status: 200, body: result }
   }
 
   if (method === 'POST' && path === '/api/admin/cash-credit') {
