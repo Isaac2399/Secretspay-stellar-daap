@@ -115,17 +115,12 @@ export function DashboardHero({
       <div>
         <p className="flex min-w-0 flex-wrap items-baseline gap-x-2">
           <span className="min-w-0 break-all text-4xl font-semibold tracking-tight tabular-nums min-[380px]:text-5xl">
-            {formatAmount(selected.value)}
+            {loyaltyOnly ? formatRojos(selected.value) : formatAmount(selected.value)}
           </span>
-          {loyaltyOnly ? null : (
-            <span className="text-lg font-medium text-white/55">{selected.code}</span>
-          )}
+          <span className="text-lg font-medium text-white/55">{selected.code}</span>
         </p>
         {loyaltyOnly ? (
-          <div className="mt-2 space-y-1">
-            <p className="text-sm text-app-muted">Saldo del evento</p>
-            <p className="text-xs text-app-muted">Sin comisión de red. PartyPay la cubre.</p>
-          </div>
+          <p className="mt-2 text-xs text-app-muted">Sin comisión de red. PartyPay la cubre.</p>
         ) : (
           <>
             <p className="mt-3 text-xs text-app-muted">Toca un token para verlo en grande</p>
@@ -200,6 +195,14 @@ export function DashboardHero({
       ) : null}
     </section>
   )
+}
+
+function formatRojos(value: string): string {
+  const numeric = Number(value)
+  if (!Number.isFinite(numeric)) {
+    return formatAmount(value)
+  }
+  return new Intl.NumberFormat('es-MX', { maximumFractionDigits: 2 }).format(numeric)
 }
 
 function QuickAction({

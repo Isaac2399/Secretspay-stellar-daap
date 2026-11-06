@@ -166,10 +166,45 @@ async function demoMerchant(): Promise<{ user: StoredUser; title: string } | nul
   return pickDemoMerchant(store, events)
 }
 
+/** Barra del jurado. GUEST_DEMO_MERCHANT_EMAIL la puede cambiar. */
+const DEFAULT_DEMO_MERCHANT_EMAIL = 'cordillera@test.com'
+
+export function demoMerchantEmail(): string {
+  const fromEnv = (process.env.GUEST_DEMO_MERCHANT_EMAIL ?? '').trim().toLowerCase()
+  return fromEnv || DEFAULT_DEMO_MERCHANT_EMAIL
+}
+
+/** Empresa fija de la demo, si ya tiene productos publicados. */
+export function pinnedDemoMerchant(
+  store: UserStore,
+  events: EventStoreData,
+): { user: StoredUser; title: string } | null {
+  const email = demoMerchantEmail()
+  const user = store.users.find(
+    (entry) =>
+      entry.role === 'merchant' && entry.email.trim().toLowerCase() === email,
+  )
+  if (!user) {
+    return null
+  }
+  const hasProduct = events.products.some(
+    (product) => product.merchantId === user.id && product.active,
+  )
+  if (!hasProduct) {
+    return null
+  }
+  const settings = events.settings[user.id]
+  return { user, title: settings?.title || 'Barra' }
+}
+
 function pickDemoMerchant(
   store: UserStore,
   events: EventStoreData,
 ): { user: StoredUser; title: string } | null {
+  const pinned = pinnedDemoMerchant(store, events)
+  if (pinned) {
+    return pinned
+  }
   const counts = new Map<string, number>()
   for (const product of events.products) {
     if (!product.active) {

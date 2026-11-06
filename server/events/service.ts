@@ -12,6 +12,7 @@ import {
 } from '../escrowContract.js'
 import { AuthError } from '../errors.js'
 import { loyaltyAssetFromEnv } from '../provisionAccount.js'
+import { pinnedDemoMerchant } from '../guestDemo.js'
 import { loadStore } from '../userStore.js'
 import { notifyOrderReady } from './push.js'
 import { parsePickupQr, serializePickupQr } from './qr.js'
@@ -65,6 +66,20 @@ export async function listVenues(options?: {
   includeInactive?: boolean
 }): Promise<EventVenue[]> {
   const [store, users] = await Promise.all([loadEventStore(), loadStore()])
+  const pinned = pinnedDemoMerchant(users, store)
+  if (pinned && !options?.includeInactive) {
+    const settings = store.settings[pinned.user.id]
+    return [
+      {
+        merchantId: pinned.user.id,
+        title: pinned.title,
+        pickupLabel: settings?.pickupLabel || 'Barra',
+        productCount: store.products.filter(
+          (product) => product.merchantId === pinned.user.id && product.active,
+        ).length,
+      },
+    ]
+  }
   const counts = new Map<string, number>()
   for (const product of store.products) {
     if (!product.active) {
