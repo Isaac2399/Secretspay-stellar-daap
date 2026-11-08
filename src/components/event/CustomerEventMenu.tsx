@@ -15,9 +15,10 @@ import {
   notifyOrderReadyLocally,
 } from '@/lib/events/push'
 import { formatStockLabel, stockCountClass } from '@/lib/events/stock'
+import { useAuth } from '@/lib/auth/AuthContext'
 import { Networks } from '@stellar/stellar-sdk'
 import { stellarConfig } from '@/lib/stellar/config'
-import { formatAmount } from '@/lib/stellar/useAccountBalances'
+import { formatAmount, useAccountBalances } from '@/lib/stellar/useAccountBalances'
 import type { EventOrder, EventProduct, EventVenue } from '@/types/event'
 import { CustomerOrderTicket } from './CustomerOrderTicket'
 
@@ -93,8 +94,12 @@ export function CustomerEventMenu({
   const [receipt, setReceipt] = useState<{ order: EventOrder; hash: string } | null>(null)
   const [swap, setSwap] = useState<StockSwap | null>(null)
   const [readyAlert, setReadyAlert] = useState<EventOrder | null>(null)
+  const [panel, setPanel] = useState<'carta' | 'pedidos'>('carta')
   const statusByIdRef = useRef<Record<string, EventOrder['status']>>({})
   const pushArmedRef = useRef<Promise<void> | null>(null)
+  const openedOrdersRef = useRef(false)
+  const { user } = useAuth()
+  const { balances, reload: reloadBalances } = useAccountBalances(user?.publicKey ?? '')
 
   function applyOrders(nextOrders: EventOrder[]) {
     const prev = statusByIdRef.current
@@ -116,6 +121,7 @@ export function CustomerEventMenu({
     })
     if (justReady) {
       setReadyAlert(justReady)
+      setPanel('pedidos')
     }
   }
 
@@ -256,8 +262,10 @@ export function CustomerEventMenu({
       statusByIdRef.current[result.order.id] = result.order.status
       setReceipt({ order: result.order, hash: result.hash || result.order.stellarHash || '' })
       setCart({})
+      setPanel('pedidos')
       void ensurePush().then(() => notifyOrderPlacedLocally(result.order))
       void reload().catch(() => undefined)
+      void reloadBalances()
     } catch (err) {
       const offer = readStockSwap(err)
       if (offer) {
@@ -270,11 +278,25 @@ export function CustomerEventMenu({
     }
   }
 
-  const pendingOrders = orders.filter(
-    (order) => order.status === 'preparing' || order.status === 'ready',
-  )
+  const pendingOrders = orders
+    .filter((order) => order.status === 'preparing' || order.status === 'ready')
+    .sort((a, b) => {
+      if (a.status === b.status) {
+        return b.createdAt.localeCompare(a.createdAt)
+      }
+      return a.status === 'ready' ? -1 : 1
+    })
   const paidOrders = orders.filter((order) => order.status === 'completed')
   const cancelledOrders = orders.filter((order) => order.status === 'cancelled')
+  const readyCount = pendingOrders.filter((order) => order.status === 'ready').length
+
+  useEffect(() => {
+    if (openedOrdersRef.current || pendingOrders.length === 0) {
+      return
+    }
+    openedOrdersRef.current = true
+    setPanel('pedidos')
+  }, [pendingOrders.length])
 
   function applySwap(alternative: StockAlternative) {
     if (!swap) {
@@ -316,13 +338,50 @@ export function CustomerEventMenu({
             ← Barras
           </button>
         ) : null}
-        <h1 className="mt-3 text-2xl font-semibold">{venue?.title ?? 'Evento'}</h1>
+        <p className="mt-3 text-xs font-medium uppercase tracking-wide text-app-muted">
+          Saldo
+        </p>
+        <p className="mt-1 flex items-baseline gap-2">
+          <span className="text-4xl font-semibold tracking-tight tabular-nums">
+            {formatAmount(balances.loyalty)}
+          </span>
+          <span className="text-lg font-medium text-white/55">
+            {stellarConfig.loyalty.code}
+          </span>
+        </p>
+        <h1 className="mt-4 text-2xl font-semibold">{venue?.title ?? 'Evento'}</h1>
         <p className="mt-1 text-base text-app-muted">
           Suma lo que quieres, paga y retira en {venue?.pickupLabel ?? 'la barra'}{' '}
           con tu número y QR. Sin comisión de red.
         </p>
       </div>
 
+      <div className="grid grid-cols-2 gap-2">
+        <button
+          type="button"
+          className={`rounded-2xl py-3 text-base font-medium ${
+            panel === 'carta' ? 'bg-app-accent text-white' : 'bg-app-chip'
+          }`}
+          onClick={() => setPanel('carta')}
+        >
+          Carta
+        </button>
+        <button
+          type="button"
+          className={`rounded-2xl py-3 text-base font-medium ${
+            panel === 'pedidos' ? 'bg-app-accent text-white' : 'bg-app-chip'
+          }`}
+          onClick={() => setPanel('pedidos')}
+        >
+          {readyCount > 0
+            ? `Pedidos · ${readyCount} listo${readyCount === 1 ? '' : 's'}`
+            : pendingOrders.length > 0
+              ? `Pedidos (${pendingOrders.length})`
+              : 'Pedidos'}
+        </button>
+      </div>
+
+      {panel === 'carta' ? (
       <section className="space-y-3">
         <h2 className="text-xl font-semibold">Productos</h2>
         {products.length === 0 ? (
@@ -396,8 +455,9 @@ export function CustomerEventMenu({
           </div>
         )}
       </section>
+      ) : null}
 
-      {lines.length > 0 ? (
+      {panel === 'carta' && lines.length > 0 ? (
         <button
           type="button"
           className="sticky bottom-24 z-20 w-full lg:bottom-6 rounded-[28px] bg-app-accent py-5 text-xl font-semibold text-white shadow-[0_8px_30px_rgba(0,0,0,0.45)] disabled:opacity-60"
@@ -416,6 +476,8 @@ export function CustomerEventMenu({
         </button>
       ) : null}
 
+      {panel === 'pedidos' ? (
+      <>
       {pendingOrders.length > 0 || placed?.status === 'preparing' || placed?.status === 'ready' ? (
         <section className="grid gap-3 sm:grid-cols-2 sm:items-start xl:grid-cols-3">
           <h2 className="col-span-full text-xl font-semibold">Pedidos</h2>
@@ -451,6 +513,12 @@ export function CustomerEventMenu({
             <CustomerOrderTicket key={order.id} order={order} compact />
           ))}
         </section>
+      ) : null}
+
+      {pendingOrders.length === 0 && paidOrders.length === 0 && cancelledOrders.length === 0 ? (
+        <p className="text-sm text-app-muted">Todavía no tienes pedidos en esta barra.</p>
+      ) : null}
+      </>
       ) : null}
 
       <ErrorModal message={error} onClose={() => setError(null)} />
