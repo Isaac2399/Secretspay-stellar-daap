@@ -583,17 +583,49 @@ async function reserveStock(
   let asset = ''
   let pickupLabel = 'Barra'
   let total = 0
+  const chosen: Array<{ product: EventProduct; qty: number }> = []
 
   for (const [productId, qty] of qtyByProduct) {
     const product = store.products.find(
       (row) => row.id === productId && row.merchantId === merchantId && row.active,
     )
     if (!product) {
-      throw new AuthError('Un producto ya no está disponible', 400)
+      throw new AuthError('Un producto ya no está disponible', 400, 'product_unavailable')
     }
     if (product.stock < qty) {
-      throw new AuthError(`No hay suficiente stock de ${product.name}`, 400)
+      const alternatives = store.products
+        .filter(
+          (row) =>
+            row.merchantId === merchantId &&
+            row.active &&
+            row.id !== product.id &&
+            row.stock > 0 &&
+            row.asset === product.asset,
+        )
+        .map((row) => ({
+          id: row.id,
+          name: row.name,
+          price: row.price,
+          asset: row.asset,
+          stock: row.stock,
+        }))
+      throw new AuthError(
+        `No hay suficiente stock de ${product.name}`,
+        400,
+        'out_of_stock',
+        {
+          productId: product.id,
+          name: product.name,
+          requested: qty,
+          available: product.stock,
+          alternatives,
+        },
+      )
     }
+    chosen.push({ product, qty })
+  }
+
+  for (const { product, qty } of chosen) {
     if (!asset) {
       asset = product.asset
     } else if (asset !== product.asset) {
@@ -601,10 +633,10 @@ async function reserveStock(
     }
     pickupLabel = product.pickupLabel || pickupLabel
     product.stock -= qty
-    stockDelta.push({ productId, qty })
+    stockDelta.push({ productId: product.id, qty })
     const line = lineTotal(product, qty)
     items.push({
-      productId,
+      productId: product.id,
       name: product.name,
       qty,
       unitPrice: product.price,

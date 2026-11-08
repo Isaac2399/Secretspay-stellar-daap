@@ -3,11 +3,13 @@ import type { AppUser } from '@/types/user'
 export class AuthApiError extends Error {
   status: number
   code?: string
-  constructor(message: unknown, status: number, code?: string) {
+  details?: unknown
+  constructor(message: unknown, status: number, code?: string, details?: unknown) {
     super(errorMessage(message))
     this.name = 'AuthApiError'
     this.status = status
     this.code = code
+    this.details = details
   }
 }
 

@@ -21,9 +21,11 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     },
   })
   const raw = await response.text()
-  let body: T & { error?: string }
+  let body: T & { error?: string; code?: string; details?: unknown }
   try {
-    body = raw ? (JSON.parse(raw) as T & { error?: string }) : ({} as T & { error?: string })
+    body = raw
+      ? (JSON.parse(raw) as T & { error?: string; code?: string; details?: unknown })
+      : ({} as T & { error?: string; code?: string; details?: unknown })
   } catch {
     throw new AuthApiError(
       `El servidor respondió ${response.status} (no JSON).`,
@@ -31,7 +33,12 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     )
   }
   if (!response.ok) {
-    throw new AuthApiError(body.error ?? 'No se pudo completar', response.status)
+    throw new AuthApiError(
+      body.error ?? 'No se pudo completar',
+      response.status,
+      body.code,
+      body.details,
+    )
   }
   return body
 }

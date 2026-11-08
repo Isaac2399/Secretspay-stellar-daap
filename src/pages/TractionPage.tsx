@@ -21,6 +21,15 @@ type Snapshot = {
   payments: Payment[]
   waitlistCount: number
   venueNote: string | null
+  nextCut?: {
+    network: 'public'
+    assetCode: string
+    issuer: string
+    feeBps: number
+    contractId: string | null
+    status: 'pendiente' | 'contrato'
+    note: string
+  }
   asOf: string
 }
 
@@ -146,6 +155,32 @@ export default function TractionPage() {
             Contrato del cobro
           </a>
         ) : null}
+      </section>
+
+      <section className="space-y-2 rounded-[24px] bg-app-card p-4">
+        <h2 className="text-base font-semibold">Siguiente corte</h2>
+        <p className="text-sm leading-relaxed text-app-muted">
+          {snapshot?.nextCut?.note ??
+            'Un producto en USDC de Circle en la red pública. Sin hash, este corte no está hecho.'}
+        </p>
+        <p className="text-sm">
+          Comisión {snapshot?.nextCut ? snapshot.nextCut.feeBps / 100 : 2.5} %. El invitado no
+          paga la red.
+        </p>
+        {snapshot?.nextCut?.contractId ? (
+          <a
+            href={`https://stellar.expert/explorer/public/contract/${snapshot.nextCut.contractId}`}
+            target="_blank"
+            rel="noreferrer"
+            className="block truncate text-sm font-medium text-app-accent"
+          >
+            Contrato en la red pública
+          </a>
+        ) : (
+          <p className="text-sm leading-relaxed">
+            Estado: pendiente. Todavía no hay contrato ni hash en la red pública.
+          </p>
+        )}
       </section>
 
       <section className="space-y-2 rounded-[24px] bg-app-card p-4">

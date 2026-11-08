@@ -4,6 +4,7 @@ import { Networks } from '@stellar/stellar-sdk'
 import { AuthError } from './errors.js'
 import { loadEventStore } from './events/store.js'
 import { networkPassphrase } from './provisionAccount.js'
+import { publicCheckoutTarget, type PublicCheckoutTarget } from './publicCheckout.js'
 
 const WAITLIST_FILE = join('data', 'traction-waitlist.json')
 const KV_KEY = 'stellar-web-app:traction-waitlist'
@@ -29,6 +30,7 @@ export type TractionSnapshot = {
   waitlistCount: number
   venueNote: string | null
   feeSponsored: true
+  nextCut: PublicCheckoutTarget
   asOf: string
 }
 
@@ -67,6 +69,7 @@ export async function tractionSnapshot(): Promise<TractionSnapshot> {
     waitlistCount: waitlist.length,
     venueNote: venueNote || null,
     feeSponsored: true,
+    nextCut: publicCheckoutTarget(),
     asOf: new Date().toISOString(),
   }
 }

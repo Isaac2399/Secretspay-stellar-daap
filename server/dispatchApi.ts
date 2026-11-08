@@ -89,9 +89,11 @@ export async function dispatchApi(input: {
     if (isAuthError(error)) {
       return {
         status: error.status,
-        body: error.code
-          ? { error: error.message, code: error.code }
-          : { error: error.message },
+        body: {
+          error: error.message,
+          ...(error.code ? { code: error.code } : {}),
+          ...(error.details ? { details: error.details } : {}),
+        },
       }
     }
     console.error('[api]', error)
@@ -283,11 +285,11 @@ async function route(input: {
     return { status: 200, body: await guestDemoStatus() }
   }
 
-  if (method === 'GET' && path === '/api/traction') {
+  if (method === 'GET' && (path === '/api/traction' || path === '/api/payments/traction')) {
     return { status: 200, body: await tractionSnapshot() }
   }
 
-  if (method === 'POST' && path === '/api/traction/waitlist') {
+  if (method === 'POST' && (path === '/api/traction/waitlist' || path === '/api/payments/traction/waitlist')) {
     const result = await joinWaitlist({
       name: input.body.name,
       contact: input.body.contact,

@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { QRCodeSVG } from 'qrcode.react'
 import { LoaderCircle, Minus, Plus } from 'lucide-react'
+import { AuthApiError } from '@/lib/auth/api'
 import { readableError } from '@/lib/auth/readableError'
 import { ErrorModal } from '@/components/feedback/ErrorModal'
 import {
@@ -19,6 +21,61 @@ import { formatAmount } from '@/lib/stellar/useAccountBalances'
 import type { EventOrder, EventProduct, EventVenue } from '@/types/event'
 import { CustomerOrderTicket } from './CustomerOrderTicket'
 
+type StockAlternative = {
+  id: string
+  name: string
+  price: string
+  asset: string
+  stock: number
+}
+
+type StockSwap = {
+  productId: string
+  name: string
+  requested: number
+  available: number
+  alternatives: StockAlternative[]
+}
+
+function readStockSwap(error: unknown): StockSwap | null {
+  if (!(error instanceof AuthApiError) || error.code !== 'out_of_stock') {
+    return null
+  }
+  const details = error.details
+  if (!details || typeof details !== 'object') {
+    return null
+  }
+  const row = details as Partial<StockSwap>
+  if (typeof row.productId !== 'string' || typeof row.name !== 'string') {
+    return null
+  }
+  const alternatives = Array.isArray(row.alternatives)
+    ? row.alternatives.flatMap((item) => {
+        if (!item || typeof item !== 'object') {
+          return []
+        }
+        const alt = item as Partial<StockAlternative>
+        if (
+          typeof alt.id !== 'string' ||
+          typeof alt.name !== 'string' ||
+          typeof alt.price !== 'string' ||
+          typeof alt.asset !== 'string' ||
+          typeof alt.stock !== 'number'
+        ) {
+          return []
+        }
+        return [alt as StockAlternative]
+      })
+    : []
+  return {
+    productId: row.productId,
+    name: row.name,
+    requested: typeof row.requested === 'number' ? row.requested : 1,
+    available: typeof row.available === 'number' ? row.available : 0,
+    alternatives,
+  }
+}
+
 export function CustomerEventMenu({
   merchantId,
   onBack,
@@ -34,6 +91,7 @@ export function CustomerEventMenu({
   const [busy, setBusy] = useState(false)
   const [placed, setPlaced] = useState<EventOrder | null>(null)
   const [receipt, setReceipt] = useState<{ order: EventOrder; hash: string } | null>(null)
+  const [swap, setSwap] = useState<StockSwap | null>(null)
   const [readyAlert, setReadyAlert] = useState<EventOrder | null>(null)
   const statusByIdRef = useRef<Record<string, EventOrder['status']>>({})
   const pushArmedRef = useRef<Promise<void> | null>(null)
@@ -105,13 +163,46 @@ export function CustomerEventMenu({
         applyOrders(mine.orders.filter((order) => order.merchantId === merchantId))
         setCart((prev) => {
           const next = { ...prev }
+          let missing: { id: string; name: string; requested: number; asset: string } | null =
+            null
           for (const [id, qty] of Object.entries(next)) {
             const product = catalog.products.find((row) => row.id === id)
             if (!product || product.stock <= 0) {
               delete next[id]
+              if (!missing) {
+                missing = {
+                  id,
+                  name: product?.name ?? 'Ese producto',
+                  requested: qty,
+                  asset: product?.asset ?? '',
+                }
+              }
             } else if (qty > product.stock) {
               next[id] = product.stock
             }
+          }
+          if (missing) {
+            const gone = missing
+            setSwap({
+              productId: gone.id,
+              name: gone.name,
+              requested: gone.requested,
+              available: 0,
+              alternatives: catalog.products
+                .filter(
+                  (row) =>
+                    row.id !== gone.id &&
+                    row.stock > 0 &&
+                    (!gone.asset || row.asset === gone.asset),
+                )
+                .map((row) => ({
+                  id: row.id,
+                  name: row.name,
+                  price: row.price,
+                  asset: row.asset,
+                  stock: row.stock,
+                })),
+            })
           }
           return next
         })
@@ -168,7 +259,12 @@ export function CustomerEventMenu({
       void ensurePush().then(() => notifyOrderPlacedLocally(result.order))
       void reload().catch(() => undefined)
     } catch (err) {
-      setError(readableError(err))
+      const offer = readStockSwap(err)
+      if (offer) {
+        setSwap(offer)
+      } else {
+        setError(readableError(err))
+      }
     } finally {
       setBusy(false)
     }
@@ -179,6 +275,33 @@ export function CustomerEventMenu({
   )
   const paidOrders = orders.filter((order) => order.status === 'completed')
   const cancelledOrders = orders.filter((order) => order.status === 'cancelled')
+
+  function applySwap(alternative: StockAlternative) {
+    if (!swap) {
+      return
+    }
+    setCart((prev) => {
+      const next = { ...prev }
+      delete next[swap.productId]
+      const qty = Math.min(swap.requested, alternative.stock)
+      if (qty > 0) {
+        next[alternative.id] = Math.min(
+          alternative.stock,
+          (next[alternative.id] ?? 0) + qty,
+        )
+      }
+      return next
+    })
+    setSwap(null)
+  }
+
+  function keepAvailable() {
+    if (!swap || swap.available <= 0) {
+      return
+    }
+    setCart((prev) => ({ ...prev, [swap.productId]: swap.available }))
+    setSwap(null)
+  }
 
   return (
     <div className="space-y-5">
@@ -342,6 +465,14 @@ export function CustomerEventMenu({
       {readyAlert ? (
         <OrderReadyNotice order={readyAlert} onClose={() => setReadyAlert(null)} />
       ) : null}
+      {swap ? (
+        <StockSwapSheet
+          swap={swap}
+          onPick={applySwap}
+          onKeep={keepAvailable}
+          onClose={() => setSwap(null)}
+        />
+      ) : null}
     </div>
   )
 }
@@ -397,6 +528,7 @@ function OrderReadyNotice({
         <p className="mt-3 text-center text-[15px] leading-relaxed">
           Ve a {order.pickupLabel} a retirar tu pedido.
         </p>
+        {order.pickupQr ? <PickupQr value={order.pickupQr} /> : null}
         <button
           type="button"
           className="mt-6 w-full rounded-[28px] bg-app-accent py-5 text-xl font-semibold text-white"
@@ -434,9 +566,16 @@ function OrderReceipt({
         className="w-full max-w-sm rounded-[28px] border border-app-accent/40 bg-app-card p-6 shadow-[0_0_40px_rgba(255,255,255,0.08)]"
         onClick={(event) => event.stopPropagation()}
       >
-        <h2 id="order-confirmed-title" className="text-center text-2xl font-semibold">
+        <p className="text-center text-xs font-medium uppercase tracking-wide text-app-accent">
           Pedido pagado
+        </p>
+        <h2 id="order-confirmed-title" className="mt-1 text-center text-4xl font-semibold">
+          #{order.orderNumber}
         </h2>
+        {order.pickupQr ? <PickupQr value={order.pickupQr} /> : null}
+        <p className="text-center text-sm text-app-muted">
+          Muestra este QR en {order.pickupLabel}.
+        </p>
         <dl className="mt-4 space-y-2 text-sm">
           <Row label="Pagaste" value={formatAmount(order.total)} />
           <Row label="La barra recibió" value={formatAmount(order.net ?? order.total)} />
@@ -464,7 +603,83 @@ function OrderReceipt({
           className="mt-6 w-full rounded-[28px] bg-app-accent py-5 text-xl font-semibold text-white"
           onClick={onClose}
         >
-          Entendido
+          Ya lo tengo
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function PickupQr({ value }: { value: string }) {
+  return (
+    <div className="mx-auto mt-4 w-fit rounded-2xl bg-white p-3">
+      <QRCodeSVG value={value} size={196} level="M" includeMargin />
+    </div>
+  )
+}
+
+function StockSwapSheet({
+  swap,
+  onPick,
+  onKeep,
+  onClose,
+}: {
+  swap: StockSwap
+  onPick: (alternative: StockAlternative) => void
+  onKeep: () => void
+  onClose: () => void
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-[95] flex items-end justify-center bg-black/80 p-4 backdrop-blur-sm sm:items-center"
+      role="alertdialog"
+      aria-modal="true"
+      aria-labelledby="stock-swap-title"
+    >
+      <div className="w-full max-w-sm rounded-[28px] border border-app-accent/40 bg-app-card p-6">
+        <h2 id="stock-swap-title" className="text-xl font-semibold">
+          {swap.name} se acabó
+        </h2>
+        <p className="mt-2 text-sm leading-relaxed text-app-muted">
+          {swap.available > 0
+            ? `Quedan ${swap.available}. Elige esos, o cambia el pedido por otro producto.`
+            : 'Elige otro producto con stock para completar el pedido.'}
+        </p>
+        {swap.available > 0 ? (
+          <button
+            type="button"
+            className="mt-4 w-full rounded-2xl bg-app-chip py-3 text-sm font-medium"
+            onClick={onKeep}
+          >
+            Quedarme con {swap.available}
+          </button>
+        ) : null}
+        <ul className="mt-4 max-h-64 space-y-2 overflow-y-auto">
+          {swap.alternatives.length === 0 ? (
+            <li className="text-sm text-app-muted">No hay otro producto disponible.</li>
+          ) : (
+            swap.alternatives.map((alternative) => (
+              <li key={alternative.id}>
+                <button
+                  type="button"
+                  className="flex w-full items-center justify-between gap-3 rounded-2xl bg-app-chip px-4 py-3 text-left"
+                  onClick={() => onPick(alternative)}
+                >
+                  <span className="text-sm font-medium">{alternative.name}</span>
+                  <span className="shrink-0 text-xs text-app-muted">
+                    {alternative.stock} disp.
+                  </span>
+                </button>
+              </li>
+            ))
+          )}
+        </ul>
+        <button
+          type="button"
+          className="mt-4 w-full rounded-2xl py-3 text-sm font-medium text-app-muted"
+          onClick={onClose}
+        >
+          Seguir eligiendo
         </button>
       </div>
     </div>
