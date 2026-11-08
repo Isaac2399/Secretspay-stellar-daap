@@ -161,7 +161,7 @@ export default function TractionPage() {
         <h2 className="text-base font-semibold">Siguiente corte</h2>
         <p className="text-sm leading-relaxed text-app-muted">
           {snapshot?.nextCut?.note ??
-            'El 14 y el 21 de noviembre siguen en testnet. El evento siguiente es mainnet, pagado por el Instaward. Sin hash de esa red, no está hecho.'}
+            'Un producto en USDC de Circle en la red pública. Sin hash, este corte no está hecho.'}
         </p>
         <p className="text-sm">
           Comisión {snapshot?.nextCut ? snapshot.nextCut.feeBps / 100 : 2.5} %. El invitado no
