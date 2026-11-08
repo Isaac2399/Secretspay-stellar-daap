@@ -29,6 +29,6 @@ export function publicCheckoutTarget(): PublicCheckoutTarget {
     feeBps: PLATFORM_FEE_BPS,
     contractId: contractId || null,
     status: contractId ? 'contrato' : 'pendiente',
-    note: 'Un producto en USDC de Circle. La comisión de red la paga la cuenta del contrato. Sin hash de esa red, el corte no está hecho.',
+    note: 'El 14 y el 21 de noviembre el evento sigue en testnet: el saldo es dinero real. El evento siguiente cobra en la red pública. El Instaward paga esa migración: base de datos, cambio visual y de marca, y el contrato con la custodia de Eurek Corp ante la SUGEF. Sin hash de esa red, mainnet no está hecho.',
   }
 }
