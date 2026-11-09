@@ -21,7 +21,9 @@ import {
   listEventsForAdmin,
   listVenues,
   markOrderReady,
+  markProductUnavailable,
   placeOrder,
+  resolveUnavailableOrder,
   saveEventForMerchant,
   saveMerchantSettings,
   updateProduct,
@@ -301,6 +303,25 @@ export async function handleEventRoutes(
         order: await markOrderReady(merchantId, String(input.body.orderId ?? '')),
       },
     }
+  }
+
+  if (method === 'POST' && path === '/api/events/orders/unavailable') {
+    const merchantId = resolveBarMerchantId(session, input.body.merchantId)
+    return {
+      status: 200,
+      body: {
+        order: await markProductUnavailable(
+          merchantId,
+          String(input.body.orderId ?? ''),
+          String(input.body.productId ?? ''),
+        ),
+      },
+    }
+  }
+
+  if (method === 'POST' && path === '/api/events/orders/resolve') {
+    const result = await resolveUnavailableOrder(session, input.body)
+    return { status: 200, body: result }
   }
 
   if (

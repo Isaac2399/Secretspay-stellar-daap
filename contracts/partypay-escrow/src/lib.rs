@@ -17,7 +17,14 @@
 //!    puede vender de más y el reclamo cuadra con el menú.
 //! 4. **Cobro (`checkout`)**. En una sola llamada descuenta el stock, deposita
 //!    el bruto del cliente y liquida ese reclamo. Si algo no cuadra, no se
-//!    mueve ni el inventario ni los tokens.
+//!    mueve ni el inventario ni los tokens. La venta queda guardada con el
+//!    precio cobrado, para poder corregirla después.
+//! 5. **Corrección (`revise_sale`)**. Si la barra ya no tiene un producto que
+//!    el contrato ya cobró, el pedido se reescribe. Las líneas que siguen
+//!    conservan el precio original. Lo que se quita no vuelve al stock: la
+//!    barra dijo que no está. El reemplazo sale del stock actual. La
+//!    diferencia de precio vuelve al cliente o se le cobra, con la misma
+//!    comisión de esa venta. Un pedido vacío es el reembolso completo.
 //!
 //! En la liquidación el bruto del comercio se parte on-chain:
 //!
@@ -37,7 +44,7 @@
 
 use soroban_sdk::{
     contract, contracterror, contractevent, contractimpl, contracttype, token::TokenClient,
-    Address, Env, String, Vec,
+    Address, BytesN, Env, String, Vec,
 };
 
 /// 100 % expresado en puntos básicos. 250 = 2,5 %.
@@ -73,6 +80,10 @@ pub enum DataKey {
     Product(Address, String),
     /// Comisión de un comercio: tasa y cuenta que la cobra en la liquidación.
     EventFee(Address),
+    /// Siguiente id de venta. El cero no se usa.
+    NextSaleId,
+    /// Venta ya cobrada. Guarda el precio de cada línea para poder corregirla.
+    Sale(u64),
 }
 
 /// Comisión de un evento. `fee_bps` usa la misma escala que la global
@@ -117,6 +128,10 @@ pub enum Error {
     InvalidProductId = 15,
     /// Quien llama no es el admin del contrato ni el comercio de esa regla.
     NotAuthorized = 16,
+    /// No hay una venta con ese id.
+    SaleNotFound = 17,
+    /// Esa venta ya se reembolsó por completo.
+    SaleClosed = 18,
 }
 
 /// Una línea de venta. `qty` son unidades que salen del inventario.
@@ -127,8 +142,40 @@ pub struct SaleLine {
     pub qty: u32,
 }
 
+/// Precio cobrado de una línea, congelado en el momento de la venta.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ReceiptLine {
+    pub product_id: String,
+    pub qty: u32,
+    pub gross: i128,
+}
+
+/// Venta cobrada. `open` pasa a falso solo cuando ya no queda ninguna línea.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SaleReceipt {
+    pub customer: Address,
+    pub merchant: Address,
+    pub token: Address,
+    pub treasury: Address,
+    pub fee_bps: u32,
+    pub lines: Vec<ReceiptLine>,
+    pub gross: i128,
+    pub open: bool,
+}
+
+/// Resultado de `checkout`. `sale_id` es el que después usa `revise_sale`.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CheckoutReceipt {
+    pub sale_id: u64,
+    pub gross: i128,
+}
+
 /// Existencias de un producto. `stock` es lo que aún se puede vender.
-/// `sold` solo sube en `sell` y no se reinicia al reponer.
+/// `sold` sube en cada venta y baja si esa venta se corrige. Reponer con
+/// `set_stock` no toca `sold`.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Product {
@@ -228,6 +275,16 @@ pub struct InventorySold {
     pub units: u32,
 }
 
+/// Una venta cobrada cambió de líneas. `new_gross` cero es un reembolso total.
+#[contractevent]
+pub struct SaleRevised {
+    #[topic]
+    pub merchant: Address,
+    pub sale_id: u64,
+    pub old_gross: i128,
+    pub new_gross: i128,
+}
+
 /// Split aplicado. `gross = fee + net` y ambos salieron de la bóveda.
 #[contractevent]
 pub struct MerchantSettled {
@@ -245,6 +302,16 @@ pub struct PartyPayEscrow;
 
 #[contractimpl]
 impl PartyPayEscrow {
+    /// Cambia el código de este contrato. Solo el admin. El hash es el del WASM
+    /// ya subido a la red.
+    pub fn update_wasm(env: Env, wasm_hash: BytesN<32>) -> Result<(), Error> {
+        let admin = require_admin(&env)?;
+        admin.require_auth();
+        env.deployer()
+            .update_current_contract(soroban_sdk::ContractExecutable::Wasm(wasm_hash));
+        Ok(())
+    }
+
     /// Fija al operador del evento y la comisión. Solo puede ejecutarse una vez.
     ///
     /// `admin` tiene que firmar: nadie puede nombrar administrador a un tercero
@@ -411,7 +478,7 @@ impl PartyPayEscrow {
     pub fn sell(env: Env, merchant: Address, lines: Vec<SaleLine>) -> Result<i128, Error> {
         let admin = require_admin(&env)?;
         admin.require_auth();
-        apply_sale(&env, &merchant, &lines)
+        Ok(apply_sale(&env, &merchant, &lines)?.0)
     }
 
     /// Cobra un pedido en una sola transacción.
@@ -426,19 +493,97 @@ impl PartyPayEscrow {
         merchant: Address,
         token: Address,
         lines: Vec<SaleLine>,
-    ) -> Result<i128, Error> {
+    ) -> Result<CheckoutReceipt, Error> {
         ensure_initialized(&env)?;
         let admin = require_admin(&env)?;
         admin.require_auth();
         customer.require_auth();
 
-        let gross = apply_sale(&env, &merchant, &lines)?;
+        let (gross, priced) = apply_sale(&env, &merchant, &lines)?;
+        let rule = event_fee(&env, &merchant);
+        let sale_fee_bps = match &rule {
+            Some(rule) => rule.fee_bps,
+            None => fee_bps(&env)?,
+        };
+        let treasury = match &rule {
+            Some(rule) => rule.treasury.clone(),
+            None => admin.clone(),
+        };
+        let sale_id = store_sale(
+            &env,
+            &SaleReceipt {
+                customer: customer.clone(),
+                merchant: merchant.clone(),
+                token: token.clone(),
+                treasury,
+                fee_bps: sale_fee_bps,
+                lines: priced,
+                gross,
+                open: true,
+            },
+        )?;
         if gross == 0 {
-            return Ok(0);
+            return Ok(CheckoutReceipt { sale_id, gross });
         }
         deposit_into(&env, &customer, gross, &token)?;
         settle_open_claim(&env, &admin, &merchant, &token)?;
-        Ok(gross)
+        Ok(CheckoutReceipt { sale_id, gross })
+    }
+
+    /// Cambia una venta ya cobrada, o la reembolsa si `lines` queda vacío.
+    ///
+    /// Las líneas que se conservan (mismo producto y misma cantidad) mantienen
+    /// el precio cobrado. Una línea nueva se cotiza con el catálogo de ahora
+    /// y descuenta stock. Una línea que se quita baja `sold` y no repone
+    /// stock: la barra ya dijo que ese producto no está. El dinero se mueve
+    /// por la diferencia, con la comisión que tenía esta venta. Quien devuelve
+    /// fondos tiene que firmar; el cliente firma solo si el reemplazo cuesta más.
+    pub fn revise_sale(env: Env, sale_id: u64, lines: Vec<SaleLine>) -> Result<i128, Error> {
+        let admin = require_admin(&env)?;
+        admin.require_auth();
+
+        let key = DataKey::Sale(sale_id);
+        let receipt = load_sale(&env, &key).ok_or(Error::SaleNotFound)?;
+        if !receipt.open {
+            return Err(Error::SaleClosed);
+        }
+
+        let next_lines = rewrite_lines(&env, &receipt, &lines)?;
+        let mut new_gross: i128 = 0;
+        for line in next_lines.iter() {
+            new_gross = new_gross.checked_add(line.gross).ok_or(Error::Overflow)?;
+        }
+        settle_revision(&env, &receipt, new_gross)?;
+
+        let open = !next_lines.is_empty();
+        save_sale(
+            &env,
+            &key,
+            &SaleReceipt {
+                lines: next_lines,
+                gross: new_gross,
+                open,
+                ..receipt.clone()
+            },
+        );
+        SaleRevised {
+            merchant: receipt.merchant.clone(),
+            sale_id,
+            old_gross: receipt.gross,
+            new_gross,
+        }
+        .publish(&env);
+        Ok(new_gross)
+    }
+
+    pub fn get_sale(env: Env, sale_id: u64) -> Option<SaleReceipt> {
+        ensure_initialized(&env).ok()?;
+        bump_instance(&env);
+        let key = DataKey::Sale(sale_id);
+        if env.storage().persistent().has(&key) {
+            bump_persistent(&env, &key);
+        }
+        load_sale(&env, &key)
     }
 
     pub fn get_product(env: Env, merchant: Address, product_id: String) -> Option<Product> {
@@ -590,12 +735,17 @@ fn deposit_into(env: &Env, from: &Address, amount: i128, token: &Address) -> Res
     Ok(())
 }
 
-fn apply_sale(env: &Env, merchant: &Address, lines: &Vec<SaleLine>) -> Result<i128, Error> {
+fn apply_sale(
+    env: &Env,
+    merchant: &Address,
+    lines: &Vec<SaleLine>,
+) -> Result<(i128, Vec<ReceiptLine>), Error> {
     if lines.is_empty() || lines.len() > MAX_SALE_LINES {
         return Err(Error::InvalidAmount);
     }
 
     let mut seen: Vec<String> = Vec::new(env);
+    let mut priced: Vec<ReceiptLine> = Vec::new(env);
     let mut gross: i128 = 0;
     let mut units: u32 = 0;
     for line in lines.iter() {
@@ -607,6 +757,11 @@ fn apply_sale(env: &Env, merchant: &Address, lines: &Vec<SaleLine>) -> Result<i1
         let line_amount = line_gross(product.price, payable, product.discount_bps)?;
         gross = gross.checked_add(line_amount).ok_or(Error::Overflow)?;
         units = units.checked_add(line.qty).ok_or(Error::Overflow)?;
+        priced.push_back(ReceiptLine {
+            product_id: line.product_id.clone(),
+            qty: line.qty,
+            gross: line_amount,
+        });
     }
 
     for line in lines.iter() {
@@ -638,7 +793,161 @@ fn apply_sale(env: &Env, merchant: &Address, lines: &Vec<SaleLine>) -> Result<i1
         }
         .publish(env);
     }
-    Ok(gross)
+    Ok((gross, priced))
+}
+
+fn store_sale(env: &Env, receipt: &SaleReceipt) -> Result<u64, Error> {
+    let current: u64 = env.storage().instance().get(&DataKey::NextSaleId).unwrap_or(0);
+    let sale_id = current.checked_add(1).ok_or(Error::Overflow)?;
+    env.storage().instance().set(&DataKey::NextSaleId, &sale_id);
+    save_sale(env, &DataKey::Sale(sale_id), receipt);
+    bump_instance(env);
+    Ok(sale_id)
+}
+
+fn load_sale(env: &Env, key: &DataKey) -> Option<SaleReceipt> {
+    env.storage().persistent().get(key)
+}
+
+fn save_sale(env: &Env, key: &DataKey, receipt: &SaleReceipt) {
+    env.storage().persistent().set(key, receipt);
+    bump_persistent(env, key);
+}
+
+/// Arma el pedido corregido y mueve el inventario. No mueve tokens.
+fn rewrite_lines(
+    env: &Env,
+    receipt: &SaleReceipt,
+    lines: &Vec<SaleLine>,
+) -> Result<Vec<ReceiptLine>, Error> {
+    if lines.len() > MAX_SALE_LINES {
+        return Err(Error::InvalidAmount);
+    }
+
+    let mut seen: Vec<String> = Vec::new(env);
+    let mut next: Vec<ReceiptLine> = Vec::new(env);
+    for line in lines.iter() {
+        if line.qty == 0 {
+            return Err(Error::InvalidAmount);
+        }
+        validate_product_id(&line.product_id)?;
+        if already_seen(&seen, &line.product_id) {
+            return Err(Error::DuplicateLine);
+        }
+        seen.push_back(line.product_id.clone());
+
+        if let Some(previous) = find_receipt_line(&receipt.lines, &line.product_id) {
+            if previous.qty != line.qty {
+                return Err(Error::InvalidAmount);
+            }
+            next.push_back(previous);
+            continue;
+        }
+
+        let empty: Vec<String> = Vec::new(env);
+        quote_line(env, &receipt.merchant, &line, &empty)?;
+        let key = product_key(&receipt.merchant, &line.product_id);
+        let mut product = load_product(env, &key).ok_or(Error::ProductNotFound)?;
+        let payable = payable_units(line.qty, product.buy_qty, product.get_qty)?;
+        let line_amount = line_gross(product.price, payable, product.discount_bps)?;
+        product.stock = product.stock.checked_sub(line.qty).ok_or(Error::Overflow)?;
+        product.sold = product.sold.checked_add(line.qty).ok_or(Error::Overflow)?;
+        save_product(env, &key, &product);
+        next.push_back(ReceiptLine {
+            product_id: line.product_id.clone(),
+            qty: line.qty,
+            gross: line_amount,
+        });
+    }
+
+    for old in receipt.lines.iter() {
+        if find_receipt_line(&next, &old.product_id).is_some() {
+            continue;
+        }
+        let key = product_key(&receipt.merchant, &old.product_id);
+        let mut product = load_product(env, &key).ok_or(Error::ProductNotFound)?;
+        product.sold = product.sold.checked_sub(old.qty).ok_or(Error::Overflow)?;
+        save_product(env, &key, &product);
+    }
+    Ok(next)
+}
+
+fn settle_revision(env: &Env, receipt: &SaleReceipt, new_gross: i128) -> Result<(), Error> {
+    let (old_fee, old_net) = split_or_zero(receipt.gross, receipt.fee_bps)?;
+    let (new_fee, new_net) = split_or_zero(new_gross, receipt.fee_bps)?;
+    let merchant_delta = new_net.checked_sub(old_net).ok_or(Error::Overflow)?;
+    let treasury_delta = new_fee.checked_sub(old_fee).ok_or(Error::Overflow)?;
+    if merchant_delta == 0 && treasury_delta == 0 {
+        return Ok(());
+    }
+
+    let token = TokenClient::new(env, &receipt.token);
+    if receipt.merchant == receipt.treasury {
+        let delta = merchant_delta
+            .checked_add(treasury_delta)
+            .ok_or(Error::Overflow)?;
+        if delta > 0 {
+            receipt.customer.require_auth();
+            token.transfer(&receipt.customer, &receipt.merchant, &delta);
+        } else if delta < 0 {
+            receipt.merchant.require_auth();
+            token.transfer(&receipt.merchant, &receipt.customer, &magnitude(delta)?);
+        }
+        return Ok(());
+    }
+
+    if merchant_delta > 0 || treasury_delta > 0 {
+        receipt.customer.require_auth();
+    }
+    if merchant_delta < 0 {
+        receipt.merchant.require_auth();
+    }
+    if treasury_delta < 0 {
+        receipt.treasury.require_auth();
+    }
+    if merchant_delta > 0 {
+        token.transfer(&receipt.customer, &receipt.merchant, &merchant_delta);
+    } else if merchant_delta < 0 {
+        token.transfer(
+            &receipt.merchant,
+            &receipt.customer,
+            &magnitude(merchant_delta)?,
+        );
+    }
+    if treasury_delta > 0 {
+        token.transfer(&receipt.customer, &receipt.treasury, &treasury_delta);
+    } else if treasury_delta < 0 {
+        token.transfer(
+            &receipt.treasury,
+            &receipt.customer,
+            &magnitude(treasury_delta)?,
+        );
+    }
+    Ok(())
+}
+
+fn split_or_zero(gross: i128, fee_bps: u32) -> Result<(i128, i128), Error> {
+    if gross == 0 {
+        return Ok((0, 0));
+    }
+    split_fee(gross, fee_bps)
+}
+
+fn magnitude(delta: i128) -> Result<i128, Error> {
+    if delta < 0 {
+        delta.checked_neg().ok_or(Error::Overflow)
+    } else {
+        Ok(delta)
+    }
+}
+
+fn find_receipt_line(lines: &Vec<ReceiptLine>, product_id: &String) -> Option<ReceiptLine> {
+    for line in lines.iter() {
+        if line.product_id == product_id.clone() {
+            return Some(line);
+        }
+    }
+    None
 }
 
 fn settle_open_claim(

@@ -2,6 +2,8 @@
   "framework": "vite",
   "rewrites": [
     { "source": "/api/v1/:path*", "destination": "/api/:path*" },
+    { "source": "/api/traction", "destination": "/api/payments/traction" },
+    { "source": "/api/traction/waitlist", "destination": "/api/payments/traction/waitlist" },
     { "source": "/api/payments/sinpe-intent/activate", "destination": "/api/payments/sinpe-intent" },
     { "source": "/api/payments/sinpe-activate", "destination": "/api/payments/sinpe-intent" },
     { "source": "/api/events/orders/ready", "destination": "/api/events/ready" },

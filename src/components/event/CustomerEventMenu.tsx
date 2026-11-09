@@ -1,16 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
-import { LoaderCircle, Minus, Plus } from 'lucide-react'
+import { LoaderCircle, Minus, Plus, X } from 'lucide-react'
 import { AuthApiError } from '@/lib/auth/api'
 import { readableError } from '@/lib/auth/readableError'
 import { ErrorModal } from '@/components/feedback/ErrorModal'
+import { SuccessModal } from '@/components/feedback/SuccessModal'
 import {
   fetchEventCatalog,
   fetchMyEventOrders,
   placeEventOrder,
+  resolveEventOrder,
 } from '@/lib/events/api'
 import {
   enableOrderReadyPush,
+  notifyMissingProductLocally,
   notifyOrderPlacedLocally,
   notifyOrderReadyLocally,
 } from '@/lib/events/push'
@@ -93,11 +96,14 @@ export function CustomerEventMenu({
   const [placed, setPlaced] = useState<EventOrder | null>(null)
   const [receipt, setReceipt] = useState<{ order: EventOrder; hash: string } | null>(null)
   const [swap, setSwap] = useState<StockSwap | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
   const [readyAlert, setReadyAlert] = useState<EventOrder | null>(null)
+  const [stockAlert, setStockAlert] = useState<EventOrder | null>(null)
   const [panel, setPanel] = useState<'carta' | 'pedidos'>('carta')
   const statusByIdRef = useRef<Record<string, EventOrder['status']>>({})
   const pushArmedRef = useRef<Promise<void> | null>(null)
   const openedOrdersRef = useRef(false)
+  const nudgedChoiceRef = useRef<Record<string, true>>({})
   const { user } = useAuth()
   const { balances, reload: reloadBalances } = useAccountBalances(user?.publicKey ?? '')
 
@@ -229,8 +235,40 @@ export function CustomerEventMenu({
 
   useEffect(() => {
     const hasOpen = orders.some(
-      (order) => order.status === 'preparing' || order.status === 'ready',
+      (order) =>
+        order.status === 'preparing' ||
+        order.status === 'ready' ||
+        order.status === 'awaiting_choice',
     )
+    const choice = orders.find((order) => {
+      if (order.status !== 'awaiting_choice') {
+        return false
+      }
+      const key = `${order.id}:${order.items
+        .filter((item) => item.unavailable)
+        .map((item) => item.productId)
+        .join(',')}`
+      return !nudgedChoiceRef.current[key]
+    })
+    if (choice) {
+      const key = `${choice.id}:${choice.items
+        .filter((item) => item.unavailable)
+        .map((item) => item.productId)
+        .join(',')}`
+      nudgedChoiceRef.current[key] = true
+      setPanel('pedidos')
+      setStockAlert(choice)
+      setReceipt(null)
+      const names = choice.items
+        .filter((item) => item.unavailable)
+        .map((item) => item.name)
+        .join(', ')
+      notifyMissingProductLocally({
+        id: choice.id,
+        orderNumber: choice.orderNumber,
+        names: names || 'Un producto',
+      })
+    }
     if (hasOpen) {
       void ensurePush()
     }
@@ -278,8 +316,40 @@ export function CustomerEventMenu({
     }
   }
 
+  async function resolveLine(
+    orderId: string,
+    productId: string,
+    action: 'refund' | 'replace',
+    replacementProductId?: string,
+  ) {
+    setBusy(true)
+    setError(null)
+    try {
+      const result = await resolveEventOrder({
+        orderId,
+        productId,
+        action,
+        replacementProductId,
+      })
+      setNotice(result.message)
+      statusByIdRef.current[result.order.id] = result.order.status
+      setPlaced(result.order)
+      void reload().catch(() => undefined)
+      void reloadBalances()
+    } catch (err) {
+      setError(readableError(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const pendingOrders = orders
-    .filter((order) => order.status === 'preparing' || order.status === 'ready')
+    .filter(
+      (order) =>
+        order.status === 'preparing' ||
+        order.status === 'ready' ||
+        order.status === 'awaiting_choice',
+    )
     .sort((a, b) => {
       if (a.status === b.status) {
         return b.createdAt.localeCompare(a.createdAt)
@@ -478,16 +548,39 @@ export function CustomerEventMenu({
 
       {panel === 'pedidos' ? (
       <>
-      {pendingOrders.length > 0 || placed?.status === 'preparing' || placed?.status === 'ready' ? (
+      {pendingOrders.length > 0 ||
+      placed?.status === 'preparing' ||
+      placed?.status === 'ready' ||
+      placed?.status === 'awaiting_choice' ? (
         <section className="grid gap-3 sm:grid-cols-2 sm:items-start xl:grid-cols-3">
           <h2 className="col-span-full text-xl font-semibold">Pedidos</h2>
-          {placed && (placed.status === 'preparing' || placed.status === 'ready') ? (
-            <CustomerOrderTicket order={placed} />
+          {placed &&
+          (placed.status === 'preparing' ||
+            placed.status === 'ready' ||
+            placed.status === 'awaiting_choice') ? (
+            <CustomerOrderTicket
+              order={placed}
+              products={products}
+              busy={busy}
+              onReplace={(productId, replacementProductId) =>
+                void resolveLine(placed.id, productId, 'replace', replacementProductId)
+              }
+              onRefund={(productId) => void resolveLine(placed.id, productId, 'refund')}
+            />
           ) : null}
           {pendingOrders
             .filter((order) => order.id !== placed?.id)
             .map((order) => (
-              <CustomerOrderTicket key={order.id} order={order} />
+              <CustomerOrderTicket
+                key={order.id}
+                order={order}
+                products={products}
+                busy={busy}
+                onReplace={(productId, replacementProductId) =>
+                  void resolveLine(order.id, productId, 'replace', replacementProductId)
+                }
+                onRefund={(productId) => void resolveLine(order.id, productId, 'refund')}
+              />
             ))}
         </section>
       ) : null}
@@ -522,12 +615,27 @@ export function CustomerEventMenu({
       ) : null}
 
       <ErrorModal message={error} onClose={() => setError(null)} />
+      <SuccessModal
+        title="Pedido actualizado"
+        message={notice}
+        onClose={() => setNotice(null)}
+      />
       {busy ? <PaymentPendingNotice /> : null}
       {receipt ? (
         <OrderReceipt
           order={receipt.order}
           hash={receipt.hash}
           onClose={() => setReceipt(null)}
+        />
+      ) : null}
+      {stockAlert ? (
+        <MissingProductNotice
+          order={stockAlert}
+          onClose={() => {
+            setStockAlert(null)
+            setReceipt(null)
+            setPanel('pedidos')
+          }}
         />
       ) : null}
       {readyAlert ? (
@@ -631,9 +739,17 @@ function OrderReceipt({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-sm rounded-[28px] border border-app-accent/40 bg-app-card p-6 shadow-[0_0_40px_rgba(255,255,255,0.08)]"
+        className="relative w-full max-w-sm rounded-[28px] border border-app-accent/40 bg-app-card p-6 shadow-[0_0_40px_rgba(255,255,255,0.08)]"
         onClick={(event) => event.stopPropagation()}
       >
+        <button
+          type="button"
+          className="absolute right-4 top-4 grid h-9 w-9 place-items-center rounded-full bg-app-chip text-white"
+          aria-label="Cerrar"
+          onClick={onClose}
+        >
+          <X className="h-4 w-4" />
+        </button>
         <p className="text-center text-xs font-medium uppercase tracking-wide text-app-accent">
           Pedido pagado
         </p>
@@ -671,7 +787,61 @@ function OrderReceipt({
           className="mt-6 w-full rounded-[28px] bg-app-accent py-5 text-xl font-semibold text-white"
           onClick={onClose}
         >
-          Ya lo tengo
+          Aceptar
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function MissingProductNotice({
+  order,
+  onClose,
+}: {
+  order: EventOrder
+  onClose: () => void
+}) {
+  const missing = order.items.filter((item) => item.unavailable)
+  return (
+    <div
+      className="fixed inset-0 z-[110] flex items-center justify-center bg-black/80 p-5 backdrop-blur-sm"
+      role="alertdialog"
+      aria-modal="true"
+      aria-labelledby="missing-product-title"
+    >
+      <div className="relative w-full max-w-sm rounded-[28px] border border-app-accent/50 bg-app-card p-6">
+        <button
+          type="button"
+          className="absolute right-4 top-4 grid h-9 w-9 place-items-center rounded-full bg-app-chip text-white"
+          aria-label="Cerrar"
+          onClick={onClose}
+        >
+          <X className="h-4 w-4" />
+        </button>
+        <p className="text-center text-xs font-medium uppercase tracking-wide text-app-accent">
+          La barra no tiene
+        </p>
+        <h2 id="missing-product-title" className="mt-2 text-center text-2xl font-semibold">
+          #{order.orderNumber}
+        </h2>
+        <ul className="mt-4 space-y-2 text-sm">
+          {missing.map((item) => (
+            <li key={item.productId}>
+              {item.qty}× {item.name}. Pagaste {formatAmount(item.lineTotal)} {order.asset}.
+            </li>
+          ))}
+        </ul>
+        <p className="mt-3 text-sm leading-relaxed text-app-muted">
+          Elige otro producto o pide el reembolso. Si el cambio sale más caro, el
+          contrato cobra la diferencia. Si sale más barato o lo reembolsas, te
+          devuelve la diferencia.
+        </p>
+        <button
+          type="button"
+          className="mt-6 w-full rounded-[28px] bg-app-accent py-5 text-xl font-semibold text-white"
+          onClick={onClose}
+        >
+          Aceptar
         </button>
       </div>
     </div>

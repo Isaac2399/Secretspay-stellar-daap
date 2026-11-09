@@ -31,6 +31,25 @@ export async function loadEventStore(): Promise<EventStoreData> {
   return parseStore(readFileSync(EVENT_FILE, 'utf8'))
 }
 
+let writeTail: Promise<unknown> = Promise.resolve()
+
+/** Lee, cambia y guarda el bar en orden. Un escaneo y un "no hay" no se pisan. */
+export function updateEventStore<T>(
+  mutate: (store: EventStoreData) => T | Promise<T>,
+): Promise<T> {
+  const run = writeTail.then(async () => {
+    const store = await loadEventStore()
+    const result = await mutate(store)
+    await saveEventStore(store)
+    return result
+  })
+  writeTail = run.then(
+    () => undefined,
+    () => undefined,
+  )
+  return run
+}
+
 export async function saveEventStore(store: EventStoreData): Promise<void> {
   if (kvConfigured()) {
     await kvCommand(['SET', KV_KEY, JSON.stringify(store)])

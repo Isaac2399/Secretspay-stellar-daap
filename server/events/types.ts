@@ -23,7 +23,12 @@ export type EventProduct = {
   updatedAt: string
 }
 
-export type EventOrderStatus = 'preparing' | 'ready' | 'completed' | 'cancelled'
+export type EventOrderStatus =
+  | 'preparing'
+  | 'ready'
+  | 'awaiting_choice'
+  | 'completed'
+  | 'cancelled'
 
 export type EventOrderItem = {
   productId: string
@@ -32,6 +37,8 @@ export type EventOrderItem = {
   unitPrice: string
   lineTotal: string
   promoLabel?: string
+  /** La barra marcó que este producto ya no está. */
+  unavailable?: boolean
 }
 
 export type EventOrder = {
@@ -52,6 +59,10 @@ export type EventOrder = {
   net?: string
   feeAccount?: string
   feeBps?: number
+  /** Id de la venta en el contrato. Hace falta para cambiarla o reembolsarla. */
+  saleId?: string
+  /** Estado al que vuelve el pedido cuando el cliente ya eligió. */
+  resumeStatus?: 'preparing' | 'ready'
   createdAt: string
   readyAt?: string
   completedAt?: string

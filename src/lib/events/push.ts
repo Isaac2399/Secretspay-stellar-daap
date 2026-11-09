@@ -79,6 +79,19 @@ export function notifyOrderPlacedLocally(order: { id: string }): void {
 }
 
 /** Aviso local al detectar `ready` por poll (útil con la pestaña abierta). */
+export function notifyMissingProductLocally(order: {
+  id: string
+  orderNumber: string
+  names: string
+}): void {
+  showLocalAlert(
+    order.id,
+    'order-missing',
+    `Ya no hay un producto del pedido #${order.orderNumber}`,
+    `${order.names}. Elige otro o pide el reembolso. El contrato ajusta lo que pagaste.`,
+  )
+}
+
 export function notifyOrderReadyLocally(order: {
   id: string
   orderNumber: string

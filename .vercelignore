@@ -1,2 +1,32 @@
+# Mismas exclusiones que .gitignore. Si este archivo existe, Vercel no usa .gitignore.
+node_modules
+dist
+dist-ssr
+*.local
+data/
+.vscode/*
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.env
+.env.*
+!.env.example
+.vercel
+~$*.docx
+target/
+.cursor/
+docs/build_stronghold_deck.py
+docs/stronghold-edp-application.pdf
+
+# No hace falta para la app y pesa más que el límite de subida.
 contracts
-docs
+
+# Copias .js junto a TypeScript. Vercel rechaza el mismo nombre con otra extensión.
+**/*.js
+!public/sw.js
+
+tmp-kv-probe.mjs

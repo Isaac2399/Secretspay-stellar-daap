@@ -357,6 +357,7 @@ function isoFromTimestamp(timestamp: number | undefined): string {
 const ORDER_STATUS: Record<EventOrder['status'], string> = {
   preparing: 'En preparación',
   ready: 'Listo para retirar',
+  awaiting_choice: 'Elige otro producto o el reembolso',
   completed: 'Entregado',
   cancelled: 'Cancelado',
 }

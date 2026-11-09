@@ -619,10 +619,9 @@ fn checkout_collects_the_gross_and_splits_it_in_one_call() {
     token_admin.mint(&customer, &10_000);
     client.register_product(&merchant, &product_id(&env, "birra"), &1_000, &9, &0, &0, &0);
 
-    assert_eq!(
-        client.checkout(&customer, &merchant, &token.address, &one_line(&env, "birra", 1)),
-        1_000
-    );
+    let paid = client.checkout(&customer, &merchant, &token.address, &one_line(&env, "birra", 1));
+    assert_eq!(paid.gross, 1_000);
+    assert_eq!(paid.sale_id, 1);
 
     assert_eq!(token.balance(&customer), 9_000);
     assert_eq!(token.balance(&treasury), 25);
@@ -640,5 +639,138 @@ fn checkout_collects_the_gross_and_splits_it_in_one_call() {
     assert_eq!(
         client.get_product(&merchant, &product_id(&env, "birra")).unwrap().stock,
         8
+    );
+}
+
+#[test]
+fn revise_refund_returns_the_whole_gross_when_the_merchant_keeps_the_fee() {
+    let (env, client, _admin, merchant, customer, token, token_admin) = setup(0);
+    client.set_event_fee(&merchant, &merchant, &0, &merchant);
+    token_admin.mint(&customer, &1_000);
+    client.register_product(&merchant, &product_id(&env, "birra"), &1_000, &2, &0, &0, &0);
+
+    let paid = client.checkout(&customer, &merchant, &token.address, &one_line(&env, "birra", 1));
+    assert_eq!(token.balance(&customer), 0);
+    assert_eq!(token.balance(&merchant), 1_000);
+    assert_eq!(client.revise_sale(&paid.sale_id, &Vec::new(&env)), 0);
+    assert_eq!(token.balance(&customer), 1_000);
+    assert_eq!(token.balance(&merchant), 0);
+    assert_eq!(
+        client.get_product(&merchant, &product_id(&env, "birra")).unwrap().sold,
+        0
+    );
+}
+
+#[test]
+fn revise_refunds_the_split_without_putting_stock_back() {
+    let (env, client, _admin, merchant, customer, token, token_admin) = setup(250);
+    let treasury = Address::generate(&env);
+    client.set_event_fee(&merchant, &merchant, &250, &treasury);
+    token_admin.mint(&customer, &10_000);
+    client.register_product(&merchant, &product_id(&env, "birra"), &1_000, &9, &0, &0, &0);
+
+    let paid = client.checkout(&customer, &merchant, &token.address, &one_line(&env, "birra", 1));
+    client.set_stock(&merchant, &product_id(&env, "birra"), &0);
+    assert_eq!(client.revise_sale(&paid.sale_id, &Vec::new(&env)), 0);
+
+    assert_eq!(token.balance(&customer), 10_000);
+    assert_eq!(token.balance(&treasury), 0);
+    assert_eq!(token.balance(&merchant), 0);
+    let item = client.get_product(&merchant, &product_id(&env, "birra")).unwrap();
+    assert_eq!(item.stock, 0);
+    assert_eq!(item.sold, 0);
+    assert!(!client.get_sale(&paid.sale_id).unwrap().open);
+    assert_eq!(
+        client.try_revise_sale(&paid.sale_id, &Vec::new(&env)),
+        Err(Ok(Error::SaleClosed))
+    );
+}
+
+#[test]
+fn revise_swaps_a_missing_product_and_settles_the_price_difference() {
+    let (env, client, _admin, merchant, customer, token, token_admin) = setup(250);
+    let treasury = Address::generate(&env);
+    client.set_event_fee(&merchant, &merchant, &250, &treasury);
+    token_admin.mint(&customer, &10_000);
+    client.register_product(&merchant, &product_id(&env, "birra"), &1_000, &5, &0, &0, &0);
+    client.register_product(&merchant, &product_id(&env, "agua"), &400, &5, &0, &0, &0);
+
+    let paid = client.checkout(&customer, &merchant, &token.address, &one_line(&env, "birra", 1));
+    assert_eq!(
+        client.revise_sale(&paid.sale_id, &one_line(&env, "agua", 1)),
+        400
+    );
+
+    assert_eq!(token.balance(&customer), 9_600);
+    assert_eq!(token.balance(&treasury), 10);
+    assert_eq!(token.balance(&merchant), 390);
+    let missing = client.get_product(&merchant, &product_id(&env, "birra")).unwrap();
+    assert_eq!(missing.stock, 4);
+    assert_eq!(missing.sold, 0);
+    let replacement = client.get_product(&merchant, &product_id(&env, "agua")).unwrap();
+    assert_eq!(replacement.stock, 4);
+    assert_eq!(replacement.sold, 1);
+
+    client.register_product(&merchant, &product_id(&env, "vino"), &2_000, &2, &0, &0, &0);
+    assert_eq!(
+        client.revise_sale(&paid.sale_id, &one_line(&env, "vino", 1)),
+        2_000
+    );
+    assert_eq!(token.balance(&customer), 8_000);
+    assert_eq!(token.balance(&treasury), 50);
+    assert_eq!(token.balance(&merchant), 1_950);
+    assert_eq!(
+        client.get_product(&merchant, &product_id(&env, "agua")).unwrap().sold,
+        0
+    );
+    assert_eq!(
+        client.get_product(&merchant, &product_id(&env, "vino")).unwrap().stock,
+        1
+    );
+}
+
+#[test]
+fn revise_keeps_the_other_line_and_rejects_a_short_replacement() {
+    let (env, client, _admin, merchant, customer, token, token_admin) = setup(250);
+    token_admin.mint(&customer, &10_000);
+    client.register_product(&merchant, &product_id(&env, "birra"), &1_000, &4, &0, &0, &0);
+    client.register_product(&merchant, &product_id(&env, "agua"), &400, &1, &0, &0, &0);
+
+    let mut lines = Vec::new(&env);
+    lines.push_back(sale_line(&env, "birra", 1));
+    lines.push_back(sale_line(&env, "agua", 1));
+    let paid = client.checkout(&customer, &merchant, &token.address, &lines);
+    assert_eq!(paid.gross, 1_400);
+
+    assert_eq!(
+        client.try_revise_sale(&paid.sale_id, &one_line(&env, "agua", 2)),
+        Err(Ok(Error::InvalidAmount))
+    );
+    assert_eq!(token.balance(&customer), 8_600);
+
+    client.register_product(&merchant, &product_id(&env, "vino"), &100, &0, &0, &0, &0);
+    assert_eq!(
+        client.try_revise_sale(&paid.sale_id, &one_line(&env, "vino", 1)),
+        Err(Ok(Error::InsufficientStock))
+    );
+    assert_eq!(token.balance(&customer), 8_600);
+    assert_eq!(
+        client.get_product(&merchant, &product_id(&env, "birra")).unwrap().sold,
+        1
+    );
+
+    assert_eq!(
+        client.revise_sale(&paid.sale_id, &one_line(&env, "agua", 1)),
+        400
+    );
+    assert_eq!(token.balance(&customer), 9_600);
+    assert!(client.get_sale(&paid.sale_id).unwrap().open);
+    assert_eq!(
+        client.get_product(&merchant, &product_id(&env, "birra")).unwrap().sold,
+        0
+    );
+    assert_eq!(
+        client.get_product(&merchant, &product_id(&env, "agua")).unwrap().stock,
+        0
     );
 }

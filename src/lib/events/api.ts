@@ -257,6 +257,36 @@ export async function markEventOrderReady(orderId: string, merchantId?: string) 
   })
 }
 
+export async function markEventProductUnavailable(
+  orderId: string,
+  productId: string,
+  merchantId?: string,
+) {
+  return request<{ order: EventOrder }>('/api/events/orders/unavailable', {
+    method: 'POST',
+    body: JSON.stringify({
+      orderId,
+      productId,
+      ...(merchantId ? { merchantId } : {}),
+    }),
+  })
+}
+
+export async function resolveEventOrder(input: {
+  orderId: string
+  productId: string
+  action: 'refund' | 'replace'
+  replacementProductId?: string
+}) {
+  return request<{ order: EventOrder; hash: string; message: string }>(
+    '/api/events/orders/resolve',
+    {
+      method: 'POST',
+      body: JSON.stringify(input),
+    },
+  )
+}
+
 export async function completeEventOrderByQr(qr: string, merchantId?: string) {
   return request<{ order: EventOrder }>('/api/events/complete', {
     method: 'POST',

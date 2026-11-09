@@ -57,7 +57,12 @@ type EscrowClient = {
   checkout: (
     args: Record<string, unknown>,
     opts?: { timeoutInSeconds?: number },
-  ) => Promise<AssembledTransaction<bigint>>
+  ) => Promise<AssembledTransaction<unknown>>
+  revise_sale: (
+    args: Record<string, unknown>,
+    opts?: { timeoutInSeconds?: number },
+  ) => Promise<AssembledTransaction<unknown>>
+  get_sale: (args: { sale_id: bigint }) => Promise<AssembledTransaction<unknown>>
 }
 
 type EventFeeView = {
@@ -205,7 +210,7 @@ export async function checkoutSale(input: {
   merchant: string
   asset: string
   lines: Array<{ productId: string; qty: number }>
-}): Promise<{ hash: string; gross: bigint }> {
+}): Promise<{ hash: string; gross: bigint; saleId: bigint | null }> {
   await ensureTokenContract(input.asset)
   const customer = Keypair.fromSecret(input.customerSecret)
   const client = await adminClient()
@@ -234,12 +239,13 @@ export async function checkoutSale(input: {
     if (!hash) {
       throw new AuthError('La red no devolvió la transacción de la venta', 502)
     }
-    const ledger = sent.getTransactionResponse as { returnValue?: unknown } | undefined
-    const gross = readI128(ledger?.returnValue) ?? readI128(sent.result)
+    const returned = readSentResult(sent)
+    const paid = readCheckout(returned)
+    const gross = paid?.gross ?? readI128(returned)
     if (gross == null) {
       throw new AuthError('No se pudo leer el monto cobrado por el contrato', 502)
     }
-    return { hash, gross }
+    return { hash, gross, saleId: paid?.saleId ?? null }
   } catch (error) {
     if (error instanceof AuthError) {
       throw error
@@ -303,6 +309,10 @@ async function adminClient(): Promise<EscrowClient> {
     })
   }
   return clientPromise
+}
+
+export function escrowAdminPublicKey(): string {
+  return adminKeypair().publicKey()
 }
 
 function adminKeypair(): Keypair {
@@ -440,6 +450,195 @@ function toU32(value: number): number {
   return value
 }
 
+export async function reviseSale(input: {
+  customerSecret: string
+  merchantSecret: string
+  treasurySecret?: string
+  asset: string
+  saleId: bigint
+  lines: Array<{ productId: string; qty: number }>
+}): Promise<{ hash: string; gross: bigint }> {
+  await ensureTokenContract(input.asset)
+  const client = await adminClient()
+  const tx = await client.revise_sale(
+    {
+      sale_id: input.saleId,
+      lines: input.lines.map((line) => ({
+        product_id: line.productId,
+        qty: toU32(line.qty),
+      })),
+    },
+    { timeoutInSeconds: 120 },
+  )
+  const signers = new Map<string, Keypair>()
+  const customer = Keypair.fromSecret(input.customerSecret)
+  const merchant = Keypair.fromSecret(input.merchantSecret)
+  signers.set(customer.publicKey(), customer)
+  signers.set(merchant.publicKey(), merchant)
+  if (input.treasurySecret) {
+    const treasury = Keypair.fromSecret(input.treasurySecret)
+    signers.set(treasury.publicKey(), treasury)
+  }
+  for (const address of tx.needsNonInvokerSigningBy()) {
+    const signer = signers.get(address)
+    if (!signer) {
+      throw new AuthError(
+        'Falta la firma de una cuenta que tiene que devolver el dinero de este pedido.',
+        400,
+      )
+    }
+    await tx.signAuthEntries({
+      address,
+      signAuthEntry: new KeypairSigner(signer, networkPassphrase()),
+    })
+  }
+  try {
+    const sent = await tx.signAndSend()
+    const hash = sent.sendTransactionResponse?.hash
+    if (!hash) {
+      throw new AuthError('La red no devolvió la transacción del cambio', 502)
+    }
+    const returned = readSentResult(sent)
+    const gross = readI128(returned)
+    if (gross == null) {
+      throw new AuthError('No se pudo leer el monto del pedido corregido', 502)
+    }
+    return { hash, gross }
+  } catch (error) {
+    if (error instanceof AuthError) {
+      throw error
+    }
+    throw new AuthError(contractError(error), 400)
+  }
+}
+
+export async function recoverSaleId(input: {
+  hash?: string
+  customer: string
+  merchant: string
+  gross: bigint
+  productIds: string[]
+}): Promise<bigint | null> {
+  const fromTx = input.hash ? await saleIdFromTransaction(input.hash) : null
+  if (fromTx != null) {
+    return fromTx
+  }
+  const client = await adminClient()
+  let misses = 0
+  let found: bigint | null = null
+  for (let id = 1n; misses < 2 && id <= 80n; id += 1n) {
+    let sale: unknown
+    try {
+      const tx = await client.get_sale({ sale_id: id })
+      sale = tx.result
+    } catch {
+      break
+    }
+    if (sale == null) {
+      misses += 1
+      continue
+    }
+    misses = 0
+    if (saleMatches(sale, input)) {
+      found = id
+    }
+  }
+  return found
+}
+
+async function saleIdFromTransaction(hash: string): Promise<bigint | null> {
+  const client = (await adminClient()) as EscrowClient & {
+    spec?: { funcResToNative: (name: string, value: unknown) => unknown }
+  }
+  const server = new rpc.Server(rpcUrl())
+  const tx = await server.getTransaction(hash)
+  if (tx.status !== 'SUCCESS' || !('returnValue' in tx) || tx.returnValue == null) {
+    return null
+  }
+  let parsed: unknown = tx.returnValue
+  try {
+    if (client.spec) {
+      parsed = client.spec.funcResToNative('checkout', tx.returnValue)
+    }
+  } catch {
+    parsed = tx.returnValue
+  }
+  return readCheckout(parsed)?.saleId ?? null
+}
+
+function saleMatches(
+  sale: unknown,
+  input: { customer: string; merchant: string; gross: bigint; productIds: string[] },
+): boolean {
+  if (!sale || typeof sale !== 'object') {
+    return false
+  }
+  const row = sale as Record<string, unknown>
+  const gross = readI128(row.gross)
+  if (row.open !== true || gross !== input.gross) {
+    return false
+  }
+  if (readAddress(row.customer) !== input.customer || readAddress(row.merchant) !== input.merchant) {
+    return false
+  }
+  const lines = Array.isArray(row.lines) ? row.lines : []
+  const got = lines
+    .map((line) => {
+      const item = line as { product_id?: unknown; productId?: unknown }
+      return String(item.product_id ?? item.productId ?? '')
+    })
+    .filter(Boolean)
+    .sort()
+  const want = [...input.productIds].sort()
+  return got.join('\0') === want.join('\0')
+}
+
+function readSentResult(sent: { result?: unknown; getTransactionResponse?: unknown }): unknown {
+  try {
+    if (sent.result != null) {
+      return sent.result
+    }
+  } catch {
+    // The parsed result throws when the ledger entry has no return value.
+  }
+  const ledger = sent.getTransactionResponse as { returnValue?: unknown } | undefined
+  return ledger?.returnValue
+}
+
+export async function readSaleOpen(saleId: bigint): Promise<boolean | null> {
+  const client = await adminClient()
+  const tx = await client.get_sale({ sale_id: saleId })
+  const sale = tx.result
+  if (!sale || typeof sale !== 'object') {
+    return null
+  }
+  const row = sale as { open?: unknown }
+  return typeof row.open === 'boolean' ? row.open : null
+}
+
+function readCheckout(value: unknown): { saleId: bigint; gross: bigint } | null {
+  if (Array.isArray(value) && value.length >= 2) {
+    const saleId = readI128(value[0])
+    const gross = readI128(value[1])
+    if (saleId != null && saleId >= 0n && gross != null) {
+      return { saleId, gross }
+    }
+  }
+  if (!value || typeof value !== 'object') {
+    return null
+  }
+  const row = value as { sale_id?: unknown; saleId?: unknown; gross?: unknown; value?: unknown }
+  const saleId = readI128(row.sale_id ?? row.saleId)
+  const gross = readI128(row.gross)
+  if (saleId != null && saleId >= 0n && gross != null) {
+    return { saleId, gross }
+  }
+  if (row.value != null && typeof row.value === 'object' && row.value !== value) {
+    return readCheckout(row.value)
+  }
+  return null
+}
+
 function readI128(value: unknown): bigint | null {
   if (typeof value === 'bigint') {
     return value
@@ -453,9 +652,19 @@ function readI128(value: unknown): bigint | null {
   if (!value || typeof value !== 'object') {
     return null
   }
-  const row = value as { i128?: unknown; toJSON?: () => unknown }
+  const row = value as {
+    i128?: unknown
+    value?: unknown
+    toJSON?: () => unknown
+  }
   if (row.i128 != null && row.i128 !== value) {
     const inner = readI128(row.i128)
+    if (inner != null) {
+      return inner
+    }
+  }
+  if (row.value != null && row.value !== value) {
+    const inner = readI128(row.value)
     if (inner != null) {
       return inner
     }
@@ -495,6 +704,8 @@ function contractError(error: unknown): string {
     [/DuplicateProduct|#13\b/, 'Ese producto ya está en el contrato'],
     [/InvalidPromo|#9\b/, 'La promo no entra en el contrato'],
     [/InsufficientVault|#5\b/, 'La bóveda del contrato no cubre la venta'],
+    [/SaleClosed|#18\b/, 'Ese pedido ya se reembolsó en el contrato'],
+    [/SaleNotFound|#17\b/, 'Esa venta no está en el contrato'],
   ]
   for (const [pattern, message] of known) {
     if (pattern.test(text)) {

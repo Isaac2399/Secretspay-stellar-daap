@@ -23,7 +23,12 @@ export type EventProduct = {
   updatedAt: string
 }
 
-export type EventOrderStatus = 'preparing' | 'ready' | 'completed' | 'cancelled'
+export type EventOrderStatus =
+  | 'preparing'
+  | 'ready'
+  | 'awaiting_choice'
+  | 'completed'
+  | 'cancelled'
 
 export type EventOrderItem = {
   productId: string
@@ -32,6 +37,8 @@ export type EventOrderItem = {
   unitPrice: string
   lineTotal: string
   promoLabel?: string
+  /** La barra marcó que este producto ya no está. */
+  unavailable?: boolean
 }
 
 export type EventOrder = {

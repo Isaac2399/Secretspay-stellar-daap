@@ -1,7 +1,6 @@
 import { useState } from 'react'
-import { Check, Copy, Landmark, LogOut, Shield, Store, User } from 'lucide-react'
+import { Check, ChevronRight, CircleHelp, Copy, Landmark, LogOut, Shield, Store, User } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
-import { CustomerFaq } from '@/components/customer/CustomerFaq'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { categoryLabel } from '@/lib/places/categories'
 
@@ -124,7 +123,18 @@ export default function ProfilePage() {
         )}
       </div>
 
-      {account.role === 'customer' ? <CustomerFaq /> : null}
+      {account.role === 'customer' ? (
+        <Link
+          to="/profile/faq"
+          className="inline-flex w-full items-center justify-between gap-2 rounded-2xl bg-app-card px-4 py-3 text-sm font-medium"
+        >
+          <span className="inline-flex items-center gap-2">
+            <CircleHelp className="h-4 w-4 text-app-accent" />
+            Preguntas frecuentes
+          </span>
+          <ChevronRight className="h-4 w-4 text-app-muted" />
+        </Link>
+      ) : null}
 
       {account.role === 'admin' ? (
         <Link

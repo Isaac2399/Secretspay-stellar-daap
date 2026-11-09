@@ -11,8 +11,8 @@ const FAQS = [
     a: 'En Inicio pulsa Agregar dinero. Puedes usar SINPE Móvil, efectivo en un stand o agregar dólares.',
   },
   {
-    q: '¿Cómo recupero el dinero que no gasté?',
-    a: 'En Inicio pulsa Reembolsar por SINPE, escribe el teléfono de 8 dígitos donde quieres recibir el dinero y confirma. La paridad es ₡1,000 por cada unidad de saldo.',
+    q: '¿El evento ya terminó? ¿Cómo recupero el saldo?',
+    a: 'Sí. Si te quedó saldo y necesitas el reembolso por SINPE, en Inicio pulsa Reembolsar por SINPE. Escribe el teléfono de 8 dígitos donde quieres recibir el dinero y pulsa Confirmar reembolso. Paridad ₡1,000 = 1 ROJO. El dinero llega por SINPE Móvil a ese número.',
   },
   {
     q: '¿Cómo ordeno?',

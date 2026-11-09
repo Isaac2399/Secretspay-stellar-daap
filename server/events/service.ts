@@ -1,23 +1,27 @@
 import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto'
 import { StrKey } from '@stellar/stellar-sdk'
-import { findUserById, secretKeyForUser } from '../auth.js'
+import { findUserById, findUserByPublicKey, secretKeyForUser } from '../auth.js'
 import {
   catalogProductExists,
   checkoutSale,
+  recoverSaleId,
+  escrowAdminPublicKey,
   publishEventFee,
+  readSaleOpen,
   registerCatalogProduct,
+  reviseSale,
   setCatalogStock,
   updateCatalogOffer,
   withMerchantLock,
 } from '../escrowContract.js'
 import { AuthError } from '../errors.js'
-import { loyaltyAssetFromEnv } from '../provisionAccount.js'
+import { submitCustodialPayment } from '../submitPayment.js'
 import { pinnedDemoMerchant } from '../guestDemo.js'
 import { loadStore } from '../userStore.js'
 import { notifyOrderReady } from './push.js'
 import { parsePickupQr, serializePickupQr } from './qr.js'
 import { emptyBoardScreen, publicBoardScreen, type EventBoardScreen } from './screen.js'
-import { loadEventStore, saveEventStore } from './store.js'
+import { loadEventStore, saveEventStore, updateEventStore } from './store.js'
 import type {
   EventBoardOrder,
   EventOrder,
@@ -359,20 +363,17 @@ export async function placeOrder(
   try {
     const paid = await withMerchantLock(merchant.publicKey, async () => {
       const treasury = split.feeBps > 0 && split.feeAccount ? split.feeAccount : merchant.publicKey
-      // Saved with the event. Reading it again is another testnet round trip.
-      if (!settings?.chainHash) {
-        const hash = await publishEventFee({
-          merchant: merchant.publicKey,
-          feeBps: split.feeBps,
-          treasury,
-        })
-        if (hash) {
-          const store = await loadEventStore()
-          const row = store.settings[merchantId]
-          if (row) {
-            row.chainHash = hash
-            await saveEventStore(store)
-          }
+      const hash = await publishEventFee({
+        merchant: merchant.publicKey,
+        feeBps: split.feeBps,
+        treasury,
+      })
+      if (hash && hash !== settings?.chainHash) {
+        const store = await loadEventStore()
+        const row = store.settings[merchantId]
+        if (row) {
+          row.chainHash = hash
+          await saveEventStore(store)
         }
       }
       const fresh = await loadEventStore()
@@ -382,7 +383,7 @@ export async function placeOrder(
         if (!product) {
           throw new AuthError('Un producto ya no está disponible', 400)
         }
-        if (product.chainHash || (await catalogProductExists(merchant.publicKey, product.id))) {
+        if (await catalogProductExists(merchant.publicKey, product.id)) {
           continue
         }
         product.chainHash = await registerCatalogProduct({
@@ -415,6 +416,7 @@ export async function placeOrder(
       merchant,
       customer,
       stellarHash: paid.hash,
+      saleId: paid.saleId?.toString(),
       fee: settled.fee,
       net: settled.net,
       feeAccount: settled.feeAccount,
@@ -444,25 +446,29 @@ export async function listMerchantOrders(merchantId: string) {
 }
 
 export async function markOrderReady(merchantId: string, orderId: string) {
-  const store = await loadEventStore()
-  const order = store.orders.find((row) => row.id === orderId && row.merchantId === merchantId)
-  if (!order) {
-    throw new AuthError('Pedido no encontrado', 404)
-  }
-  if (order.status === 'completed') {
-    throw new AuthError('Ese pedido ya se entregó', 400)
-  }
-  const becameReady = order.status !== 'ready'
-  order.status = 'ready'
-  order.readyAt = order.readyAt ?? new Date().toISOString()
-  await saveEventStore(store)
-  if (becameReady) {
+  const order = await updateEventStore((store) => {
+    const row = store.orders.find((item) => item.id === orderId && item.merchantId === merchantId)
+    if (!row) {
+      throw new AuthError('Pedido no encontrado', 404)
+    }
+    if (row.status === 'completed') {
+      throw new AuthError('Ese pedido ya se entregó', 400)
+    }
+    if (row.status === 'awaiting_choice') {
+      throw new AuthError('El cliente todavía tiene que cambiar el producto o pedir el reembolso', 400)
+    }
+    const becameReady = row.status !== 'ready'
+    row.status = 'ready'
+    row.readyAt = row.readyAt ?? new Date().toISOString()
+    return { order: row, becameReady }
+  })
+  if (order.becameReady) {
     // No bloquear la barra si falla el push (permiso, SW, suscripción muerta).
-    void notifyOrderReady(order).catch((error) => {
-      console.warn('[events] push listo falló', order.id, error)
+    void notifyOrderReady(order.order).catch((error) => {
+      console.warn('[events] push listo falló', order.order.id, error)
     })
   }
-  return publicOrder(order, false)
+  return publicOrder(order.order, false)
 }
 
 export async function completeOrderByQr(merchantId: string, rawQr: string) {
@@ -472,49 +478,405 @@ export async function completeOrderByQr(merchantId: string, rawQr: string) {
   } catch (error) {
     throw new AuthError(error instanceof Error ? error.message : 'QR inválido', 400)
   }
+  return updateEventStore((store) => {
+    const order = store.orders.find((row) => row.id === parsed.orderId)
+
+    // Wrong bar / forged id / other event: same opaque message (no order leak).
+    if (!order || order.merchantId !== merchantId) {
+      throw new AuthError(
+        'Ese QR no es de esta barra o no existe. No entregues productos.',
+        404,
+      )
+    }
+    if (!tokensMatch(order.pickupToken, parsed.pickupToken)) {
+      throw new AuthError(
+        'El código del pedido no coincide. Puede ser un QR falso o alterado.',
+        400,
+      )
+    }
+    if (!order.stellarHash) {
+      throw new AuthError(
+        'Ese pedido no tiene pago registrado. No entregues productos.',
+        400,
+      )
+    }
+    if (order.status === 'cancelled') {
+      throw new AuthError('Ese pedido está cancelado. No entregues productos.', 400)
+    }
+    if (order.status === 'awaiting_choice') {
+      throw new AuthError(
+        'Ese pedido está esperando que el cliente cambie el producto o pida el reembolso. Los demás se pueden entregar.',
+        400,
+      )
+    }
+    // Re-scan of a completed order, or a screenshot/copy of an already-used QR.
+    if (order.status === 'completed') {
+      throw new AuthError(
+        'Ese pedido ya fue entregado. No vuelvas a dar productos.',
+        409,
+      )
+    }
+    if (order.status !== 'preparing' && order.status !== 'ready') {
+      throw new AuthError('Ese pedido no se puede entregar', 400)
+    }
+
+    order.status = 'completed'
+    order.completedAt = new Date().toISOString()
+    if (!order.readyAt) {
+      order.readyAt = order.completedAt
+    }
+    return publicOrder(order, false)
+  })
+}
+
+export async function markProductUnavailable(merchantId: string, orderId: string, productId: string) {
+  const id = productId.trim()
   const store = await loadEventStore()
-  const order = store.orders.find((row) => row.id === parsed.orderId)
-
-  // Wrong bar / forged id / other event: same opaque message (no order leak).
-  if (!order || order.merchantId !== merchantId) {
-    throw new AuthError(
-      'Ese QR no es de esta barra o no existe. No entregues productos.',
-      404,
-    )
+  const order = store.orders.find((row) => row.id === orderId && row.merchantId === merchantId)
+  if (!order) {
+    throw new AuthError('Pedido no encontrado', 404)
   }
-  if (!tokensMatch(order.pickupToken, parsed.pickupToken)) {
+  if (order.status === 'completed' || order.status === 'cancelled') {
+    throw new AuthError('Ese pedido ya no se puede corregir', 400)
+  }
+  const item = order.items.find((row) => row.productId === id)
+  if (!item) {
+    throw new AuthError('Ese producto no está en el pedido', 400)
+  }
+  if (item.unavailable) {
+    return publicOrder(order, false)
+  }
+  const product = store.products.find((row) => row.id === id && row.merchantId === merchantId)
+  if (!product) {
+    throw new AuthError('Ese producto no está en la carta', 404)
+  }
+  const merchant = await findUserById(merchantId)
+  if (!merchant) {
+    throw new AuthError('La barra no está disponible', 404)
+  }
+  await withMerchantLock(merchant.publicKey, async () => {
+    if (await catalogProductExists(merchant.publicKey, product.id)) {
+      await setCatalogStock(merchant.publicKey, product.id, 0)
+    }
+  })
+
+  return updateEventStore((fresh) => {
+    const catalogProduct = fresh.products.find((row) => row.id === id && row.merchantId === merchantId)
+    if (catalogProduct) {
+      catalogProduct.stock = 0
+      catalogProduct.updatedAt = new Date().toISOString()
+    }
+    for (const row of fresh.orders) {
+      if (row.merchantId !== merchantId) {
+        continue
+      }
+      if (row.status !== 'preparing' && row.status !== 'ready' && row.status !== 'awaiting_choice') {
+        continue
+      }
+      const line = row.items.find((entry) => entry.productId === id)
+      if (!line || line.unavailable) {
+        continue
+      }
+      line.unavailable = true
+      if (row.status === 'preparing' || row.status === 'ready') {
+        row.resumeStatus = row.status
+        row.status = 'awaiting_choice'
+      }
+    }
+    const updated = fresh.orders.find((row) => row.id === orderId)
+    if (!updated) {
+      throw new AuthError('Pedido no encontrado', 404)
+    }
+    return publicOrder(updated, false)
+  })
+}
+
+async function payPriceDifference(input: {
+  customerId: string
+  customerAddress: string
+  merchantId: string
+  merchantAddress: string
+  asset: string
+  oldGross: bigint
+  newGross: bigint
+  feeBps: number
+  feeAccount: string
+}): Promise<{ hash: string; gross: bigint }> {
+  const oldFee = splitFee(input.oldGross, input.feeBps)
+  const newFee = splitFee(input.newGross, input.feeBps)
+  const merchantDelta = input.newGross - newFee - (input.oldGross - oldFee)
+  const treasuryDelta = newFee - oldFee
+  const treasury =
+    input.feeAccount && input.feeAccount !== input.merchantAddress ? input.feeAccount : ''
+  let hash = ''
+  if (!treasury) {
+    hash = await moveDifference({
+      delta: input.newGross - input.oldGross,
+      asset: input.asset,
+      customerId: input.customerId,
+      customerAddress: input.customerAddress,
+      merchantId: input.merchantId,
+      merchantAddress: input.merchantAddress,
+    })
+  } else {
+    hash = await moveDifference({
+      delta: merchantDelta,
+      asset: input.asset,
+      customerId: input.customerId,
+      customerAddress: input.customerAddress,
+      merchantId: input.merchantId,
+      merchantAddress: input.merchantAddress,
+    })
+    const treasuryUser = await findUserByPublicKey(treasury)
+    if (treasuryUser && treasuryDelta !== 0n) {
+      const treasuryHash = await moveDifference({
+        delta: treasuryDelta,
+        asset: input.asset,
+        customerId: input.customerId,
+        customerAddress: input.customerAddress,
+        merchantId: treasuryUser.id,
+        merchantAddress: treasury,
+      })
+      hash = hash || treasuryHash
+    }
+  }
+  return { hash, gross: input.newGross }
+}
+
+function splitFee(gross: bigint, feeBps: number): bigint {
+  if (gross <= 0n || feeBps <= 0) {
+    return 0n
+  }
+  return (gross * BigInt(feeBps)) / 10_000n
+}
+
+async function moveDifference(input: {
+  delta: bigint
+  asset: string
+  customerId: string
+  customerAddress: string
+  merchantId: string
+  merchantAddress: string
+}): Promise<string> {
+  if (input.delta === 0n || input.customerAddress === input.merchantAddress) {
+    return ''
+  }
+  const amount = stroopsToAmount(input.delta < 0n ? -input.delta : input.delta)
+  const customerPays = input.delta > 0n
+  const paid = await submitCustodialPayment({
+    userId: customerPays ? input.customerId : input.merchantId,
+    destination: customerPays ? input.merchantAddress : input.customerAddress,
+    amount,
+    asset: input.asset,
+  })
+  return paid.hash
+}
+
+export async function resolveUnavailableOrder(
+  customer: PublicUserLike,
+  input: Record<string, unknown>,
+) {
+  if (customer.role !== 'customer') {
+    throw new AuthError('Solo el cliente puede cambiar o reembolsar su pedido', 403)
+  }
+  const orderId = String(input.orderId ?? '').trim()
+  const productId = String(input.productId ?? '').trim()
+  const action = String(input.action ?? '').trim()
+  const replacementId = String(input.replacementProductId ?? '').trim()
+  if (!orderId || !productId || (action !== 'refund' && action !== 'replace')) {
+    throw new AuthError('Elige si cambias el producto o pides el reembolso', 400)
+  }
+
+  const store = await loadEventStore()
+  const order = store.orders.find((row) => row.id === orderId && row.customerId === customer.id)
+  if (!order) {
+    throw new AuthError('Pedido no encontrado', 404)
+  }
+  if (order.status !== 'awaiting_choice') {
+    throw new AuthError('Este pedido no está esperando un cambio', 400)
+  }
+  const missing = order.items.find((row) => row.productId === productId && row.unavailable)
+  if (!missing) {
+    throw new AuthError('Ese producto no está marcado como agotado', 400)
+  }
+  if (!order.saleId || !/^\d+$/.test(order.saleId)) {
+    const merchantUser = await findUserById(order.merchantId)
+    const found = merchantUser
+      ? await recoverSaleId({
+          hash: order.stellarHash,
+          customer: customer.publicKey,
+          merchant: merchantUser.publicKey,
+          gross: decimalToStroops(order.total),
+          productIds: order.items.map((item) => item.productId),
+        })
+      : null
+    if (found == null) {
+      order.saleId = undefined
+    } else {
+      order.saleId = found.toString()
+      await updateEventStore((fresh) => {
+        const row = fresh.orders.find((item) => item.id === order.id)
+        if (row) {
+          row.saleId = order.saleId
+        }
+      })
+    }
+  }
+  const merchant = await findUserById(order.merchantId)
+  if (!merchant || merchant.role !== 'merchant') {
+    throw new AuthError('La barra no está disponible', 404)
+  }
+
+  let replacement: EventProduct | undefined
+  if (action === 'replace') {
+    replacement = store.products.find(
+      (row) =>
+        row.id === replacementId &&
+        row.merchantId === order.merchantId &&
+        row.active &&
+        row.asset === order.asset &&
+        row.id !== productId,
+    )
+    if (!replacement) {
+      throw new AuthError('Ese reemplazo no está en la carta', 400)
+    }
+    if (replacement.stock < missing.qty) {
+      throw new AuthError(`No hay suficiente stock de ${replacement.name}`, 400, 'out_of_stock')
+    }
+    if (order.items.some((row) => row.productId === replacementId)) {
+      throw new AuthError('Ese producto ya está en el pedido. Elige otro.', 400)
+    }
+  }
+
+  const nextItems = order.items.flatMap((row) => {
+    if (row.productId !== productId) {
+      return [row]
+    }
+    if (!replacement) {
+      return []
+    }
+    const line = lineTotal(replacement, missing.qty)
+    return [
+      {
+        productId: replacement.id,
+        name: replacement.name,
+        qty: missing.qty,
+        unitPrice: replacement.price,
+        lineTotal: line === 0 ? '0' : formatAmount(line),
+        promoLabel: replacement.promo?.label,
+      },
+    ]
+  })
+
+  const lines = nextItems.map((row) => ({ productId: row.productId, qty: row.qty }))
+  const treasurySecret =
+    (order.feeBps ?? 0) > 0 && order.feeAccount
+      ? await treasurySecretFor(order.feeAccount)
+      : undefined
+  let revised: { hash: string; gross: bigint }
+  if (order.saleId && /^\d+$/.test(order.saleId)) {
+    try {
+      revised = await withMerchantLock(merchant.publicKey, async () =>
+        reviseSale({
+          customerSecret: await secretKeyForUser(customer.id),
+          merchantSecret: await secretKeyForUser(merchant.id),
+          treasurySecret,
+          asset: order.asset,
+          saleId: BigInt(order.saleId ?? '0'),
+          lines,
+        }),
+      )
+    } catch (error) {
+      const closed =
+        error instanceof AuthError && /ya se reembolsó/i.test(error.message)
+          ? await readSaleOpen(BigInt(order.saleId)).catch(() => null)
+          : null
+      if (closed !== false || nextItems.length > 0) {
+        throw error
+      }
+      revised = { hash: '', gross: 0n }
+    }
+  } else {
+    revised = await payPriceDifference({
+      customerId: customer.id,
+      customerAddress: customer.publicKey,
+      merchantId: merchant.id,
+      merchantAddress: merchant.publicKey,
+      asset: order.asset,
+      oldGross: decimalToStroops(order.total),
+      newGross: nextItems.reduce(
+        (sum, row) => sum + decimalToStroops(row.lineTotal),
+        0n,
+      ),
+      feeBps: order.feeBps ?? 0,
+      feeAccount: order.feeAccount ?? '',
+    })
+  }
+
+  const fresh = await loadEventStore()
+  const current = fresh.orders.find((row) => row.id === order.id)
+  if (!current) {
+    throw new AuthError('Pedido no encontrado', 404)
+  }
+  if (replacement) {
+    const catalogProduct = fresh.products.find((row) => row.id === replacement.id)
+    if (catalogProduct) {
+      catalogProduct.stock = Math.max(0, catalogProduct.stock - missing.qty)
+      catalogProduct.updatedAt = new Date().toISOString()
+    }
+  }
+  current.items = nextItems
+  const total = stroopsToAmount(revised.gross)
+  current.total = total
+  const settled = splitFrozen(total, current.feeBps ?? 0, current.feeAccount ?? '')
+  current.fee = settled.fee
+  current.net = settled.net
+  const stillMissing = nextItems.some((row) => row.unavailable)
+  if (nextItems.length === 0) {
+    current.status = 'cancelled'
+  } else if (!stillMissing) {
+    current.status = current.resumeStatus ?? 'preparing'
+  } else {
+    current.status = 'awaiting_choice'
+  }
+  await saveEventStore(fresh)
+  const refunded = decimalToStroops(order.total) - revised.gross
+  const message =
+    nextItems.length === 0
+      ? 'Pedido reembolsado. El dinero volvió a tu saldo.'
+      : refunded > 0n
+        ? `Listo. Volvieron ${stroopsToAmount(refunded)} ${order.asset} a tu saldo.`
+        : refunded < 0n
+          ? `Listo. Se cobraron ${stroopsToAmount(-refunded)} ${order.asset} más por el cambio.`
+          : 'Listo. El cambio quedó por el mismo precio.'
+  return { order: publicOrder(current, true), hash: revised.hash, message }
+}
+
+async function treasurySecretFor(address: string): Promise<string | undefined> {
+  if (address === escrowAdminPublicKey()) {
+    return undefined
+  }
+  const user = await findUserByPublicKey(address)
+  if (!user) {
     throw new AuthError(
-      'El código del pedido no coincide. Puede ser un QR falso o alterado.',
+      'La cuenta que cobró la comisión no está en la app, así que no puede firmar la devolución.',
       400,
     )
   }
-  if (!order.stellarHash) {
-    throw new AuthError(
-      'Ese pedido no tiene pago registrado. No entregues productos.',
-      400,
-    )
-  }
-  if (order.status === 'cancelled') {
-    throw new AuthError('Ese pedido está cancelado. No entregues productos.', 400)
-  }
-  // Re-scan of a completed order, or a screenshot/copy of an already-used QR.
-  if (order.status === 'completed') {
-    throw new AuthError(
-      'Ese pedido ya fue entregado. No vuelvas a dar productos.',
-      409,
-    )
-  }
-  if (order.status !== 'preparing' && order.status !== 'ready') {
-    throw new AuthError('Ese pedido no se puede entregar', 400)
-  }
+  return secretKeyForUser(user.id)
+}
 
-  order.status = 'completed'
-  order.completedAt = new Date().toISOString()
-  if (!order.readyAt) {
-    order.readyAt = order.completedAt
+function splitFrozen(
+  total: string,
+  feeBps: number,
+  feeAccount: string,
+): { fee: string; net: string } {
+  if (feeBps <= 0 || !feeAccount) {
+    return { fee: '0', net: total }
   }
-  await saveEventStore(store)
-  return publicOrder(order, false)
+  const gross = decimalToStroops(total)
+  const fee = (gross * BigInt(feeBps)) / 10_000n
+  return { fee: stroopsToAmount(fee), net: stroopsToAmount(gross - fee) }
 }
 
 function tokensMatch(expected: string, provided: string): boolean {
@@ -677,6 +1039,7 @@ async function commitOrder(input: {
   merchant: { id: string; email: string; place?: { name?: string } }
   customer: PublicUserLike
   stellarHash: string
+  saleId?: string
   fee: string
   net: string
   feeAccount: string
@@ -697,6 +1060,7 @@ async function commitOrder(input: {
     asset: input.reserved.asset,
     status: 'preparing',
     stellarHash: input.stellarHash,
+    saleId: input.saleId,
     fee: input.fee,
     net: input.net,
     feeAccount: input.feeAccount,

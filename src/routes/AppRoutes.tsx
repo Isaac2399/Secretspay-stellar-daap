@@ -8,6 +8,7 @@ import SignInPage from '@/pages/SignInPage'
 import ResetPasswordPage from '@/pages/ResetPasswordPage'
 import MapPage from '@/pages/MapPage'
 import ProfilePage from '@/pages/ProfilePage'
+import FaqPage from '@/pages/FaqPage'
 import RegisterPage from '@/pages/RegisterPage'
 import CardPage from '@/pages/CardPage'
 import UnassignedDepositsPage from '@/pages/UnassignedDepositsPage'
@@ -46,6 +47,7 @@ export function AppRoutes() {
           <Route path="/admin/unassigned-deposits" element={<UnassignedDepositsPage />} />
           <Route path="/admin/claim-lookup" element={<ClaimLookupPage />} />
           <Route element={<ConsumerRoute />}>
+            <Route path="/profile/faq" element={<FaqPage />} />
             <Route path="/event" element={<EventPage />} />
             <Route path="/card" element={<CardPage />} />
             <Route path="/map" element={<MapPage />} />
