@@ -15,6 +15,7 @@ import {
   withMerchantLock,
 } from '../escrowContract.js'
 import { AuthError } from '../errors.js'
+import { loyaltyAssetFromEnv } from '../provisionAccount.js'
 import { submitCustodialPayment } from '../submitPayment.js'
 import { pinnedDemoMerchant } from '../guestDemo.js'
 import { loadStore } from '../userStore.js'
