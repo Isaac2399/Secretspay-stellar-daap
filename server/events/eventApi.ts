@@ -305,7 +305,10 @@ export async function handleEventRoutes(
     }
   }
 
-  if (method === 'POST' && path === '/api/events/orders/unavailable') {
+  if (
+    method === 'POST' &&
+    (path === '/api/events/unavailable' || path === '/api/events/orders/unavailable')
+  ) {
     const merchantId = resolveBarMerchantId(session, input.body.merchantId)
     return {
       status: 200,
@@ -319,7 +322,10 @@ export async function handleEventRoutes(
     }
   }
 
-  if (method === 'POST' && path === '/api/events/orders/resolve') {
+  if (
+    method === 'POST' &&
+    (path === '/api/events/resolve' || path === '/api/events/orders/resolve')
+  ) {
     const result = await resolveUnavailableOrder(session, input.body)
     return { status: 200, body: result }
   }
