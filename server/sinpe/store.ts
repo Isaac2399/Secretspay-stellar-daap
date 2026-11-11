@@ -1,5 +1,12 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
+import { postgresReady, withDb, withDbTransaction } from '../db/client.js'
+import {
+  issueCodeRow,
+  loadSinpeSnapshot,
+  upsertSinpeTransactionRow,
+  upsertUnassignedDepositRow,
+} from '../db/sinpe.js'
 import { AuthError } from '../errors.js'
 import {
   normalizeSinpeCode,
@@ -35,6 +42,9 @@ export async function findByReference(referenceId: string): Promise<{
 export async function upsertSinpeTransaction(
   record: SinpeTransaction,
 ): Promise<SinpeTransaction> {
+  if (await postgresReady()) {
+    return withDbTransaction((sql) => upsertSinpeTransactionRow(sql, record))
+  }
   const store = await loadSinpeStore()
   const key = normalizeReference(record.referenceId)
   const index = store.sinpeTransactions.findIndex(
@@ -53,6 +63,9 @@ export async function upsertSinpeTransaction(
 export async function upsertUnassignedDeposit(
   record: UnassignedDeposit,
 ): Promise<UnassignedDeposit> {
+  if (await postgresReady()) {
+    return withDbTransaction((sql) => upsertUnassignedDepositRow(sql, record))
+  }
   const store = await loadSinpeStore()
   const key = normalizeReference(record.referenceId)
   const index = store.unassignedDeposits.findIndex(
@@ -167,6 +180,22 @@ export async function issueSinpeCodeForUser(input: {
   code: string
   now?: number
 }): Promise<SinpeCodeIssue> {
+  if (await postgresReady()) {
+    const nowMs = input.now ?? Date.now()
+    const issuedAt = new Date(nowMs).toISOString()
+    const issue: SinpeCodeIssue = {
+      id: input.id,
+      code: normalizeSinpeCode(input.code),
+      userId: input.userId,
+      publicKey: input.publicKey,
+      issuedAt,
+      expiresAt: new Date(nowMs + SINPE_CODE_TTL_MS).toISOString(),
+    }
+    await withDbTransaction((sql) =>
+      issueCodeRow(sql, issue, new Date(nowMs - SINPE_CODE_RETENTION_MS).toISOString()),
+    )
+    return issue
+  }
   const store = await loadSinpeStore()
   const nowMs = input.now ?? Date.now()
   const issuedAt = new Date(nowMs).toISOString()
@@ -209,6 +238,9 @@ function pruneCodeIssues(store: SinpeStoreData, nowMs: number) {
 }
 
 async function loadSinpeStore(): Promise<SinpeStoreData> {
+  if (await postgresReady()) {
+    return withDb((sql) => loadSinpeSnapshot(sql))
+  }
   if (kvConfigured()) {
     const raw = await kvCommand<string | SinpeStoreData | null>(['GET', KV_KEY])
     if (!raw) {

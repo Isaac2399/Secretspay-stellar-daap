@@ -10,6 +10,8 @@ import {
 import { Keypair } from '@stellar/stellar-sdk'
 import { AuthError } from './errors.js'
 import { ensureLoyaltyTrustline, provisionStellarAccount } from './provisionAccount.js'
+import { postgresReady } from './db/client.js'
+import { findLiveSession, insertSession } from './db/sessions.js'
 import { loadStore, saveStore } from './userStore.js'
 import {
   generateSinpeCode,
@@ -723,10 +725,22 @@ export async function createSessionCookie(userId: string): Promise<string> {
   const user = await findUserById(userId)
   const epoch = user?.sessionEpoch ?? 0
   const exp = Date.now() + SESSION_TTL_MS
+  const maxAge = Math.floor(SESSION_TTL_MS / 1000)
+  if (await postgresReady()) {
+    const sessionId = randomBytes(16).toString('hex')
+    await insertSession({
+      id: sessionId,
+      userId,
+      expiresAt: new Date(exp).toISOString(),
+    })
+    const payload = `s2.${sessionId}.${userId}.${exp}.${epoch}`
+    const sig = createHmac('sha256', sessionSecret()).update(payload).digest('hex')
+    return `${COOKIE_NAME}=${payload}.${sig}; ${cookieAttrs()}; Max-Age=${maxAge}`
+  }
   const payload = `${userId}.${exp}.${epoch}`
   const sig = createHmac('sha256', sessionSecret()).update(payload).digest('hex')
   const token = `${payload}.${sig}`
-  return `${COOKIE_NAME}=${token}; ${cookieAttrs()}; Max-Age=${Math.floor(SESSION_TTL_MS / 1000)}`
+  return `${COOKIE_NAME}=${token}; ${cookieAttrs()}; Max-Age=${maxAge}`
 }
 
 export function clearSessionCookie(): string {
@@ -741,6 +755,9 @@ export async function userFromCookieHeader(
     return null
   }
   const parts = token.split('.')
+  if (parts[0] === 's2') {
+    return userFromStoredSession(parts)
+  }
   let userId = ''
   let exp = ''
   let epoch = '0'
@@ -765,6 +782,35 @@ export async function userFromCookieHeader(
   }
   const expected = createHmac('sha256', sessionSecret()).update(payload).digest('hex')
   if (!safeEqual(sig, expected) || Number(exp) < Date.now()) {
+    return null
+  }
+  const user = await findUserById(userId)
+  if (!user || String(user.sessionEpoch ?? 0) !== epoch) {
+    return null
+  }
+  const withCode = (await ensureUserSinpeCode(user.id)) ?? user
+  return toPublicUser(withCode)
+}
+
+async function userFromStoredSession(parts: string[]): Promise<PublicUser | null> {
+  if (parts.length !== 6 || !(await postgresReady())) {
+    return null
+  }
+  const sessionId = parts[1] ?? ''
+  const userId = parts[2] ?? ''
+  const exp = parts[3] ?? ''
+  const epoch = parts[4] ?? ''
+  const sig = parts[5] ?? ''
+  if (!sessionId || !userId || !exp || !sig) {
+    return null
+  }
+  const payload = `s2.${sessionId}.${userId}.${exp}.${epoch}`
+  const expected = createHmac('sha256', sessionSecret()).update(payload).digest('hex')
+  if (!safeEqual(sig, expected) || Number(exp) < Date.now()) {
+    return null
+  }
+  const session = await findLiveSession(sessionId)
+  if (!session || session.userId !== userId) {
     return null
   }
   const user = await findUserById(userId)

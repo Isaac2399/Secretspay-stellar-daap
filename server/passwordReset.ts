@@ -1,6 +1,8 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
 import { sealPassword } from './auth.js'
 import { AuthError } from './errors.js'
+import { postgresReady } from './db/client.js'
+import { revokeUserSessions } from './db/sessions.js'
 import { loadStore, saveStore } from './userStore.js'
 
 const RESET_TTL_MS = 30 * 60 * 1000
@@ -123,6 +125,9 @@ export async function completePasswordReset(tokenRaw: string, password: string):
   user.sessionEpoch = (user.sessionEpoch ?? 0) + 1
   delete user.passwordReset
   await saveStore(store)
+  if (await postgresReady()) {
+    await revokeUserSessions(user.id)
+  }
 }
 
 async function clearResetToken(userId: string): Promise<void> {

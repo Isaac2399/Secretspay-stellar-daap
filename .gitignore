@@ -44,3 +44,4 @@ target/
 docs/build_stronghold_deck.py
 docs/stronghold-edp-application.pdf
 .env*
+.neon

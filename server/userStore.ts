@@ -1,6 +1,9 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import type { StoredUser } from './auth.js'
+import { postgresReady, withDb, withDbTransaction } from './db/client.js'
+import { isUniqueViolation } from './db/sql.js'
+import { loadUserSnapshot, saveUserSnapshot } from './db/users.js'
 import { AuthError } from './errors.js'
 
 export type MerchantApplicationStatus = 'pending' | 'approving' | 'approved' | 'rejected'
@@ -35,6 +38,9 @@ const USERS_FILE = join('data', 'users.json')
 const KV_KEY = 'stellar-web-app:users'
 
 export async function loadStore(): Promise<UserStore> {
+  if (await postgresReady()) {
+    return withDb((sql) => loadUserSnapshot(sql))
+  }
   if (kvConfigured()) {
     const raw = await kvCommand<string | UserStore | null>(['GET', KV_KEY])
     if (!raw) {
@@ -60,6 +66,17 @@ export async function loadStore(): Promise<UserStore> {
 }
 
 export async function saveStore(store: UserStore): Promise<void> {
+  if (await postgresReady()) {
+    try {
+      await withDbTransaction((sql) => saveUserSnapshot(sql, store))
+    } catch (error) {
+      if (isUniqueViolation(error, 'users_email_unique')) {
+        throw new AuthError('Ya existe una cuenta con ese email', 409)
+      }
+      throw error
+    }
+    return
+  }
   if (kvConfigured()) {
     await kvCommand(['SET', KV_KEY, JSON.stringify(store)])
     return
