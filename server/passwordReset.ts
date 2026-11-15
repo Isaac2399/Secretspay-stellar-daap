@@ -23,6 +23,9 @@ export async function requestPasswordReset(emailRaw: string): Promise<ResetReque
   }
 
   const mode = mailMode()
+  if (mode === 'resend') {
+    await senderAddress()
+  }
   const store = await loadStore()
   const user = store.users.find((entry) => entry.email === email)
   if (!user || user.guestDemo) {
@@ -72,7 +75,7 @@ export async function requestPasswordReset(emailRaw: string): Promise<ResetReque
 
   const url = `${appOrigin()}/reset-password?token=${encodeURIComponent(token)}`
   if (mode === 'preview') {
-    console.info(`[password-reset] ${email} ${url}`)
+    console.info('[password-reset] enlace de prueba emitido, sin token en el log')
     return { devResetUrl: url }
   }
 
@@ -142,19 +145,12 @@ async function clearResetToken(userId: string): Promise<void> {
 
 function mailMode(): 'resend' | 'preview' {
   const apiKey = (process.env.RESEND_API_KEY ?? '').trim()
-  const from = (process.env.EMAIL_FROM ?? '').trim()
-  if (apiKey && from) {
+  if (apiKey) {
     return 'resend'
-  }
-  if (apiKey && !from) {
-    throw new AuthError(
-      'Falta EMAIL_FROM para enviar el correo de recuperación.',
-      503,
-    )
   }
   if (process.env.VERCEL || process.env.NODE_ENV === 'production') {
     throw new AuthError(
-      'El correo de recuperación no está configurado. Añade RESEND_API_KEY y EMAIL_FROM.',
+      'El correo de recuperación no está configurado. Añade RESEND_API_KEY y un dominio verificado en Resend.',
       503,
     )
   }
@@ -167,7 +163,7 @@ async function sendPasswordMail(input: {
   text: string
 }): Promise<void> {
   const apiKey = (process.env.RESEND_API_KEY ?? '').trim()
-  const from = (process.env.EMAIL_FROM ?? '').trim()
+  const from = await senderAddress()
   if (!apiKey || !from) {
     throw new AuthError('El correo de recuperación no está configurado.', 503)
   }
@@ -194,10 +190,57 @@ async function sendPasswordMail(input: {
   }
 }
 
+let cachedSender: { at: number; from: string } | null = null
+
+async function senderAddress(): Promise<string> {
+  const configured = (process.env.EMAIL_FROM ?? '').trim()
+  if (configured) {
+    return configured
+  }
+  if (cachedSender && Date.now() - cachedSender.at < 10 * 60 * 1000) {
+    return cachedSender.from
+  }
+  const domain = await verifiedSendingDomain()
+  if (!domain) {
+    throw new AuthError(
+      'Falta un dominio verificado en Resend para enviar el correo de recuperación.',
+      503,
+    )
+  }
+  const from = `Stellar Pay <no-reply@${domain}>`
+  cachedSender = { at: Date.now(), from }
+  return from
+}
+
+async function verifiedSendingDomain(): Promise<string | null> {
+  const apiKey = (process.env.RESEND_API_KEY ?? '').trim()
+  if (!apiKey) {
+    return null
+  }
+  const response = await fetch('https://api.resend.com/domains', {
+    headers: { Authorization: `Bearer ${apiKey}` },
+  })
+  if (!response.ok) {
+    console.error('[password-reset] domains', response.status)
+    return null
+  }
+  const body = (await response.json()) as {
+    data?: Array<{ name?: string; status?: string }>
+  }
+  const verified = (body.data ?? [])
+    .map((row) => ({ name: (row.name ?? '').trim().toLowerCase(), status: row.status }))
+    .filter((row) => row.status === 'verified' && row.name && !row.name.endsWith('.resend.app'))
+  return verified[0]?.name ?? null
+}
+
 function appOrigin(): string {
   const configured = (process.env.APP_URL ?? '').trim().replace(/\/$/, '')
   if (configured) {
     return configured
+  }
+  const production = (process.env.VERCEL_PROJECT_PRODUCTION_URL ?? '').trim().replace(/\/$/, '')
+  if (production && process.env.VERCEL_ENV === 'production') {
+    return production.startsWith('http') ? production : `https://${production}`
   }
   const vercel = (process.env.VERCEL_URL ?? '').trim().replace(/\/$/, '')
   if (vercel) {
