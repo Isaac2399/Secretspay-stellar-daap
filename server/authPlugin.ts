@@ -4,6 +4,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { Plugin } from 'vite'
 import { ensureDevSuperAdmin, ensureDevEventStaff } from './auth.js'
 import { guestDemoStatus, scheduleGuestDemoWarm } from './guestDemo.js'
+import { clientIpFromHeaders } from './clientIp.js'
 import { dispatchApi } from './dispatchApi.js'
 
 loadLocalEnv()
@@ -69,7 +70,11 @@ async function handleApi(
       path,
       cookie: req.headers.cookie,
       authorization,
-      apiKey: headerValue(req.headers['x-api-key']),
+      apiKey:
+        headerValue(req.headers['x-api-key']) ??
+        headerValue(req.headers['api-key']) ??
+        headerValue(req.headers.apikey),
+      clientIp: clientIpFromHeaders(req.headers, req.socket?.remoteAddress),
       body,
       rawBody: posted.rawBody,
       webhookId: headerValue(req.headers['svix-id']) ?? headerValue(req.headers['webhook-id']),
@@ -84,10 +89,11 @@ async function handleApi(
     res.statusCode = result.status
     res.setHeader('Content-Type', 'application/json')
     if (result.setCookie) {
-      res.setHeader('Set-Cookie', result.setCookie)
+      res.setHeader('Set-Cookie', cookieForRequest(result.setCookie, req))
     }
     res.end(payload)
-  } catch {
+  } catch (error) {
+    console.error('[api]', error)
     res.statusCode = 500
     res.setHeader('Content-Type', 'application/json')
     res.end(JSON.stringify({ error: 'Error interno' }))
@@ -106,6 +112,42 @@ async function readJson(
     return { body: {} }
   }
   return { body: decodeHttpBody(raw), rawBody: raw }
+}
+
+function cookieForRequest(
+  setCookie: string | string[],
+  req: IncomingMessage,
+): string | string[] {
+  const headers = Array.isArray(setCookie) ? setCookie : [setCookie]
+  if (requestIsSecure(req)) {
+    return headers.length === 1 ? (headers[0] ?? '') : headers
+  }
+  const adjusted = headers.flatMap((header) => {
+    const without = header.replace(/; Secure/g, '')
+    if (/Max-Age=0/i.test(header)) {
+      const withSecure = /; Secure/.test(header) ? header : `${header}; Secure`
+      return [without, withSecure]
+    }
+    return [without]
+  })
+  const unique = [...new Set(adjusted)]
+  return unique.length === 1 ? (unique[0] ?? '') : unique
+}
+
+function requestIsSecure(req: IncomingMessage): boolean {
+  const forwarded = req.headers['x-forwarded-proto']
+  const proto = (Array.isArray(forwarded) ? forwarded[0] : forwarded)
+    ?.split(',')[0]
+    ?.trim()
+    .toLowerCase()
+  if (proto === 'https') {
+    return true
+  }
+  if (proto === 'http') {
+    return false
+  }
+  const socket = req.socket as { encrypted?: boolean } | undefined
+  return socket?.encrypted === true
 }
 
 function headerValue(value: string | string[] | undefined): string | undefined {

@@ -47,6 +47,13 @@ CREATE TABLE IF NOT EXISTS merchant_applications (
   user_id text
 );
 
+CREATE TABLE IF NOT EXISTS login_limits (
+  subject text PRIMARY KEY,
+  failures integer NOT NULL,
+  window_started_at timestamptz NOT NULL,
+  locked_until timestamptz
+);
+
 CREATE TABLE IF NOT EXISTS sessions (
   id text PRIMARY KEY,
   user_id text NOT NULL REFERENCES users (id) ON DELETE CASCADE,
@@ -119,6 +126,26 @@ CREATE TABLE IF NOT EXISTS sinpe_code_issues (
   public_key text NOT NULL,
   issued_at timestamptz NOT NULL,
   expires_at timestamptz NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS pilot_balance_snapshot (
+  public_key text PRIMARY KEY,
+  email text NOT NULL,
+  role text NOT NULL,
+  guest_demo boolean NOT NULL DEFAULT false,
+  rojos text NOT NULL,
+  usdc text NOT NULL,
+  xlm text NOT NULL,
+  recorded_at timestamptz NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS account_openings (
+  user_id text PRIMARY KEY,
+  email text NOT NULL,
+  role text NOT NULL,
+  public_key text NOT NULL,
+  guest_demo boolean NOT NULL DEFAULT false,
+  created_at timestamptz NOT NULL
 );
 `
 

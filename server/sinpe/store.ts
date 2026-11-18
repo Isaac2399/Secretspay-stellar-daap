@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { postgresReady, withDb, withDbTransaction } from '../db/client.js'
+import { asNumber } from '../db/sql.js'
 import {
   issueCodeRow,
   loadSinpeSnapshot,
@@ -22,6 +23,110 @@ import type {
 
 const SINPE_FILE = join('data', 'sinpe.json')
 const KV_KEY = 'stellar-web-app:sinpe'
+
+export async function claimUnderpaidSinpe(input: {
+  referenceId: string
+  crcAmount: number
+  rojos: number
+  comment: string
+  sender: string
+  rawMessage: string
+  now: string
+}): Promise<{ previousRojos: number; userId?: string; publicKey: string } | null> {
+  if (!(await postgresReady())) {
+    return null
+  }
+  return withDbTransaction(async (sql) => {
+    const claimed = await sql.query<{
+      previous_rojos: unknown
+      user_id: string | null
+      public_key: string | null
+    }>(
+      `WITH prev AS (
+         SELECT id, calculated_rojos, user_id, public_key
+         FROM sinpe_transactions
+         WHERE reference_key = $1
+           AND status = 'COMPLETED'
+           AND crc_amount > 0
+           AND crc_amount * 10 <= $2
+           AND public_key IS NOT NULL
+         FOR UPDATE
+       )
+       UPDATE sinpe_transactions AS t
+       SET crc_amount = $2,
+           calculated_rojos = $3,
+           comment = CASE WHEN btrim(t.comment) = '' THEN $4 ELSE t.comment END,
+           sender = CASE WHEN btrim(t.sender) = '' THEN $5 ELSE t.sender END,
+           raw_message = CASE WHEN btrim(t.raw_message) = '' THEN $6 ELSE t.raw_message END,
+           updated_at = $7
+       FROM prev
+       WHERE t.id = prev.id
+       RETURNING prev.calculated_rojos AS previous_rojos, prev.user_id, prev.public_key`,
+      [
+        input.referenceId.trim(),
+        input.crcAmount,
+        input.rojos,
+        input.comment,
+        input.sender,
+        input.rawMessage,
+        input.now,
+      ],
+    )
+    const row = claimed.rows[0]
+    if (!row?.public_key) {
+      return null
+    }
+    await sql.query(
+      `UPDATE sinpe_deposits
+       SET crc_amount = $2,
+           calculated_rojos = $3,
+           comment = CASE WHEN btrim(comment) = '' THEN $4 ELSE comment END,
+           sender = CASE WHEN btrim(sender) = '' THEN $5 ELSE sender END,
+           raw_message = CASE WHEN btrim(raw_message) = '' THEN $6 ELSE raw_message END,
+           updated_at = $7
+       WHERE reference_key = $1`,
+      [
+        input.referenceId.trim(),
+        input.crcAmount,
+        input.rojos,
+        input.comment,
+        input.sender,
+        input.rawMessage,
+        input.now,
+      ],
+    )
+    return {
+      previousRojos: asNumber(row.previous_rojos),
+      userId: row.user_id ?? undefined,
+      publicKey: row.public_key,
+    }
+  })
+}
+
+export async function revertUnderpaidSinpe(input: {
+  referenceId: string
+  crcAmount: number
+  rojos: number
+  now: string
+}): Promise<void> {
+  if (!(await postgresReady())) {
+    return
+  }
+  await withDbTransaction(async (sql) => {
+    await sql.query(
+      `UPDATE sinpe_transactions
+       SET crc_amount = $2, calculated_rojos = $3, updated_at = $4
+       WHERE reference_key = $1`,
+      [input.referenceId.trim(), input.crcAmount, input.rojos, input.now],
+    )
+    await sql.query(
+      `UPDATE sinpe_deposits
+       SET crc_amount = $2, calculated_rojos = $3, updated_at = $4
+       WHERE reference_key = $1`,
+      [input.referenceId.trim(), input.crcAmount, input.rojos, input.now],
+    )
+  })
+}
 
 export async function findByReference(referenceId: string): Promise<{
   transaction?: SinpeTransaction

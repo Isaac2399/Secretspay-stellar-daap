@@ -192,6 +192,14 @@ export function parseCrcNumber(raw: string): number | null {
         : Number(cleaned.replace(',', '.'))
     return Number.isFinite(value) && value > 0 ? value : null
   }
+  if (cleaned.includes('.')) {
+    const parts = cleaned.split('.')
+    const grouped = parts.slice(1).every((part) => part.length === 3)
+    if (grouped && parts.length > 1) {
+      const value = Number(cleaned.replace(/\./g, ''))
+      return Number.isFinite(value) && value > 0 ? value : null
+    }
+  }
   const value = Number(cleaned)
   return Number.isFinite(value) && value > 0 ? value : null
 }

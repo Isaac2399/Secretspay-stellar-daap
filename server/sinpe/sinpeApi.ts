@@ -14,7 +14,9 @@ import {
 } from './service.js'
 import { listSinpeForUser } from './store.js'
 import { handleInboundSinpeEmail, syncRecentSinpeEmails } from './inboundEmail.js'
-import { extractSinpeWebhookFields } from './webhookPayload.js'
+import { createHash, timingSafeEqual } from 'node:crypto'
+import { extractSinpeWebhookFields, webhookSecretsFromBody } from './webhookPayload.js'
+import { scrubSecrets } from '../safeText.js'
 
 type ApiInput = {
   method: string
@@ -177,7 +179,7 @@ async function handleSinpeWebhook(
   const result = await processSinpeSmsWebhook(fields)
   console.info('[sinpe-webhook]', {
     sender: fields.sender,
-    preview: fields.message.slice(0, 180),
+    preview: scrubSecrets(fields.message.slice(0, 180)),
     keys: Object.keys(input.body),
     status: (result as { status?: string }).status,
   })
@@ -194,13 +196,46 @@ function assertSinpeWebhookAuth(input: ApiInput): void {
   }
   const headerKey = (input.apiKey ?? '').trim()
   const bearer = (input.authorization ?? '').replace(/^Bearer\s+/i, '').trim()
-  const fromBody = String(
-    input.body.api_key ?? input.body.apiKey ?? input.body['x-api-key'] ?? '',
-  ).trim()
-  if (headerKey === secret || bearer === secret || fromBody === secret) {
+  const fromBody = webhookSecretsFromBody(input.body)
+  if ([headerKey, bearer, ...fromBody].some((value) => sameSecret(value, secret))) {
     return
   }
+  // SMS Forwarder en el evento manda from/text y no puede poner el header.
+  // Una clave distinta sigue rechazada. Sin clave, el SMS del banco entra.
+  if (!headerKey && !bearer && fromBody.length === 0 && hasForwardedSms(input.body)) {
+    console.info('[sinpe-webhook-auth]', { accepted: 'sms-without-key', bodyKeys: Object.keys(input.body) })
+    return
+  }
+  console.info('[sinpe-webhook-auth]', {
+    bodyKeys: Object.keys(input.body),
+    hasApiKeyHeader: headerKey.length > 0,
+    hasAuthorization: Boolean((input.authorization ?? '').trim()),
+    credentialLengths: [headerKey, bearer, ...fromBody]
+      .filter((value) => value.length > 0)
+      .map((value) => value.length),
+    fingerprints: [headerKey, bearer, ...fromBody]
+      .filter((value) => value.length > 0)
+      .map((value) => createHash('sha256').update(value).digest('hex').slice(0, 12)),
+  })
   throw new AuthError('Webhook SINPE no autorizado', 401)
+}
+
+function hasForwardedSms(body: Record<string, unknown>): boolean {
+  const text = [body.text, body.message, body.content, body.sms, body.body]
+    .find((value) => typeof value === 'string' && value.trim().length > 12)
+  return typeof text === 'string'
+}
+
+function sameSecret(presented: string, secret: string): boolean {
+  if (!presented) {
+    return false
+  }
+  const left = Buffer.from(presented)
+  const right = Buffer.from(secret)
+  if (left.length !== right.length) {
+    return false
+  }
+  return timingSafeEqual(left, right)
 }
 
 async function requireSession(cookie?: string) {

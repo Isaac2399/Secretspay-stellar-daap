@@ -1,4 +1,5 @@
 import { loadLocalEnv } from './loadLocalEnv.js'
+import { topUpFromSuperAdmin } from './adminTopUp.js'
 import {
   staffSendSource,
   submitCustodialPayment,
@@ -9,8 +10,10 @@ import {
   AuthError,
   authenticate,
   authenticateWithGoogle,
-  clearSessionCookie,
+  changePassword,
+  clearSessionCookieHeaders,
   createSessionCookie,
+  endSession,
   createUser,
   ensureUserLoyaltyTrustline,
   findUserByPublicKey,
@@ -50,6 +53,7 @@ import {
   PASSWORD_RESET_MESSAGE,
   requestPasswordReset,
 } from './passwordReset.js'
+import { publicErrorMessage } from './safeText.js'
 import {
   decideMerchantApplication,
   listMerchantApplications,
@@ -77,12 +81,13 @@ export async function dispatchApi(input: {
   cookie?: string
   authorization?: string
   apiKey?: string
+  clientIp?: string
   body: Record<string, unknown>
   rawBody?: string
   webhookId?: string
   webhookTimestamp?: string
   webhookSignature?: string
-}): Promise<{ status: number; body: unknown; setCookie?: string }> {
+}): Promise<{ status: number; body: unknown; setCookie?: string | string[] }> {
   try {
     return await route(input)
   } catch (error) {
@@ -90,18 +95,14 @@ export async function dispatchApi(input: {
       return {
         status: error.status,
         body: {
-          error: error.message,
+          error: publicErrorMessage(error.message),
           ...(error.code ? { code: error.code } : {}),
-          ...(error.details ? { details: error.details } : {}),
         },
       }
     }
-    console.error('[api]', error)
-    const message =
-      error instanceof Error && error.message.trim()
-        ? error.message
-        : 'Error interno'
-    return { status: 500, body: { error: message } }
+    const message = error instanceof Error ? error.message : 'Error interno'
+    console.error('[api]', publicErrorMessage(message))
+    return { status: 500, body: { error: publicErrorMessage(message) } }
   }
 }
 
@@ -111,12 +112,13 @@ async function route(input: {
   cookie?: string
   authorization?: string
   apiKey?: string
+  clientIp?: string
   body: Record<string, unknown>
   rawBody?: string
   webhookId?: string
   webhookTimestamp?: string
   webhookSignature?: string
-}): Promise<{ status: number; body: unknown; setCookie?: string }> {
+}): Promise<{ status: number; body: unknown; setCookie?: string | string[] }> {
   await ensureDevSuperAdmin()
   await ensureDevEventStaff()
   const path = (input.path.split('?')[0] ?? input.path).replace(/\/$/, '') || '/'
@@ -173,6 +175,59 @@ async function route(input: {
     const staff = await requireStaffTransfer(session)
     const source = staffSendSource(staff.role as StaffSendRole)
     return { status: 200, body: source }
+  }
+
+  if (method === 'POST' && path === '/api/admin/top-up') {
+    const session = await userFromCookieHeader(input.cookie)
+    const admin = await requireSuperAdmin(session)
+    const referenceId = String(
+      input.body.reference_id ?? input.body.referenceId ?? '',
+    ).trim()
+    const asset = String(input.body.asset ?? '')
+    if (referenceId && isLoyaltyAssetCode(asset)) {
+      await assertReferenceAvailableForManualGrant(referenceId)
+    }
+    const result = await topUpFromSuperAdmin({
+      email: String(input.body.email ?? ''),
+      publicKey: String(input.body.destination ?? input.body.publicKey ?? ''),
+      amount: String(input.body.amount ?? ''),
+      asset,
+      memo: String(input.body.memo ?? ''),
+    })
+    if (referenceId && isLoyaltyAssetCode(asset)) {
+      const byKey = await findUserByPublicKey(result.destination)
+      try {
+        await markReferenceGrantedByAdmin({
+          referenceId,
+          adminId: admin.id,
+          publicKey: result.destination,
+          userId: byKey?.id,
+          rojos: Number(input.body.amount),
+          stellarHash: result.hash,
+        })
+        return {
+          status: 200,
+          body: { ...result, referenceId, referenceMarked: true },
+        }
+      } catch (error) {
+        console.error('[admin-top-up] fondos enviados pero no se marcó la referencia', {
+          referenceId,
+          hash: result.hash,
+          error,
+        })
+        return {
+          status: 200,
+          body: {
+            ...result,
+            referenceId,
+            referenceMarked: false,
+            warning:
+              'Los fondos se enviaron, pero no se pudo marcar el número de referencia. Revisalo en SINPE.',
+          },
+        }
+      }
+    }
+    return { status: 200, body: result }
   }
 
   if (method === 'POST' && path === '/api/admin/send') {
@@ -308,8 +363,30 @@ async function route(input: {
     const user = await authenticate(
       String(input.body.email ?? ''),
       String(input.body.password ?? ''),
+      input.clientIp,
     )
     return { status: 200, body: user, setCookie: await createSessionCookie(user.id) }
+  }
+
+  if (method === 'POST' && path === '/api/auth/change-password') {
+    const session = await userFromCookieHeader(input.cookie)
+    if (!session) {
+      throw new AuthError('No hay sesión', 401)
+    }
+    const setCookie = await changePassword({
+      userId: session.id,
+      currentPassword: String(input.body.currentPassword ?? input.body.current_password ?? ''),
+      nextPassword: String(input.body.password ?? input.body.nextPassword ?? ''),
+      ip: input.clientIp,
+    })
+    return {
+      status: 200,
+      body: {
+        ok: true,
+        message: 'Contraseña actualizada. Las otras sesiones se cerraron.',
+      },
+      setCookie,
+    }
   }
 
   if (method === 'POST' && path === '/api/auth/forgot-password') {
@@ -335,7 +412,7 @@ async function route(input: {
         ok: true,
         message: 'Contraseña actualizada. Ya puedes iniciar sesión.',
       },
-      setCookie: clearSessionCookie(),
+      setCookie: clearSessionCookieHeaders(),
     }
   }
 
@@ -363,7 +440,8 @@ async function route(input: {
   }
 
   if (method === 'POST' && path === '/api/auth/logout') {
-    return { status: 200, body: { ok: true }, setCookie: clearSessionCookie() }
+    await endSession(input.cookie)
+    return { status: 200, body: { ok: true }, setCookie: clearSessionCookieHeaders() }
   }
 
   if (method === 'GET' && path === '/api/auth/me') {

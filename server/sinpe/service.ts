@@ -2,7 +2,6 @@ import { randomUUID } from 'node:crypto'
 import {
   ensureUserLoyaltyTrustline,
   ensureUserSinpeCode,
-  findUserByEmail,
   findUserById,
   findUserByPublicKey,
   findUserBySinpeCode,
@@ -25,8 +24,15 @@ import {
 } from './code.js'
 import { AuthError } from '../errors.js'
 import { creditLoyaltyFromTreasury } from '../submitPayment.js'
-import { calculateRojos, CRC_PER_ROJO, formatRojosAmount } from './convert.js'
-import { extractStellarPublicKey, extractPhoneFromSms, parseSinpeSms } from './parseSms.js'
+import { calculateRojos, CRC_PER_ROJO, formatRojosAmount, roundRojos } from './convert.js'
+import {
+  amountFromBankText,
+  autoCreditDecision,
+  bankAmountReplaces,
+  claimCreditDecision,
+} from './creditRules.js'
+import { publicErrorMessage } from '../safeText.js'
+import { extractPhoneFromSms, parseSinpeSms } from './parseSms.js'
 import {
   isTemplatePlaceholder,
   isRouteNoise,
@@ -35,8 +41,10 @@ import {
 import {
   findActiveCodeIssueForUser,
   findByMessageQuery,
+  claimUnderpaidSinpe,
   findByReference,
   findCodeIssueByCode,
+  revertUnderpaidSinpe,
   isPendingDepositStatus,
   issueSinpeCodeForUser,
   listActiveCodeCodes,
@@ -146,9 +154,7 @@ export async function processSinpeSmsWebhook(
   if (senderGate) {
     const now = new Date().toISOString()
     const codes = extractSinpeCodes(payload.message)
-    const matched = codes[0]
-      ? await resolveDestination(codes[0], payload.message)
-      : undefined
+    const matched = await ownerFromBankText(codes[0] ?? '', payload.message)
     const parsedEarly = parseSinpeSms(payload.message)
     const earlyRef = parsedEarly?.referenceId
     if (earlyRef) {
@@ -198,9 +204,7 @@ export async function processSinpeSmsWebhook(
   if (!parsed) {
     const now = new Date().toISOString()
     const codes = extractSinpeCodes(payload.message)
-    const matched = codes[0]
-      ? await resolveDestination(codes[0], payload.message)
-      : undefined
+    const matched = await ownerFromBankText(codes[0] ?? '', payload.message)
     const deposit = await upsertUnassignedDeposit({
       id: randomUUID(),
       referenceId: `unparsed-${Date.now()}`,
@@ -226,6 +230,20 @@ export async function processSinpeSmsWebhook(
   }
 
   const existing = await findByReference(parsed.referenceId)
+  const storedCrc = existing.transaction?.crcAmount || existing.deposit?.crcAmount || 0
+  if (
+    (existing.transaction?.status === 'COMPLETED' || isResolved(existing.deposit)) &&
+    bankAmountReplaces(storedCrc, parsed.crcAmount)
+  ) {
+    const topped = await topUpUnderpaidSinpe({
+      parsed,
+      message: payload.message,
+      sender,
+    })
+    if (topped) {
+      return topped
+    }
+  }
   if (existing.transaction?.status === 'COMPLETED' || isResolved(existing.deposit)) {
     return {
       status: 'duplicate_ignored' as const,
@@ -238,6 +256,7 @@ export async function processSinpeSmsWebhook(
   if (
     isPendingDepositStatus(existing.deposit?.status ?? '') &&
     !existing.transaction &&
+    !bankAmountReplaces(existing.deposit?.crcAmount ?? 0, parsed.crcAmount) &&
     !isRicherSms(payload.message, existing.deposit?.rawMessage ?? '') &&
     !parkedForUntrustedSender(existing.deposit)
   ) {
@@ -245,15 +264,18 @@ export async function processSinpeSmsWebhook(
   }
 
   const { rojos, promoApplied } = calculateRojos(parsed.crcAmount)
+  const owner = await ownerFromBankText(parsed.comment, payload.message)
   const claimedUser = await claimedDestination(existing.deposit)
-  const destination =
-    claimedUser ?? (await resolveDestination(parsed.comment, payload.message))
+  const creditOwner =
+    autoCreditDecision({ ownerId: owner?.id, claimedId: claimedUser?.id }) === 'credit'
+      ? owner
+      : undefined
   const now = new Date().toISOString()
   const timestamp = Number.isFinite(payload.timestamp)
     ? payload.timestamp
     : Date.now()
 
-  if (!destination) {
+  if (!creditOwner) {
     const deposit = await upsertUnassignedDeposit({
       id: existing.deposit?.id ?? randomUUID(),
       referenceId: parsed.referenceId,
@@ -265,9 +287,12 @@ export async function processSinpeSmsWebhook(
       rawMessage: payload.message,
       timestamp,
       status: 'PENDING_MANUAL_MATCH',
-      lastError: destinationError(parsed.comment, payload.message),
-      assignedUserId: existing.deposit?.assignedUserId,
-      assignedPublicKey: existing.deposit?.assignedPublicKey,
+      lastError:
+        claimedUser?.id && owner?.id && claimedUser.id !== owner.id
+          ? 'El código del comprobante no es de la cuenta que reclamó esta referencia.'
+          : destinationError(parsed.comment, payload.message),
+      assignedUserId: owner?.id ?? existing.deposit?.assignedUserId,
+      assignedPublicKey: owner?.publicKey ?? existing.deposit?.assignedPublicKey,
       createdAt: existing.deposit?.createdAt ?? now,
       updatedAt: now,
     })
@@ -280,7 +305,7 @@ export async function processSinpeSmsWebhook(
   }
 
   try {
-    const credit = await mintRojosToUser(destination, rojos, parsed.referenceId)
+    const credit = await mintRojosToUser(creditOwner, rojos, parsed.referenceId)
     const notification = successMessage(rojos)
     const transaction = await upsertSinpeTransaction({
       id: existing.transaction?.id ?? randomUUID(),
@@ -293,8 +318,8 @@ export async function processSinpeSmsWebhook(
       rawMessage: payload.message,
       timestamp,
       status: 'COMPLETED',
-      userId: destination.id,
-      publicKey: destination.publicKey,
+      userId: creditOwner.id,
+      publicKey: creditOwner.publicKey,
       stellarHash: credit.hash,
       notification,
       createdAt: existing.transaction?.createdAt ?? now,
@@ -313,8 +338,8 @@ export async function processSinpeSmsWebhook(
         status: existing.deposit.status === 'PENDING_USER_CLAIM'
           ? 'RESOLVED_BY_USER_CLAIM'
           : 'RESOLVED',
-        assignedUserId: destination.id,
-        assignedPublicKey: destination.publicKey,
+        assignedUserId: creditOwner.id,
+        assignedPublicKey: creditOwner.publicKey,
         stellarHash: credit.hash,
         lastError: undefined,
         resolvedAt: now,
@@ -327,7 +352,9 @@ export async function processSinpeSmsWebhook(
       notification,
     }
   } catch (error) {
-    const lastError = error instanceof Error ? error.message : 'No se pudo acreditar'
+    const lastError = publicErrorMessage(
+      error instanceof Error ? error.message : 'No se pudo acreditar',
+    )
     const deposit = await upsertUnassignedDeposit({
       id: existing.deposit?.id ?? randomUUID(),
       referenceId: parsed.referenceId,
@@ -342,8 +369,8 @@ export async function processSinpeSmsWebhook(
         ? 'PENDING_USER_CLAIM'
         : 'PENDING_MANUAL_MATCH',
       lastError,
-      assignedUserId: destination.id ?? existing.deposit?.assignedUserId,
-      assignedPublicKey: destination.publicKey,
+      assignedUserId: creditOwner.id ?? existing.deposit?.assignedUserId,
+      assignedPublicKey: creditOwner.publicKey,
       createdAt: existing.deposit?.createdAt ?? now,
       updatedAt: now,
     })
@@ -409,6 +436,7 @@ export async function assignUnassignedDeposit(input: {
       }
     }
   }
+  ready = applyBankPrice(ready)
   if (!(ready.calculatedRojos > 0)) {
     throw new AuthError('Indica cuántos ROJOS o el monto en colones para acreditar', 400)
   }
@@ -585,8 +613,30 @@ export async function retryMySinpeCredits(userId: string) {
   const results = []
   for (const deposit of pending) {
     try {
+      const owner = await ownerFromBankText(deposit.comment, deposit.rawMessage)
+      const priced = amountFromBankText(deposit.rawMessage)
+      if (
+        claimCreditDecision({
+          ownerId: owner?.id,
+          userId,
+          bankRojos: priced?.rojos,
+        }) !== 'credit' ||
+        !priced
+      ) {
+        results.push({
+          referenceId: deposit.referenceId,
+          ok: false,
+          error: 'Ese comprobante no se acredita solo: falta el código de tu cuenta o el monto del banco.',
+        })
+        continue
+      }
       const user = await requireAssignableUser(userId)
-      const ready = withParsedAmounts(deposit)
+      const ready = {
+        ...withParsedAmounts(deposit),
+        crcAmount: priced.crcAmount,
+        calculatedRojos: priced.rojos,
+        promoApplied: priced.promoApplied,
+      }
       const credit = await mintRojosToUser(
         user,
         ready.calculatedRojos,
@@ -621,7 +671,9 @@ export async function retryMySinpeCredits(userId: string) {
       })
       results.push({ referenceId: ready.referenceId, ok: true, hash: credit.hash })
     } catch (error) {
-      const lastError = error instanceof Error ? error.message : 'No se pudo acreditar'
+      const lastError = publicErrorMessage(
+        error instanceof Error ? error.message : 'No se pudo acreditar',
+      )
       await upsertUnassignedDeposit({
         ...deposit,
         lastError,
@@ -680,16 +732,38 @@ export async function claimSinpeDeposit(input: {
       'not_found',
     )
   }
-  const ready = withParsedAmounts(deposit)
-  if (!(ready.calculatedRojos > 0)) {
+  const owner = await ownerFromBankText(deposit.comment, deposit.rawMessage)
+  const priced = amountFromBankText(deposit.rawMessage)
+  const decision = claimCreditDecision({
+    ownerId: owner?.id,
+    userId: input.user.id,
+    bankRojos: priced?.rojos,
+  })
+  if (decision === 'mismatch') {
+    throw new AuthError(
+      'El código de esa transacción no coincide con tu cuenta.',
+      403,
+      'code_mismatch',
+    )
+  }
+  const ready = priced
+    ? {
+        ...withParsedAmounts(deposit),
+        crcAmount: priced.crcAmount,
+        calculatedRojos: priced.rojos,
+        promoApplied: priced.promoApplied,
+      }
+    : withParsedAmounts(deposit)
+  if (decision === 'queue' || !(ready.calculatedRojos > 0)) {
     const now = new Date().toISOString()
     const queued = await upsertUnassignedDeposit({
       ...ready,
       status: 'PENDING_USER_CLAIM',
       assignedUserId: input.user.id,
       assignedPublicKey: input.user.publicKey,
-      lastError:
-        'Reclamo del usuario: recibimos el comprobante pero falta el monto legible para acreditar.',
+      lastError: owner
+        ? 'Reclamo del usuario: recibimos el comprobante pero falta el monto legible para acreditar.'
+        : 'Reclamo del usuario: el comprobante no trae el código de esta cuenta.',
       updatedAt: now,
     })
     return {
@@ -705,7 +779,9 @@ export async function claimSinpeDeposit(input: {
   try {
     credit = await mintRojosToUser(user, ready.calculatedRojos, ready.referenceId)
   } catch (error) {
-    const lastError = error instanceof Error ? error.message : 'No se pudo acreditar'
+    const lastError = publicErrorMessage(
+      error instanceof Error ? error.message : 'No se pudo acreditar',
+    )
     await upsertUnassignedDeposit({
       ...ready,
       lastError,
@@ -886,6 +962,71 @@ export function listPendingDeposits(query?: string) {
   }).then((rows) => rows.map(withParsedAmounts))
 }
 
+async function topUpUnderpaidSinpe(input: {
+  parsed: { crcAmount: number; referenceId: string; comment: string }
+  message: string
+  sender: string
+}) {
+  const { rojos } = calculateRojos(input.parsed.crcAmount)
+  const now = new Date().toISOString()
+  const claimed = await claimUnderpaidSinpe({
+    referenceId: input.parsed.referenceId,
+    crcAmount: input.parsed.crcAmount,
+    rojos,
+    comment: input.parsed.comment,
+    sender: input.sender,
+    rawMessage: input.message,
+    now,
+  })
+  if (!claimed) {
+    return null
+  }
+  const delta = roundRojos(rojos - claimed.previousRojos)
+  if (!(delta > 0)) {
+    return {
+      status: 'duplicate_ignored' as const,
+      reason: 'already_credited' as const,
+      referenceId: input.parsed.referenceId,
+    }
+  }
+  const owner = await ownerFromBankText(input.parsed.comment, input.message)
+  const target =
+    owner?.publicKey && (!claimed.userId || !owner.id || owner.id === claimed.userId)
+      ? owner
+      : { id: claimed.userId, publicKey: claimed.publicKey }
+  try {
+    const credit = await mintRojosToUser(
+      target,
+      delta,
+      `TOP${input.parsed.referenceId}`,
+    )
+    return {
+      status: 'completed' as const,
+      toppedUp: true,
+      referenceId: input.parsed.referenceId,
+      rojos,
+      addedRojos: delta,
+      stellarHash: credit.hash,
+      notification: successMessage(rojos),
+    }
+  } catch (error) {
+    await revertUnderpaidSinpe({
+      referenceId: input.parsed.referenceId,
+      crcAmount: roundRojos(claimed.previousRojos * CRC_PER_ROJO),
+      rojos: claimed.previousRojos,
+      now: new Date().toISOString(),
+    })
+    const lastError = publicErrorMessage(
+      error instanceof Error ? error.message : 'No se pudo completar el SINPE',
+    )
+    return {
+      status: 'pending_manual_match' as const,
+      error: lastError,
+      referenceId: input.parsed.referenceId,
+    }
+  }
+}
+
 async function mintRojosToUser(
   user: { id?: string; publicKey: string },
   rojos: number,
@@ -901,13 +1042,13 @@ async function mintRojosToUser(
   })
 }
 
-async function resolveDestination(
+async function ownerFromBankText(
   comment: string,
-  rawMessage?: string,
+  rawMessage = '',
 ): Promise<{ id?: string; publicKey: string } | undefined> {
-  for (const sinpeCode of extractSinpeCodes(comment, rawMessage ?? '')) {
+  for (const sinpeCode of extractSinpeCodes(comment, rawMessage)) {
     const byIssue = await resolveByIssuedCode(sinpeCode)
-    if (byIssue) {
+    if (byIssue?.id) {
       return byIssue
     }
     const byCode = await findUserBySinpeCode(sinpeCode)
@@ -919,28 +1060,20 @@ async function resolveDestination(
       return byCode
     }
   }
-  const publicKey = extractStellarPublicKey(comment)
-  if (publicKey) {
-    const byKey = await findUserByPublicKey(publicKey)
-    return { id: byKey?.id, publicKey }
-  }
-  const emailMatch = comment.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i)
-  if (emailMatch?.[0]) {
-    const byEmail = await findUserByEmail(emailMatch[0])
-    if (byEmail) {
-      return byEmail
-    }
-  }
-  const idMatch = comment.match(
-    /\b[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b/i,
-  )
-  if (idMatch?.[0]) {
-    const byId = await findUserById(idMatch[0])
-    if (byId) {
-      return byId
-    }
-  }
   return undefined
+}
+
+function applyBankPrice(deposit: UnassignedDeposit): UnassignedDeposit {
+  const priced = amountFromBankText(deposit.rawMessage)
+  if (!priced) {
+    return deposit
+  }
+  return {
+    ...deposit,
+    crcAmount: priced.crcAmount,
+    calculatedRojos: priced.rojos,
+    promoApplied: priced.promoApplied,
+  }
 }
 
 /**

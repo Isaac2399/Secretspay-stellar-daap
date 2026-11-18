@@ -15,7 +15,8 @@
     "preview": "vite preview",
     "invoicing:listen": "npx tsx server/invoicing/listeners/blockchain.listener.ts",
     "db:migrate": "tsx scripts/migrate-kv-to-postgres.ts",
-    "test:db": "tsx --test server/db/concurrency.test.ts"
+    "test:db": "tsx --test server/db/concurrency.test.ts",
+    "test:week2": "tsx --test server/loginLimit.test.ts server/sinpe/creditRules.test.ts server/safeText.test.ts"
   },
   "dependencies": {
     "@neon/config": "^1.14.0",

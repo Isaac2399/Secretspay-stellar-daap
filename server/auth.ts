@@ -10,8 +10,13 @@ import {
 import { Keypair } from '@stellar/stellar-sdk'
 import { AuthError } from './errors.js'
 import { ensureLoyaltyTrustline, provisionStellarAccount } from './provisionAccount.js'
-import { postgresReady } from './db/client.js'
-import { findLiveSession, insertSession } from './db/sessions.js'
+import { postgresReady, withDb } from './db/client.js'
+import { findLiveSession, insertSession, revokeSession, revokeUserSessions } from './db/sessions.js'
+import {
+  assertLoginAllowed,
+  clearLoginFailures,
+  recordLoginFailure,
+} from './loginLimit.js'
 import { loadStore, saveStore } from './userStore.js'
 import {
   generateSinpeCode,
@@ -280,7 +285,8 @@ function sessionSecret(): string {
 }
 
 function cookieAttrs(): string {
-  const secure = process.env.VERCEL ? '; Secure' : ''
+  const deployed = process.env.VERCEL === '1' && process.env.NODE_ENV === 'production'
+  const secure = deployed ? '; Secure' : ''
   return `HttpOnly; Path=/; SameSite=Lax${secure}`
 }
 
@@ -347,8 +353,38 @@ export async function ensureUserSinpeCode(
   }
   const expected = generateSinpeCode(user.publicKey)
   user.sinpeCode = expected
-  await saveStore(store)
+  try {
+    await persistSinpeCode(store, user.id, expected)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'error de red'
+    console.error('[auth] sinpe', message)
+  }
   return user
+}
+
+/** Escribe solo el código. En Postgres no reescribe todas las cuentas. */
+async function persistSinpeCode(
+  store: { users: StoredUser[] },
+  userId: string,
+  code: string,
+): Promise<void> {
+  if (await postgresReady()) {
+    await withDb((sql) =>
+      sql.query('UPDATE users SET sinpe_code = $2 WHERE id = $1', [userId, code]),
+    )
+    return
+  }
+  await saveStore(store)
+}
+
+/** La trustline no debe impedir entrar. El pago la vuelve a pedir si falta. */
+async function openLoyaltyTrustline(userId: string): Promise<void> {
+  try {
+    await ensureUserLoyaltyTrustline(userId)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'error de red'
+    console.error('[auth] trustline', message)
+  }
 }
 
 /** Actualiza el código visible del usuario (p. ej. el efímero activo). */
@@ -369,7 +405,12 @@ export async function setUserSinpeCode(
     return user
   }
   user.sinpeCode = normalized
-  await saveStore(store)
+  try {
+    await persistSinpeCode(store, user.id, normalized)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'error de red'
+    console.error('[auth] sinpe', message)
+  }
   return user
 }
 
@@ -459,7 +500,7 @@ export async function authenticateWithGoogle(input: {
     }
     await saveStore(store)
     if (!isSuperAdminRecord(existing)) {
-      await ensureUserLoyaltyTrustline(existing.id)
+      await openLoyaltyTrustline(existing.id)
     }
     const withCode = (await ensureUserSinpeCode(existing.id)) ?? existing
     return toPublicUser(withCode)
@@ -585,6 +626,15 @@ async function persistNewUser(input: {
   }
   store.users.push(user)
   await saveStore(store)
+  const { recordAccountOpening } = await import('./db/pilot.js')
+  await recordAccountOpening({
+    id: user.id,
+    email: user.email,
+    role: user.role,
+    publicKey: user.publicKey,
+    guestDemo: user.guestDemo,
+    createdAt: user.createdAt,
+  })
   return toPublicUser(user)
 }
 
@@ -609,11 +659,15 @@ async function grantSignupRegalia(publicKey: string): Promise<string | undefined
 export async function authenticate(
   email: string,
   password: string,
+  ip?: string,
 ): Promise<PublicUser> {
-  const user = await findUserByEmail(email)
+  const normalized = normalizeEmail(email)
+  await assertLoginAllowed(normalized, ip)
+  const user = await findUserByEmail(normalized)
   if (!user) {
     const { explainMerchantApplicationLogin } = await import('./merchantApplications.js')
-    const blocked = await explainMerchantApplicationLogin(email, password)
+    const blocked = await explainMerchantApplicationLogin(normalized, password)
+    await recordLoginFailure(normalized, ip)
     if (blocked) {
       throw new AuthError(blocked, 403)
     }
@@ -623,20 +677,57 @@ export async function authenticate(
     )
   }
   if (!user.passwordHash || !user.salt) {
+    await recordLoginFailure(normalized, ip)
     throw new AuthError('Esta cuenta entra con Google. Usa el botón de Google.', 401)
   }
   if (!verifyPassword(password, user.salt, user.passwordHash)) {
+    await recordLoginFailure(normalized, ip)
     throw new AuthError(
       'Email o contraseña incorrectos. Las cuentas de tu PC no están en Vercel: usa Registro en este mismo enlace.',
       401,
     )
   }
+  await clearLoginFailures(normalized, ip)
   const promoted = await promoteSuperAdminIfNeeded(user)
   if (!isSuperAdminRecord(promoted)) {
-    await ensureUserLoyaltyTrustline(promoted.id)
+    await openLoyaltyTrustline(promoted.id)
   }
   const withCode = (await ensureUserSinpeCode(promoted.id)) ?? promoted
   return toPublicUser(withCode)
+}
+
+export async function changePassword(input: {
+  userId: string
+  currentPassword: string
+  nextPassword: string
+  ip?: string
+}): Promise<string> {
+  const store = await loadStore()
+  const user = store.users.find((entry) => entry.id === input.userId)
+  if (!user) {
+    throw new AuthError('No hay sesión', 401)
+  }
+  await assertLoginAllowed(user.email, input.ip)
+  if (!user.passwordHash || !user.salt) {
+    throw new AuthError('Esta cuenta entra con Google. No tiene contraseña que cambiar.', 400)
+  }
+  if (input.nextPassword.length > 128) {
+    throw new AuthError('La contraseña es demasiado larga', 400)
+  }
+  if (!verifyPassword(input.currentPassword, user.salt, user.passwordHash)) {
+    await recordLoginFailure(user.email, input.ip)
+    throw new AuthError('La contraseña actual no coincide', 401)
+  }
+  const sealed = sealPassword(input.nextPassword)
+  user.salt = sealed.salt
+  user.passwordHash = sealed.passwordHash
+  user.sessionEpoch = (user.sessionEpoch ?? 0) + 1
+  await saveStore(store)
+  await clearLoginFailures(user.email, input.ip)
+  if (await postgresReady()) {
+    await revokeUserSessions(user.id)
+  }
+  return createSessionCookie(user.id)
 }
 
 export async function ensureUserLoyaltyTrustline(userId: string): Promise<void> {
@@ -744,7 +835,30 @@ export async function createSessionCookie(userId: string): Promise<string> {
 }
 
 export function clearSessionCookie(): string {
-  return `${COOKIE_NAME}=; ${cookieAttrs()}; Max-Age=0`
+  return clearSessionCookieHeaders()[0] ?? ''
+}
+
+/** Borra la cookie con y sin Secure. En local VERCEL=1 la dejó Secure y un solo clear no cierra la sesión. */
+export function clearSessionCookieHeaders(): string[] {
+  const expires = 'Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT'
+  const base = `${COOKIE_NAME}=; HttpOnly; Path=/; SameSite=Lax; ${expires}`
+  return [base, `${base}; Secure`]
+}
+
+export async function endSession(cookieHeader: string | undefined): Promise<void> {
+  try {
+    const token = readCookie(cookieHeader, COOKIE_NAME)
+    if (!token?.startsWith('s2.')) {
+      return
+    }
+    const sessionId = token.split('.')[1]?.trim()
+    if (!sessionId || !(await postgresReady())) {
+      return
+    }
+    await revokeSession(sessionId)
+  } catch (error) {
+    console.error('[auth] no se pudo revocar la sesión', error)
+  }
 }
 
 export async function userFromCookieHeader(

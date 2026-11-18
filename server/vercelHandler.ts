@@ -2,6 +2,8 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { loadLocalEnv } from './loadLocalEnv.js'
 import { decodeHttpBody } from './httpBody.js'
+import { clientIpFromHeaders } from './clientIp.js'
+import { publicErrorMessage } from './safeText.js'
 import { dispatchApi } from './dispatchApi.js'
 
 loadLocalEnv()
@@ -29,6 +31,7 @@ export default async function handler(
       cookie: req.headers.cookie,
       authorization: headerAuth(req),
       apiKey: headerApiKey(req),
+      clientIp: clientIpFromHeaders(req.headers, req.socket?.remoteAddress),
       body: received.body,
       rawBody: received.rawBody,
       webhookId: headerValue(req, 'svix-id') ?? headerValue(req, 'webhook-id'),
@@ -41,14 +44,15 @@ export default async function handler(
     res.statusCode = result.status
     res.setHeader('Content-Type', 'application/json')
     if (result.setCookie) {
-      res.setHeader('Set-Cookie', result.setCookie)
+      res.setHeader('Set-Cookie', cookieForRequest(result.setCookie, req))
     }
     res.end(JSON.stringify(result.body))
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Error interno'
+    console.error('[api]', publicErrorMessage(message))
     res.statusCode = 500
     res.setHeader('Content-Type', 'application/json')
-    res.end(JSON.stringify({ error: message }))
+    res.end(JSON.stringify({ error: publicErrorMessage(message) }))
   }
 }
 
@@ -164,9 +168,7 @@ function parseBody(body: unknown): Record<string, unknown> {
 async function readRequestBody(
   req: VercelRequest,
 ): Promise<{ body: Record<string, unknown>; rawBody?: string }> {
-  const query = Object.fromEntries(
-    new URLSearchParams((req.url ?? '').split('?')[1] ?? '').entries(),
-  )
+  const query = queryParams(req)
   const parsed = parseBody(req.body)
   if (Object.keys(parsed).length > 0) {
     const rawBody = rawFromPreparsed(req.body)
@@ -196,14 +198,73 @@ function rawFromPreparsed(body: unknown): string | undefined {
   return undefined
 }
 
+function cookieForRequest(
+  setCookie: string | string[],
+  req: IncomingMessage,
+): string | string[] {
+  const headers = Array.isArray(setCookie) ? setCookie : [setCookie]
+  if (requestIsSecure(req)) {
+    return headers.length === 1 ? (headers[0] ?? '') : headers
+  }
+  const adjusted = headers.flatMap((header) => {
+    const without = header.replace(/; Secure/g, '')
+    if (/Max-Age=0/i.test(header)) {
+      const withSecure = /; Secure/.test(header) ? header : `${header}; Secure`
+      return [without, withSecure]
+    }
+    return [without]
+  })
+  const unique = [...new Set(adjusted)]
+  return unique.length === 1 ? (unique[0] ?? '') : unique
+}
+
+function requestIsSecure(req: IncomingMessage): boolean {
+  const forwarded = req.headers['x-forwarded-proto']
+  const proto = (Array.isArray(forwarded) ? forwarded[0] : forwarded)
+    ?.split(',')[0]
+    ?.trim()
+    .toLowerCase()
+  if (proto === 'https') {
+    return true
+  }
+  if (proto === 'http') {
+    return false
+  }
+  const socket = req.socket as { encrypted?: boolean } | undefined
+  return socket?.encrypted === true
+}
+
 function headerAuth(req: IncomingMessage): string | undefined {
   const value = req.headers.authorization
   const raw = Array.isArray(value) ? value[0] : value
   return raw?.trim() || undefined
 }
 
+function queryParams(req: VercelRequest): Record<string, string> {
+  const fromUrl = Object.fromEntries(
+    new URLSearchParams((req.url ?? '').split('?')[1] ?? '').entries(),
+  )
+  const raw = (req as VercelRequest & { query?: Record<string, unknown> }).query
+  if (!raw || typeof raw !== 'object') {
+    return fromUrl
+  }
+  const fromQuery: Record<string, string> = {}
+  for (const [key, value] of Object.entries(raw)) {
+    if (typeof value === 'string') {
+      fromQuery[key] = value
+    } else if (Array.isArray(value) && typeof value[0] === 'string') {
+      fromQuery[key] = value[0]
+    }
+  }
+  return { ...fromQuery, ...fromUrl }
+}
+
 function headerApiKey(req: IncomingMessage): string | undefined {
-  return headerValue(req, 'x-api-key')
+  return (
+    headerValue(req, 'x-api-key') ??
+    headerValue(req, 'api-key') ??
+    headerValue(req, 'apikey')
+  )
 }
 
 function headerValue(req: IncomingMessage, name: string): string | undefined {

@@ -34,6 +34,12 @@ export async function findLiveSession(
   })
 }
 
+export async function revokeSession(id: string): Promise<void> {
+  await withDbTransaction(async (sql) => {
+    await sql.query('DELETE FROM sessions WHERE id = $1', [id])
+  })
+}
+
 export async function revokeUserSessions(userId: string): Promise<void> {
   await withDbTransaction(async (sql) => {
     await sql.query('DELETE FROM sessions WHERE user_id = $1', [userId])

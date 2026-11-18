@@ -29,9 +29,56 @@ const IGNORE_KEYS = new Set([
   'apiKey',
   'x-api-key',
   'authorization',
+  'secret',
+  'sign',
+  'token',
+  'key',
+  'apikey',
+  'api-key',
+])
+
+const CREDENTIAL_KEYS = new Set([
+  'api-key',
+  'apikey',
+  'x-api-key',
+  'secret',
+  'sign',
+  'token',
+  'key',
+  'authorization',
 ])
 
 const PART_ARRAY_KEYS = ['parts', 'pdus', 'messages', 'smsParts', 'fragments']
+
+/** Claves que SMS Forwarder manda en el cuerpo, no siempre en el header. */
+export function webhookSecretsFromBody(body: Record<string, unknown>): string[] {
+  const found: string[] = []
+  collectSecrets(body, found, 0)
+  return found
+}
+
+function collectSecrets(
+  value: unknown,
+  found: string[],
+  depth: number,
+): void {
+  if (depth > 2 || !value || typeof value !== 'object' || Array.isArray(value)) {
+    return
+  }
+  for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+    const normalized = key.toLowerCase().replace(/_/g, '-')
+    if (typeof entry === 'string' && CREDENTIAL_KEYS.has(normalized)) {
+      const trimmed = entry.trim()
+      if (trimmed && !isTemplatePlaceholder(trimmed)) {
+        found.push(trimmed)
+      }
+      continue
+    }
+    if (normalized === 'headers') {
+      collectSecrets(entry, found, depth + 1)
+    }
+  }
+}
 
 export function extractSinpeWebhookFields(body: Record<string, unknown>): {
   sender: string
